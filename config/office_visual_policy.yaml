@@ -1,0 +1,70 @@
+schema_version: "1.0"
+theme:
+  name: sevc-kami-broker-v2
+  colors:
+    white: "#FFFFFF"
+    black: "#111111"
+    navy: "#1B365D"
+    cobalt: "#2D5A8A"
+    sevc_purple: "#6F2B86"
+    cool_gray: "#6B7280"
+    pale_gray: "#D9E2EC"
+    canvas: "#F7F8FA"
+  minimum_chart_font_pt: 8
+word:
+  page: A4
+  body_cjk_font: SimSun
+  body_latin_font: Times New Roman
+  body_size_pt: 12
+  line_spacing_pt: 22
+  first_line_indent_characters: 2
+  heading_1_size_pt: 22
+  heading_2_size_pt: 14
+  heading_3_size_pt: 12
+  table_size_pt: 9
+  table_style: three-line
+  figure_png_dpi: 300
+  maximum_figure_width_cm: 15.6
+  require_editable_svg: true
+  require_visual_per_core_chapter: true
+  minimum_analysis_characters_before_visual: 50
+  minimum_visual_families_when_visuals_ge_6: 3
+  maximum_bar_family_ratio: 0.60
+  maximum_canonical_type_repetitions: 2
+  require_same_stem_pdf: true
+  require_page_by_page_inspection: true
+  evidence_images:
+    require_publication_manifest: true
+    require_sha256_mime_dimension_revalidation: true
+    normalize_to_offline_png: true
+    maximum_per_chapter: 6
+    require_caption_and_original_page_source: true
+    supplement_charts_never_replace: true
+ppt:
+  canvas_px: [1280, 720]
+  minimum_slides: 15
+  maximum_slides: 20
+  target_slides: 17
+  minimum_layout_families: 4
+  maximum_consecutive_same_layout: 2
+  require_visual_every_slide: true
+  require_answer_first_titles: true
+  require_storyline: true
+  require_evidence_map: true
+  require_source_date_bias_footer: true
+  require_contact_sheet: true
+  require_all_slide_inspection: true
+  require_visual_fix_cycles: 1
+  require_full_rerender_after_fix: true
+  maximum_geometry_overlap_pt: 3
+  prohibit_wrapped_kpi_unit: true
+  prohibit_wrapped_page_number: true
+  prohibit_text_only_slides: true
+  prohibit_repetitive_card_grids: true
+  evidence_images:
+    require_publication_manifest: true
+    require_chapter_image_placements: true
+    require_caption_and_original_page_source: true
+    fit: contain
+    prohibit_semantic_crop: true
+    supplement_charts_never_replace: true

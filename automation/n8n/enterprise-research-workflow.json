@@ -1,0 +1,488 @@
+{
+  "name": "Enterprise Energy Research Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "feishu-form-trigger",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "n8n-node-webhook-feishu",
+      "name": "Feishu Form Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Feishu form payload -> research API trigger body\nconst form = $input.first().json.body || {};\nreturn [{ json: {\n  requested_by: form.requested_by || 'feishu-user',\n  company: form.company,\n  country: form.country,\n  region: form.region,\n  product: form.product,\n  research_type: form.research_type || 'market_entry',\n  topics: (form.topics || '').split(',').map(t => t.trim()).filter(Boolean),\n  priority: form.priority || 'normal',\n  notes: form.notes\n}}];"
+      },
+      "id": "n8n-node-code-map-form",
+      "name": "Map Form to Task",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -140,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://research-api:8000/api/v1/triggers/feishu",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "n8n-node-http-submit",
+      "name": "Submit Research Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        40,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 15,
+        "unit": "seconds"
+      },
+      "id": "n8n-node-wait-first",
+      "name": "Wait Before First Poll",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const runId = $('Submit Research Task').first().json.run_id;\nreturn [{ json: { run_id: runId } }];"
+      },
+      "id": "n8n-node-code-poll",
+      "name": "Poll Run Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://research-api:8000/api/v1/research/={{ $json.run_id }}",
+        "options": {}
+      },
+      "id": "n8n-node-http-status",
+      "name": "Get Run Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        580,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "PUBLISHED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n8n-node-if-published",
+      "name": "Published?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const run = $json;\nreturn [{ json: {\n  run_id: run.run_id,\n  task_id: run.task_id,\n  status: run.status,\n  artifacts: (run.artifact_manifest || []).map(a => a.artifact_type + ':' + a.status).join(','),\n  message: '[研究完成] ' + run.task_id + ' -> ' + run.status\n}}];"
+      },
+      "id": "n8n-node-code-notify-published",
+      "name": "Build Publish Notice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://research-api:8000/api/v1/research/={{ $json.run_id }}/feedback",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"submitted_by\":\"n8n-eval\",\"manual_baseline_minutes\":480,\"human_review_minutes\":45,\"adoption_status\":\"ADOPTED\"}",
+        "options": {}
+      },
+      "id": "n8n-node-http-feedback",
+      "name": "Collect Feedback (ROI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        940,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "REVIEW_REQUIRED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n8n-node-if-review",
+      "name": "Review Required?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        940,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 15,
+        "unit": "minutes"
+      },
+      "id": "n8n-node-wait-review",
+      "name": "Wait For Human Review",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const run = $('Get Run Status').first().json;\nreturn [{ json: {\n  run_id: run.run_id,\n  message: '[需人工评审] ' + run.task_id + ' 原因: ' + (run.review_reasons || []).join('; ')\n}}];"
+      },
+      "id": "n8n-node-code-review-notice",
+      "name": "Build Review Notice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://research-api:8000/api/v1/research/={{ $('Get Run Status').first().json.run_id }}/review",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"reviewer\":\"n8n-reviewer\",\"decision\":\"APPROVE\",\"reason\":\"reviewed in n8n\"}",
+        "options": {}
+      },
+      "id": "n8n-node-http-review",
+      "name": "Approve In Review Gate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://research-api:8000/api/v1/research/={{ $('Get Run Status').first().json.run_id }}/retry",
+        "method": "POST",
+        "options": {}
+      },
+      "id": "n8n-node-http-retry",
+      "name": "Retry Failed Run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "FAILED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n8n-node-if-failed",
+      "name": "Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const run = $json;\nreturn [{ json: { message: '[研究失败] ' + run.task_id + ' ' + (run.error ? run.error.error_type + ': ' + run.error.message : '') } }];"
+      },
+      "id": "n8n-node-code-fail-notice",
+      "name": "Build Failure Notice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://research-api:8000/api/v1/research/={{ $json.run_id }}/retry",
+        "method": "POST",
+        "options": {}
+      },
+      "id": "n8n-node-http-retry-2",
+      "name": "Auto Retry",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        600
+      ]
+    }
+  ],
+  "connections": {
+    "Feishu Form Webhook": {
+      "main": [
+        [
+          {
+            "node": "Map Form to Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Form to Task": {
+      "main": [
+        [
+          {
+            "node": "Submit Research Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submit Research Task": {
+      "main": [
+        [
+          {
+            "node": "Wait Before First Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Before First Poll": {
+      "main": [
+        [
+          {
+            "node": "Poll Run Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Run Status": {
+      "main": [
+        [
+          {
+            "node": "Get Run Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Run Status": {
+      "main": [
+        [
+          {
+            "node": "Published?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Review Required?",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Failed?",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Published?": {
+      "main": [
+        [
+          {
+            "node": "Build Publish Notice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Build Publish Notice": {
+      "main": [
+        [
+          {
+            "node": "Collect Feedback (ROI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Required?": {
+      "main": [
+        [
+          {
+            "node": "Build Review Notice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Approve In Review Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Notice": {
+      "main": [
+        [
+          {
+            "node": "Wait For Human Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait For Human Review": {
+      "main": [
+        [
+          {
+            "node": "Approve In Review Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approve In Review Gate": {
+      "main": [
+        [
+          {
+            "node": "Retry Failed Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failed?": {
+      "main": [
+        [
+          {
+            "node": "Build Failure Notice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Build Failure Notice": {
+      "main": [
+        [
+          {
+            "node": "Auto Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto Retry": {
+      "main": [
+        [
+          {
+            "node": "Retry Failed Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "id": "enterprise-research-automation-v1"
+}

@@ -1,0 +1,81 @@
+{
+  "$defs": {
+    "GapStatus": {
+      "enum": [
+        "OPEN",
+        "ACCEPTED",
+        "RESOLVED",
+        "BLOCKING"
+      ],
+      "title": "GapStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "gap_id": {
+      "title": "Gap Id",
+      "type": "string"
+    },
+    "entity_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Entity Id"
+    },
+    "field_name": {
+      "title": "Field Name",
+      "type": "string"
+    },
+    "importance": {
+      "enum": [
+        "critical",
+        "major",
+        "minor"
+      ],
+      "title": "Importance",
+      "type": "string"
+    },
+    "reason": {
+      "enum": [
+        "missing",
+        "conflicting",
+        "stale",
+        "unverifiable",
+        "requires_site_due_diligence"
+      ],
+      "title": "Reason",
+      "type": "string"
+    },
+    "attempted_query_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Attempted Query Ids",
+      "type": "array"
+    },
+    "next_action": {
+      "title": "Next Action",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/GapStatus",
+      "default": "OPEN"
+    }
+  },
+  "required": [
+    "gap_id",
+    "field_name",
+    "importance",
+    "reason",
+    "next_action"
+  ],
+  "title": "DataGap",
+  "type": "object"
+}

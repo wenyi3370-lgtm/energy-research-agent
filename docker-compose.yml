@@ -1,0 +1,72 @@
+# Enterprise Energy Research Automation — full stack (Phase 15)
+#   research-api  : FastAPI application service
+#   postgres      : automation control-plane database
+#   n8n           : workflow orchestration (Feishu triggers, polling, review)
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: research
+      POSTGRES_PASSWORD: research
+      POSTGRES_DB: research
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U research"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  research-api:
+    build: .
+    restart: unless-stopped
+    environment:
+      EER_AUTOMATION_DATABASE_URL: postgresql+psycopg://research:research@postgres:5432/research
+      EER_AUTOMATION_WORKDIR: /data/automation_work
+      # Run mode: synthetic (default, zero-config) | orchestrating (real research)
+      EER_AUTOMATION_EXECUTOR: orchestrating
+      # LLM gateway for real extraction (至少配置一个 provider):
+      EER_DEEPSEEK_API_KEY: ${EER_DEEPSEEK_API_KEY:-}
+      # EER_OPENAI_API_KEY: ""
+      # Kimi WebBridge browser session (daemon runs on host, port 10086):
+      EER_KIMI_WEB_SESSION: default
+      # 容器内经 host.docker.internal 访问宿主机 daemon（浏览器扩展已连接）
+      EER_KIMI_WEB_DAEMON_URL: http://host.docker.internal:10086
+      # Optional Feishu notifications (Phase 7):
+      EER_FEISHU_APP_ID: ${EER_FEISHU_APP_ID:-}
+      EER_FEISHU_APP_SECRET: ${EER_FEISHU_APP_SECRET:-}
+      # 接收人：飞书邮箱 / open_id / chat_id（未配置则通知 fail-closed，可后续补）
+      EER_FEISHU_DEFAULT_RECEIVER: ${EER_FEISHU_DEFAULT_RECEIVER:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - research-data:/data/automation_work
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    environment:
+      N8N_HOST: "0.0.0.0"
+      N8N_PORT: 5678
+      TZ: Asia/Shanghai
+      GENERIC_TIMEZONE: Asia/Shanghai
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n-data:/home/node/.n8n
+    depends_on:
+      - research-api
+
+volumes:
+  pgdata:
+  research-data:
+  n8n-data:

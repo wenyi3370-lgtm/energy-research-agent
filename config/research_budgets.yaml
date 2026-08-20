@@ -1,0 +1,20 @@
+schema_version: "1.0"
+default:
+  max_queries: 90
+  max_pages: 120
+  max_images: 40
+  max_model_calls: 100
+  max_retries_per_node: 2
+  max_elapsed_minutes: 90
+  minimum_collection_rounds: 3
+  minimum_no_new_high_priority_batches: 2
+  marginal_high_priority_yield_threshold: 0.05
+GROUP_LARGE:
+  max_child_entities: 100
+  max_recursion_depth: 3
+ENTERPRISE_NORMAL:
+  max_child_entities: 20
+  max_recursion_depth: 1
+SMALL_SIMPLE:
+  max_child_entities: 5
+  max_recursion_depth: 0

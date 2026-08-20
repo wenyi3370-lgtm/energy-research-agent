@@ -1,0 +1,30 @@
+[
+  {
+    "source_url": "https://small-demo.example.com/about",
+    "source_title": "示例节能服务有限公司简介",
+    "publisher": "示例节能服务有限公司",
+    "source_kind": "official_company",
+    "extraction_method": "recorded_fixture",
+    "is_search_snippet": false,
+    "entities": [
+      {
+        "entity_key": "small",
+        "canonical_name": "示例节能服务有限公司",
+        "entity_type": "company",
+        "official_website": "https://small-demo.example.com",
+        "registration_region": "四川省宜宾市"
+      }
+    ],
+    "claims": [
+      {
+        "entity_key": "small",
+        "field_name": "canonical_company_name",
+        "value": "示例节能服务有限公司",
+        "value_type": "string",
+        "raw_text": "公司名称：示例节能服务有限公司",
+        "context_text": "示例节能服务有限公司提供节能咨询服务。",
+        "qualifier": "exact"
+      }
+    ]
+  }
+]

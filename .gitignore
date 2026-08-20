@@ -1,0 +1,26 @@
+.artifact-inspection/
+.artifact-inspection-final/
+projects/
+research_capture/
+latest_rerun_output.json
+outputs/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.env
+!.env.example
+.venv/
+*.zip
+*.tmp
+*.log
+
+# 本地运行数据与密钥
+.env
+automation_work/
+automation*.db
+*.sqlite3
+# 客户专案脚本（含真实企业信息，不上传）
+*shanshan*
+*Shanshan*
+vendor/skills/ppt-master/

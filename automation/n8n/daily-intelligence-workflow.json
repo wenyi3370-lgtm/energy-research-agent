@@ -1,0 +1,60 @@
+{
+  "id": "daily-intelligence-v1",
+  "name": "每日情报（V2G & 储能日报）",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1
+            }
+          ],
+          "triggerAtHour": 10,
+          "triggerAtMinute": 0
+        }
+      },
+      "id": "n8n-node-schedule-daily",
+      "name": "每天 10:00 触发",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://research-api:8000/api/v1/intelligence/daily",
+        "options": {}
+      },
+      "id": "n8n-node-http-intel",
+      "name": "触发情报采集与发布",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "每天 10:00 触发": {
+      "main": [
+        [
+          {
+            "node": "触发情报采集与发布",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

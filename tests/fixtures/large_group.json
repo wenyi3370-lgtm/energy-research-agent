@@ -1,0 +1,47 @@
+[
+  {
+    "source_url": "https://demo-group.example.com/group",
+    "source_title": "示例工业集团组织结构",
+    "publisher": "示例工业集团有限公司",
+    "source_kind": "official_company",
+    "extraction_method": "recorded_fixture",
+    "is_search_snippet": false,
+    "entities": [
+      {
+        "entity_key": "group",
+        "canonical_name": "示例工业集团有限公司",
+        "entity_type": "group",
+        "aliases": ["示例集团"],
+        "official_website": "https://demo-group.example.com",
+        "registration_region": "四川省"
+      },
+      {
+        "entity_key": "sub-a",
+        "canonical_name": "示例工业装备有限公司",
+        "entity_type": "company",
+        "parent_entity_key": "group"
+      },
+      {
+        "entity_key": "sub-b",
+        "canonical_name": "示例工业材料有限公司",
+        "entity_type": "company",
+        "parent_entity_key": "group"
+      }
+    ],
+    "claims": [
+      {
+        "entity_key": "group",
+        "field_name": "canonical_company_name",
+        "value": "示例工业集团有限公司",
+        "value_type": "string",
+        "raw_text": "示例工业集团有限公司",
+        "context_text": "示例工业集团有限公司组织结构",
+        "qualifier": "exact"
+      }
+    ],
+    "factories": [
+      {"factory_key": "factory-a", "operator_entity_key": "sub-a", "name": "装备基地", "processes": ["机加工"]},
+      {"factory_key": "factory-b", "operator_entity_key": "sub-b", "name": "材料基地", "processes": ["熔炼"]}
+    ]
+  }
+]

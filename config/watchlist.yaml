@@ -1,0 +1,57 @@
+# Scheduled monitoring watchlist (Phase 14).
+# 已启用下面两项（第二项、第三项按需启用）。注意：
+# - 在真实研究模式（EER_AUTOMATION_EXECUTOR=orchestrating）下，把 company/
+#   country/product 改成你真正要盯的对象，否则研究的是示例占位。
+# - 运行方式：python scripts/run_monitor.py（小白一键调度），或 cron/n8n 定时调用。
+schema_version: "1.0"
+items:
+  - name: "泰国家庭储能市场月度监测"
+    enabled: true
+    schedule:
+      cadence: monthly
+      interval: 1
+      at_time: "09:00"
+      day_of_month: 1
+    task:
+      task_id: "MON_TH_BESS_MARKET"
+      requested_by: "watchdog"
+      country: "Thailand"
+      product: "Residential BESS"
+      research_type: "market_monitor"
+      topics: ["market_size", "policy", "competitor"]
+      priority: "normal"
+      language: "zh-CN"
+    monitor_fields: ["market_size_gwh", "policy_status", "installed_base"]
+
+  - name: "某储能企业官网产品参数周度监测"
+    enabled: true
+    schedule:
+      cadence: weekly
+      interval: 1
+      at_time: "08:30"
+      weekday: 1
+    task:
+      task_id: "MON_STORAGE_CO_PRODUCT"
+      requested_by: "watchdog"
+      company: "某储能企业"
+      research_type: "product_research"
+      topics: ["product_parameters"]
+      priority: "normal"
+      language: "zh-CN"
+    monitor_fields: ["product_capacity", "product_price"]
+
+  - name: "德国储能政策监测（每日）"
+    enabled: false
+    schedule:
+      cadence: daily
+      interval: 1
+      at_time: "07:00"
+    task:
+      task_id: "MON_DE_POLICY"
+      requested_by: "watchdog"
+      country: "Germany"
+      research_type: "policy_regulation"
+      topics: ["battery_storage_policy"]
+      priority: "high"
+      language: "zh-CN"
+    monitor_fields: ["policy_status", "subsidy_rate"]

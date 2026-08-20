@@ -1,0 +1,76 @@
+{
+  "$defs": {
+    "ConflictStatus": {
+      "enum": [
+        "OPEN",
+        "RESOLVED",
+        "BLOCKING"
+      ],
+      "title": "ConflictStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "conflict_group_id": {
+      "title": "Conflict Group Id",
+      "type": "string"
+    },
+    "entity_id": {
+      "title": "Entity Id",
+      "type": "string"
+    },
+    "field_name": {
+      "title": "Field Name",
+      "type": "string"
+    },
+    "claim_ids": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 2,
+      "title": "Claim Ids",
+      "type": "array"
+    },
+    "analysis": {
+      "additionalProperties": true,
+      "title": "Analysis",
+      "type": "object"
+    },
+    "resolution": {
+      "default": "unresolved",
+      "enum": [
+        "coexist",
+        "select_authoritative",
+        "superseded",
+        "unresolved"
+      ],
+      "title": "Resolution",
+      "type": "string"
+    },
+    "selected_claim_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Selected Claim Ids",
+      "type": "array"
+    },
+    "rationale": {
+      "title": "Rationale",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/ConflictStatus",
+      "default": "OPEN"
+    }
+  },
+  "required": [
+    "conflict_group_id",
+    "entity_id",
+    "field_name",
+    "claim_ids",
+    "rationale"
+  ],
+  "title": "ConflictGroup",
+  "type": "object"
+}

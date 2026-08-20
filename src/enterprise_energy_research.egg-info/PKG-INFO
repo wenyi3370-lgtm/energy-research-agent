@@ -1,0 +1,42 @@
+Metadata-Version: 2.4
+Name: enterprise-energy-research
+Version: 0.8.1
+Summary: Evidence-first enterprise industry and energy cooperation research workflow
+Requires-Python: >=3.10
+Requires-Dist: pydantic<3,>=2.7
+Requires-Dist: pydantic-settings<3,>=2.2
+Requires-Dist: PyYAML<7,>=6
+Requires-Dist: Pillow<13,>=10
+Requires-Dist: python-docx<2,>=1.1
+Requires-Dist: requests<3,>=2.31
+Requires-Dist: openpyxl<4,>=3.1
+Requires-Dist: pandas<3,>=2.0
+Provides-Extra: orchestration
+Requires-Dist: langgraph<2,>=0.2; extra == "orchestration"
+Provides-Extra: models
+Requires-Dist: litellm<2,>=1.40; extra == "models"
+Provides-Extra: database
+Requires-Dist: SQLAlchemy<3,>=2.0; extra == "database"
+Requires-Dist: alembic<2,>=1.13; extra == "database"
+Requires-Dist: psycopg[binary]<4,>=3.1; extra == "database"
+Provides-Extra: api
+Requires-Dist: fastapi<1,>=0.110; extra == "api"
+Requires-Dist: uvicorn<1,>=0.29; extra == "api"
+Requires-Dist: httpx<1,>=0.27; extra == "api"
+Provides-Extra: test
+Requires-Dist: pytest<9,>=8; extra == "test"
+Requires-Dist: pytest-asyncio<1,>=0.23; extra == "test"
+Provides-Extra: render
+Requires-Dist: PyMuPDF<2,>=1.24; extra == "render"
+Provides-Extra: full
+Requires-Dist: langgraph<2,>=0.2; extra == "full"
+Requires-Dist: litellm<2,>=1.40; extra == "full"
+Requires-Dist: SQLAlchemy<3,>=2.0; extra == "full"
+Requires-Dist: alembic<2,>=1.13; extra == "full"
+Requires-Dist: psycopg[binary]<4,>=3.1; extra == "full"
+Requires-Dist: fastapi<1,>=0.110; extra == "full"
+Requires-Dist: uvicorn<1,>=0.29; extra == "full"
+Requires-Dist: httpx<1,>=0.27; extra == "full"
+Requires-Dist: pytest<9,>=8; extra == "full"
+Requires-Dist: pytest-asyncio<1,>=0.23; extra == "full"
+Requires-Dist: PyMuPDF<2,>=1.24; extra == "full"

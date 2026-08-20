@@ -1,0 +1,489 @@
+{
+  "$defs": {
+    "EnterpriseEdge": {
+      "additionalProperties": false,
+      "properties": {
+        "edge_id": {
+          "title": "Edge Id",
+          "type": "string"
+        },
+        "from_id": {
+          "title": "From Id",
+          "type": "string"
+        },
+        "relation": {
+          "enum": [
+            "ParentCompany",
+            "Owns",
+            "Subsidiary",
+            "OperatesFactory",
+            "ProducesProduct",
+            "UsesProcess",
+            "ConsumesEnergy",
+            "HasOpportunity",
+            "SuitableForSolution"
+          ],
+          "title": "Relation",
+          "type": "string"
+        },
+        "to_id": {
+          "title": "To Id",
+          "type": "string"
+        },
+        "valid_from": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Valid From"
+        },
+        "valid_to": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Valid To"
+        },
+        "verification_status": {
+          "$ref": "#/$defs/VerificationStatus",
+          "default": "UNVERIFIED"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Claim Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "edge_id",
+        "from_id",
+        "relation",
+        "to_id",
+        "confidence"
+      ],
+      "title": "EnterpriseEdge",
+      "type": "object"
+    },
+    "Entity": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "canonical_name": {
+          "minLength": 1,
+          "title": "Canonical Name",
+          "type": "string"
+        },
+        "entity_type": {
+          "default": "company",
+          "enum": [
+            "company",
+            "group",
+            "institution",
+            "brand",
+            "other"
+          ],
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "registered_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Registered Name"
+        },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "former_names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Former Names",
+          "type": "array"
+        },
+        "official_website": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "maxLength": 2083,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Official Website"
+        },
+        "registration_region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Registration Region"
+        },
+        "parent_entity_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Entity Id"
+        },
+        "actual_controller_entity_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Controller Entity Id"
+        },
+        "verification_status": {
+          "$ref": "#/$defs/VerificationStatus",
+          "default": "UNVERIFIED"
+        },
+        "supporting_claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supporting Claim Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "entity_id",
+        "canonical_name"
+      ],
+      "title": "Entity",
+      "type": "object"
+    },
+    "Factory": {
+      "additionalProperties": false,
+      "properties": {
+        "factory_id": {
+          "title": "Factory Id",
+          "type": "string"
+        },
+        "operator_entity_id": {
+          "title": "Operator Entity Id",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "address": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Address"
+        },
+        "latitude": {
+          "anyOf": [
+            {
+              "maximum": 90,
+              "minimum": -90,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latitude"
+        },
+        "longitude": {
+          "anyOf": [
+            {
+              "maximum": 180,
+              "minimum": -180,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Longitude"
+        },
+        "processes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Processes",
+          "type": "array"
+        },
+        "operating_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Operating Status"
+        },
+        "supporting_claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supporting Claim Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "factory_id",
+        "operator_entity_id"
+      ],
+      "title": "Factory",
+      "type": "object"
+    },
+    "Product": {
+      "additionalProperties": false,
+      "properties": {
+        "product_id": {
+          "title": "Product Id",
+          "type": "string"
+        },
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "brand": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/ProductParameter"
+          },
+          "title": "Parameters",
+          "type": "array"
+        },
+        "image_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image Id"
+        },
+        "source_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "verification_status": {
+          "$ref": "#/$defs/VerificationStatus",
+          "default": "UNVERIFIED"
+        }
+      },
+      "required": [
+        "product_id",
+        "entity_id",
+        "name"
+      ],
+      "title": "Product",
+      "type": "object"
+    },
+    "ProductParameter": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "default": null,
+          "title": "Value"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Claim Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ProductParameter",
+      "type": "object"
+    },
+    "VerificationStatus": {
+      "enum": [
+        "UNVERIFIED",
+        "VERIFIED",
+        "CONFLICTING",
+        "REJECTED",
+        "STALE",
+        "REVIEW_REQUIRED"
+      ],
+      "title": "VerificationStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "entities": {
+      "items": {
+        "$ref": "#/$defs/Entity"
+      },
+      "title": "Entities",
+      "type": "array"
+    },
+    "factories": {
+      "items": {
+        "$ref": "#/$defs/Factory"
+      },
+      "title": "Factories",
+      "type": "array"
+    },
+    "products": {
+      "items": {
+        "$ref": "#/$defs/Product"
+      },
+      "title": "Products",
+      "type": "array"
+    },
+    "edges": {
+      "items": {
+        "$ref": "#/$defs/EnterpriseEdge"
+      },
+      "title": "Edges",
+      "type": "array"
+    }
+  },
+  "title": "EnterpriseGraph",
+  "type": "object"
+}

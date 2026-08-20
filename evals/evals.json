@@ -1,0 +1,216 @@
+{
+  "skill_name": "enterprise-energy-research",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "调研杉杉股份，重点把负极材料和偏光片产品信息搜全，输出产品目录、型号、参数、应用及来源。联网仅使用 AnySearch 和 Kimi WebBridge。",
+      "expected_output": "识别母公司与杉杉科技、杉金光电等官方产品中心；区分产品族和型号；输出目录覆盖状态、未覆盖项和逐参数来源。",
+      "files": [],
+      "expectations": [
+        "不得只用人造石墨、天然石墨、硅基负极等大类代替已公开型号",
+        "必须记录官方产品中心范围及目录枚举状态",
+        "必须报告型号级和参数级覆盖数量",
+        "未完成目录闭环时必须标记 PARTIAL 并生成产品覆盖缺口",
+        "联网路径只能使用 AnySearch 与 Kimi WebBridge"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "调查一家公开披露多个产品系列和具体型号的制造企业，并判断产品信息是否已经搜全。",
+      "expected_output": "从官方产品中心导航、分页和详情页建立可核验的产品目录边界，并将目录项与产品记录逐项对账。",
+      "files": [],
+      "expectations": [
+        "产品覆盖结论必须基于可验证的目录边界",
+        "产品族、系列和型号/SKU必须分层记录",
+        "目录项未匹配时不得宣称完整",
+        "参数值必须包含单位与来源证据"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "对一家制造业集团开展完整企业产业与能源合作调研。说明什么时候可以停止搜索，并交付正式 Word 和 17 页管理层 PPT。",
+      "expected_output": "研究按 R1 广度、R2 深挖、R3 三角验证执行，以数量下限、边际新增率、高优先级缺口和来源独立性共同判断饱和；Word 达到正式篇幅并渲染验收；PPT 完成高保真逐页生产和视觉回归。",
+      "files": [],
+      "expectations": [
+        "每个研究目标都必须有 R1/R2/R3 三轮记录和原始捕获",
+        "达到最低搜索数不得直接认定为饱和",
+        "连续两个批次无高优新增且边际新增率不高于 5% 才可停搜",
+        "默认 Word 为 15000-30000 中文字符且至少 30 个渲染页",
+        "PPT 每页有视觉元素、动作标题和来源日期偏差说明",
+        "PPT 必须生成 contact sheet、逐页目检并至少修复一次后全量重渲染"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "研究泰国户用储能市场进入机会：市场规模、政策激励、竞争格局、渠道结构。",
+      "expected_output": "完成市场级研究并产出 Word/Excel/HTML 交付物；验证门通过后冻结发布。",
+      "files": [],
+      "task": {
+        "task_id": "EVAL_TH_BESS_MARKET",
+        "requested_by": "eval-runner",
+        "country": "Thailand",
+        "product": "Residential BESS",
+        "research_type": "market_entry",
+        "topics": [
+          "market_size",
+          "policy",
+          "competitors"
+        ],
+        "priority": "normal",
+        "language": "zh-CN"
+      },
+      "expectations": [
+        "PUBLISHED",
+        "PASS",
+        "excel",
+        "word",
+        "enterprise_html"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "调研德国电池储能最新政策与法规（补贴、并网规则、碳排放要求）。",
+      "expected_output": "政策法规类任务必须走人工评审门（RV-09 规则启用时）。",
+      "files": [],
+      "task": {
+        "task_id": "EVAL_DE_POLICY",
+        "requested_by": "eval-runner",
+        "country": "Germany",
+        "research_type": "policy_regulation",
+        "topics": [
+          "battery_storage_policy"
+        ],
+        "priority": "high",
+        "language": "zh-CN"
+      },
+      "expectations": [
+        "PUBLISHED",
+        "PASS",
+        "excel"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "为一家锂电池正极材料制造企业建立公司档案：组织、产能、产品、认证。",
+      "expected_output": "公司级档案，实体识别、复杂度分级、能源画像与解决方案完整。",
+      "files": [],
+      "task": {
+        "task_id": "EVAL_CATHODE_PROFILE",
+        "requested_by": "eval-runner",
+        "company": "某锂电正极材料企业",
+        "research_type": "company_profile",
+        "topics": [
+          "organization",
+          "factories",
+          "product_catalog"
+        ],
+        "priority": "normal",
+        "language": "zh-CN"
+      },
+      "expectations": [
+        "PUBLISHED",
+        "PASS",
+        "excel",
+        "word"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "竞品分析：某光储一体逆变器厂商的产品线、定价策略与渠道。",
+      "expected_output": "竞品分析报告，冲突点必须保留并提示人工裁决（冲突为一等记录）。",
+      "files": [],
+      "task": {
+        "task_id": "EVAL_HYBRID_INVERTER",
+        "requested_by": "eval-runner",
+        "company": "某光储逆变器厂商",
+        "product": "Hybrid Inverter",
+        "research_type": "competitor_analysis",
+        "topics": [
+          "product_models",
+          "product_parameters",
+          "channels"
+        ],
+        "priority": "normal",
+        "language": "zh-CN"
+      },
+      "expectations": [
+        "PUBLISHED",
+        "PASS"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "海外渠道研究：欧洲户储产品的分销商、安装商与线上渠道结构。",
+      "expected_output": "渠道类研究（RV-09 敏感类型规则启用时）需人工确认后发布。",
+      "files": [],
+      "task": {
+        "task_id": "EVAL_EU_CHANNEL",
+        "requested_by": "eval-runner",
+        "region": "Europe",
+        "product": "Residential Storage",
+        "research_type": "channel_research",
+        "topics": [
+          "distributors",
+          "installers",
+          "ecommerce"
+        ],
+        "priority": "normal",
+        "language": "zh-CN"
+      },
+      "expectations": [
+        "PUBLISHED",
+        "PASS",
+        "excel"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "产品参数研究：某储能系统厂商的型号、技术参数与适用场景。",
+      "expected_output": "产品参数逐条带 source_id，缺失值渲染为 —，禁止编造。",
+      "files": [],
+      "task": {
+        "task_id": "EVAL_STORAGE_PARAMS",
+        "requested_by": "eval-runner",
+        "company": "某储能系统厂商",
+        "product": "ESS Container",
+        "research_type": "product_research",
+        "topics": [
+          "product_models",
+          "product_parameters",
+          "product_applications"
+        ],
+        "priority": "normal",
+        "language": "zh-CN"
+      },
+      "expectations": [
+        "PUBLISHED",
+        "PASS",
+        "enterprise_html"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "市场监测：新加坡 V2G 试点项目进展与车网互动政策。",
+      "expected_output": "监测类任务（market_monitor）支持周期重跑与变化检测（Phase 14）。",
+      "files": [],
+      "task": {
+        "task_id": "EVAL_SG_V2G",
+        "requested_by": "eval-runner",
+        "country": "Singapore",
+        "research_type": "market_monitor",
+        "topics": [
+          "v2g_pilot",
+          "policy"
+        ],
+        "priority": "normal",
+        "language": "zh-CN"
+      },
+      "expectations": [
+        "PUBLISHED",
+        "PASS",
+        "excel",
+        "word"
+      ]
+    }
+  ]
+}

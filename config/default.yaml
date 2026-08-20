@@ -1,0 +1,9 @@
+schema_version: "1.0"
+primary_provider: deepseek
+fallback_provider: openai
+primary_model: deepseek-chat
+fallback_model: gpt-5
+database_backend: sqlite
+fail_closed: true
+output_root: outputs
+

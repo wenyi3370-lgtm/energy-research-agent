@@ -1,0 +1,125 @@
+{
+  "$defs": {
+    "ArtifactBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/ArtifactType"
+        },
+        "status": {
+          "$ref": "#/$defs/ArtifactStatus",
+          "default": "PLANNED"
+        },
+        "skip_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skip Reason"
+        },
+        "claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Claim Ids",
+          "type": "array"
+        },
+        "image_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Image Ids",
+          "type": "array"
+        },
+        "chart_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Chart Ids",
+          "type": "array"
+        },
+        "section_bindings": {
+          "additionalProperties": true,
+          "title": "Section Bindings",
+          "type": "object"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "type"
+      ],
+      "title": "ArtifactBinding",
+      "type": "object"
+    },
+    "ArtifactStatus": {
+      "enum": [
+        "PLANNED",
+        "SKIPPED",
+        "PUBLISHED",
+        "FAILED"
+      ],
+      "title": "ArtifactStatus",
+      "type": "string"
+    },
+    "ArtifactType": {
+      "enum": [
+        "excel",
+        "word",
+        "enterprise_html",
+        "product_html",
+        "ppt"
+      ],
+      "title": "ArtifactType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "artifact_manifest_id": {
+      "title": "Artifact Manifest Id",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "freeze_id": {
+      "title": "Freeze Id",
+      "type": "string"
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/ArtifactBinding"
+      },
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "artifact_manifest_id",
+    "run_id",
+    "freeze_id",
+    "artifacts"
+  ],
+  "title": "ArtifactManifest",
+  "type": "object"
+}

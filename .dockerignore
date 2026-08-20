@@ -1,0 +1,15 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+outputs/
+automation_work/
+automation.db
+docs/
+tests/
+scripts/
+references/
+evals/
+schemas/
+*.md
+*.log

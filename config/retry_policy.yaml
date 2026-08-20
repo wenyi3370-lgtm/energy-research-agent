@@ -1,0 +1,9 @@
+# Retry policy (Phase 8): transient vs permanent classification + bounded
+# backoff. `should_retry` is evaluated against the durable RETRYING event
+# trail, so bounds survive restarts.
+schema_version: "1.0"
+retry:
+  max_retries: 3
+  base_delay_seconds: 5
+  max_delay_seconds: 300
+  jitter_ratio: 0.2

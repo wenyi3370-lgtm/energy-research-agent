@@ -1,0 +1,73 @@
+schema_version: "1.0"
+policy_version: 1
+policy_name: enterprise_three_round_saturation
+
+# 数量是最低执行门槛，不是提前停搜条件。只有三轮完成、关键缺口闭合且
+# 边际新增率进入饱和区，才允许把研究标记为 SATURATED。
+rounds:
+  R1:
+    goal: coverage
+    min_queries_per_goal: 1
+    min_unique_sources_per_goal: 2
+    min_source_types_per_goal: 2
+  R2:
+    goal: depth
+    min_queries_per_goal: 1
+    min_fulltext_captures_per_goal: 1
+    min_material_records_per_goal: 1
+  R3:
+    goal: triangulation
+    min_queries_per_goal: 1
+    min_independent_origins_per_critical_claim: 2
+
+saturation:
+  required_rounds: [R1, R2, R3]
+  minimum_no_new_high_priority_batches: 2
+  maximum_marginal_high_priority_yield: 0.05
+  require_zero_unresolved_critical_gaps: true
+  require_zero_unexpanded_high_priority_discoveries: true
+  require_raw_capture_per_attempt: true
+  require_attempt_journal: true
+  authoritative_source_can_satisfy_claim_with_one_origin: true
+
+goal_families:
+  - identity
+  - organization
+  - factories
+  - business
+  - product_centers
+  - product_catalog
+  - product_models
+  - product_parameters
+  - product_applications
+  - product_launches
+  - energy
+  - green
+  - overseas
+  - projects
+  - images
+
+exceptions:
+  allowed_type: public_evidence_gap
+  require_all_rounds_attempted: true
+  require_query_and_source_evidence: true
+  require_failure_reason: true
+  require_raw_capture_refs: true
+  require_zero_remaining_high_priority_discoveries: true
+  required_fields:
+    - reason
+    - decision_impact
+    - resolution_path
+    - owner
+    - status
+    - source_context
+  approval_status: approved
+
+approved_failure_reasons:
+  - auth_required
+  - bridge_unavailable
+  - tool_unavailable
+  - insufficient_balance
+  - access_blocked
+  - paywall
+  - source_not_published

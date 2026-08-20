@@ -1,0 +1,132 @@
+# 🚀 小白上手指南（零基础，10 分钟跑通第一个研究）
+
+不需要懂代码。所有操作都在浏览器和几个按钮里完成。
+
+---
+
+## 第 1 步：确认系统在跑（已完成）
+
+你机器上现在有 3 个服务（Docker 里）：
+
+| 服务 | 干什么 | 网址 |
+|---|---|---|
+| **研究服务** | 收任务、做研究、出报告 | http://localhost:8000 |
+| **数据库** | 存任务和结果 | （不用管） |
+| **n8n 自动化** | 把"表单→研究→通知"串起来 | http://localhost:5678 |
+
+> 想随时查看/重启：打开终端，进入项目目录后运行
+> `docker compose ps`（看状态）、`docker compose restart`（重启）。
+
+## 第 2 步：提交你的第一个研究任务（2 分钟）
+
+1. 浏览器打开 **http://localhost:8000/docs**（这就是"操作面板"，自动生成，免费不用装）。
+2. 找到 **POST /api/v1/research**，点右边的 **Try it out**。
+3. 在请求框里把内容改成下面这样（**中文直接用**）：
+
+```json
+{
+  "task_id": "MY-FIRST-001",
+  "requested_by": "你的名字",
+  "company": "宁德时代",
+  "research_type": "company_profile",
+  "topics": ["主营业务", "生产基地", "产品线"]
+}
+```
+
+4. 点 **Execute**。返回里会给你一个 `run_id`（像 `RUN-xxx`），**记下它**。
+
+> 💡 提示：`company` 是研究谁；`country`/`product` 也可以（研究市场用）。
+> `task_id` 是任务编号，自己起个不重复的名字即可。
+
+## 第 3 步：看研究结果（2 分钟）
+
+1. 回到 /docs，找到 **GET /api/v1/research/{run_id}**，点 Try it out。
+2. 把刚才的 `run_id` 填进去，Execute。
+3. 看到 `"status": "PUBLISHED"` 就是**完成了**（一般 10 秒内）。
+   - 如果 `"status": "REVIEW_REQUIRED"` —— 说明系统判断**需要你人工确认**（见第 4 步）。
+   - 如果 `"status": "FAILED"` —— 看 `error.message`，按提示处理（多半是配置问题）。
+
+4. 看产出文件：**GET /api/v1/research/{run_id}/artifacts** → 你会看到
+   `excel`（数据表格）、`word`（报告文档）、`enterprise_html`（网页版报告）三个文件。
+   文件存在项目的 `automation_work/<run_id>/outputs/` 目录里。
+
+## 第 4 步：需要人工评审时怎么办（1 分钟）
+
+系统碰到**数据有冲突、置信度低、政策类研究**等情况，会停下来等你拍板（这是设计好的，
+不是出错）。找到 **POST /api/v1/research/{run_id}/review**：
+
+```json
+{
+  "reviewer": "你的名字",
+  "decision": "APPROVE",
+  "reason": "内容确认无误"
+}
+```
+
+- `APPROVE` = 批准，继续发布
+- `REJECT` = 不通过，任务终止
+- `RESEARCH_AGAIN` = 重新研究
+- `EDIT_AND_APPROVE` = 改完再批准（要带上修改内容）
+
+## 第 5 步：反馈和看回报（1 分钟）
+
+做完研究后反馈一下，系统会帮你算"省了多少人工"：
+
+- **POST /api/v1/research/{run_id}/feedback**，填上你的人工用时：
+```json
+{
+  "submitted_by": "你的名字",
+  "adoption_status": "ADOPTED",
+  "manual_baseline_minutes": 480,
+  "human_review_minutes": 30
+}
+```
+- **GET /api/v1/roi/summary** 看汇总：节省了多少分钟、ROI 倍数、采纳数。
+
+## 第 6 步：定时监测（自动盯市场）（1 分钟）
+
+系统已配好 2 个监测任务（泰国户储市场·月度、某储能企业产品·周度），
+跑一下就能触发到期任务：
+
+```bash
+python scripts/run_monitor.py          # 跑所有到期任务
+python scripts/run_monitor.py --check  # 只看计划，不执行
+```
+
+> 想改监测对象：编辑 `config/watchlist.yaml`，把 company/country 换成你真正关心的，
+> 保存即生效（不用重启）。正式定时可以交给 n8n 的 Schedule 节点或系统计划任务。
+
+## 第 7 步：n8n 自动化（表单一键触发）（可选）
+
+1. 打开 **http://localhost:5678**（第一次会让你设管理员账号密码，自己设一个）。
+2. 工作流 **Enterprise Energy Research Automation** 已经导入好了，点开即可看到流程图。
+3. 点右上角 **Active** 开启。之后有人往飞书表单填内容（Webhook 触发），
+   系统就会自动：建任务 → 轮询 → 完成通知 / 评审等待 / 失败重试 → 收集 ROI 反馈。
+4. 本地测试 Webhook：POST 到 `http://localhost:5678/webhook/feishu-form-trigger`
+   （n8n 界面里点 Webhook 节点能看到完整地址；生产环境需 HTTPS 反代）。
+
+## 第 8 步（进阶）：真实联网研究
+
+当前默认是"演示模式"（合成数据，为了让你先跑通流程）。要研究**真实企业**，
+需要两样东西：
+
+1. **一个 LLM 密钥**（任选）：DeepSeek 官网注册拿 `EER_DEEPSEEK_API_KEY`，
+   或在 `docker-compose.yml` 里打开对应配置行；
+2. **浏览器调研工具**：运行 `kimi-webbridge` 程序并装上配套浏览器扩展
+   （你机器上已有程序本体：`~/.kimi-webbridge/bin/`）。
+
+然后改 `docker-compose.yml` 里的 `EER_AUTOMATION_EXECUTOR=orchestrating`，
+`docker compose restart research-api`，就是真实研究了。
+
+---
+
+## 常见问题
+
+| 现象 | 原因 / 处理 |
+|---|---|
+| 任务 FAILED，错误是 Permission denied | 容器目录权限问题（已修复过一次）；`docker compose restart research-api` 即可 |
+| 状态一直是 QUEUED | 稍等几秒再查；或看 `docker compose logs research-api` |
+| n8n 打不开 | `docker compose up -d` 重新拉起 |
+| 想清空所有测试数据 | `docker compose down -v` 全部重置（会删掉 n8n 账号和数据） |
+
+祝研究顺利！🎉

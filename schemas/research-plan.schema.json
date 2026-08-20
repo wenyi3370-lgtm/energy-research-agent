@@ -1,0 +1,157 @@
+{
+  "$defs": {
+    "EnterpriseComplexity": {
+      "enum": [
+        "GROUP_LARGE",
+        "ENTERPRISE_NORMAL",
+        "SMALL_SIMPLE",
+        "UNKNOWN"
+      ],
+      "title": "EnterpriseComplexity",
+      "type": "string"
+    },
+    "QueryStatus": {
+      "enum": [
+        "PLANNED",
+        "COMPLETED",
+        "PARTIAL",
+        "BLOCKED",
+        "FAILED"
+      ],
+      "title": "QueryStatus",
+      "type": "string"
+    },
+    "ResearchQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "query_id": {
+          "title": "Query Id",
+          "type": "string"
+        },
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "topic": {
+          "title": "Topic",
+          "type": "string"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "purpose": {
+          "title": "Purpose",
+          "type": "string"
+        },
+        "preferred_source_levels": {
+          "items": {
+            "$ref": "#/$defs/SourceLevel"
+          },
+          "title": "Preferred Source Levels",
+          "type": "array"
+        },
+        "adapter_preference": {
+          "default": "anysearch",
+          "enum": [
+            "anysearch",
+            "kimi_webbridge"
+          ],
+          "title": "Adapter Preference",
+          "type": "string"
+        },
+        "max_results": {
+          "default": 5,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Max Results",
+          "type": "integer"
+        },
+        "recursion_depth": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Recursion Depth",
+          "type": "integer"
+        },
+        "requires_browser": {
+          "default": false,
+          "title": "Requires Browser",
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/$defs/QueryStatus",
+          "default": "PLANNED"
+        }
+      },
+      "required": [
+        "query_id",
+        "entity_id",
+        "topic",
+        "query",
+        "purpose"
+      ],
+      "title": "ResearchQuery",
+      "type": "object"
+    },
+    "SourceLevel": {
+      "enum": [
+        "SOURCE_A",
+        "SOURCE_B",
+        "SOURCE_C",
+        "SOURCE_D"
+      ],
+      "title": "SourceLevel",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "plan_id": {
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "complexity": {
+      "$ref": "#/$defs/EnterpriseComplexity"
+    },
+    "queries": {
+      "items": {
+        "$ref": "#/$defs/ResearchQuery"
+      },
+      "title": "Queries",
+      "type": "array"
+    },
+    "budget": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Budget",
+      "type": "object"
+    },
+    "completion_contract": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Completion Contract",
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "plan_id",
+    "run_id",
+    "complexity",
+    "queries",
+    "budget",
+    "completion_contract"
+  ],
+  "title": "ResearchPlan",
+  "type": "object"
+}

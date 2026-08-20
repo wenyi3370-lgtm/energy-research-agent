@@ -1,0 +1,19 @@
+schema_version: "1.0"
+group_large:
+  minimum_score: 5
+  signals:
+    group_in_canonical_name: 2
+    multiple_subsidiaries: 2
+    multiple_factories: 2
+    state_owned_group: 2
+    published_member_roster: 2
+    multiple_industry_segments: 1
+small_simple:
+  maximum_score: 1
+  signals:
+    no_known_subsidiaries: -1
+    single_factory: -1
+    single_business_line: -1
+unknown:
+  minimum_identity_confidence: 0.75
+

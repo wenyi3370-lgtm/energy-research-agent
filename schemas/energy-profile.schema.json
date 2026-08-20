@@ -1,0 +1,163 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "energy_profile_id": {
+      "title": "Energy Profile Id",
+      "type": "string"
+    },
+    "entity_id": {
+      "title": "Entity Id",
+      "type": "string"
+    },
+    "factory_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Factory Id"
+    },
+    "processes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Processes",
+      "type": "array"
+    },
+    "operating_schedule": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Operating Schedule"
+    },
+    "electricity_equipment": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Electricity Equipment",
+      "type": "array"
+    },
+    "gas_equipment": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Gas Equipment",
+      "type": "array"
+    },
+    "steam_heat": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Steam Heat"
+    },
+    "compressed_air": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Compressed Air"
+    },
+    "chilled_water_hvac": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Chilled Water Hvac"
+    },
+    "transformer_load": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Transformer Load"
+    },
+    "roof": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Roof"
+    },
+    "load_shape": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Load Shape"
+    },
+    "field_status": {
+      "additionalProperties": {
+        "enum": [
+          "observed",
+          "inferred",
+          "missing",
+          "requires_on_site_due_diligence"
+        ],
+        "type": "string"
+      },
+      "title": "Field Status",
+      "type": "object"
+    },
+    "claim_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Claim Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "energy_profile_id",
+    "entity_id"
+  ],
+  "title": "EnergyProfile",
+  "type": "object"
+}

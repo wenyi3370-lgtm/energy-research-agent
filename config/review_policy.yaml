@@ -1,0 +1,42 @@
+# Review Gate policy (Phase 5). Only `enabled` rules are enforced by the
+# automation service.
+# 已按生产推荐启用：RV-01（警告即评审，V1 基线）、RV-02（低置信度）、
+# RV-04（数据冲突）、RV-09（政策/渠道类敏感研究）。这些规则对合成演示
+# 不产生干扰（合成数据置信度 1.0、无冲突），对真实研究提供安全兜底。
+# 需要更严时可继续启用 RV-05（缺口评审）/ RV-06（证据量过少）/ RV-03（高风险）。
+schema_version: "1.0"
+rules:
+  RV-01_pass_with_warnings:
+    enabled: true
+    reason: "validation passed with warnings; a human must confirm"
+  RV-02_low_confidence:
+    enabled: true
+    min_confidence: 0.70
+    reason: "model confidence {confidence} is below {min_confidence}"
+  RV-03_high_risk:
+    enabled: false
+    min_risk: "HIGH"
+    reason: "risk level is {risk_level}"
+  RV-04_conflicts:
+    enabled: true
+    reason: "{conflict_count} conflicting claims need adjudication"
+  RV-05_gaps:
+    enabled: false
+    reason: "{gap_count} open evidence gaps need acceptance"
+  RV-06_low_evidence:
+    enabled: false
+    min_evidence: 10
+    reason: "only {evidence_count} evidence records; below {min_evidence}"
+  RV-07_executor_reasons:
+    enabled: false
+    reason: "executor reported: {first_reason}"
+  RV-08_market_scope:
+    enabled: false
+    reason: "market-level scope without a named company"
+  RV-09_sensitive_types:
+    enabled: true
+    research_types: ["policy_regulation", "channel_research"]
+    reason: "research type {research_type} is policy-sensitive"
+  RV-10_urgent_priority:
+    enabled: false
+    reason: "priority {priority} requires senior sign-off"

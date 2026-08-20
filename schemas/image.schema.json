@@ -1,0 +1,203 @@
+{
+  "$defs": {
+    "VerificationStatus": {
+      "enum": [
+        "UNVERIFIED",
+        "VERIFIED",
+        "CONFLICTING",
+        "REJECTED",
+        "STALE",
+        "REVIEW_REQUIRED"
+      ],
+      "title": "VerificationStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "image_id": {
+      "title": "Image Id",
+      "type": "string"
+    },
+    "entity_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Entity Id"
+    },
+    "factory_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Factory Id"
+    },
+    "product_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Product Id"
+    },
+    "source_url": {
+      "format": "uri",
+      "maxLength": 2083,
+      "minLength": 1,
+      "title": "Source Url",
+      "type": "string"
+    },
+    "source_page_url": {
+      "format": "uri",
+      "maxLength": 2083,
+      "minLength": 1,
+      "title": "Source Page Url",
+      "type": "string"
+    },
+    "source_id": {
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_domain": {
+      "title": "Source Domain",
+      "type": "string"
+    },
+    "source_title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Title"
+    },
+    "image_type": {
+      "enum": [
+        "logo",
+        "factory",
+        "office",
+        "production_line",
+        "product",
+        "location",
+        "certificate",
+        "other"
+      ],
+      "title": "Image Type",
+      "type": "string"
+    },
+    "retrieved_at": {
+      "format": "date-time",
+      "title": "Retrieved At",
+      "type": "string"
+    },
+    "sha256": {
+      "title": "Sha256",
+      "type": "string"
+    },
+    "phash": {
+      "title": "Phash",
+      "type": "string"
+    },
+    "width": {
+      "exclusiveMinimum": 0,
+      "title": "Width",
+      "type": "integer"
+    },
+    "height": {
+      "exclusiveMinimum": 0,
+      "title": "Height",
+      "type": "integer"
+    },
+    "mime_type": {
+      "title": "Mime Type",
+      "type": "string"
+    },
+    "alt_text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Alt Text"
+    },
+    "surrounding_text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Surrounding Text"
+    },
+    "entity_match_signals": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Entity Match Signals",
+      "type": "array"
+    },
+    "verification_status": {
+      "$ref": "#/$defs/VerificationStatus",
+      "default": "UNVERIFIED"
+    },
+    "confidence": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "local_asset_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Local Asset Ref"
+    }
+  },
+  "required": [
+    "image_id",
+    "source_url",
+    "source_page_url",
+    "source_id",
+    "source_domain",
+    "image_type",
+    "sha256",
+    "phash",
+    "width",
+    "height",
+    "mime_type",
+    "confidence"
+  ],
+  "title": "ImageEvidence",
+  "type": "object"
+}

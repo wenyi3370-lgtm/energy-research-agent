@@ -1,0 +1,11 @@
+schema_version: "1.0"
+core_fact_rule:
+  source_a_count: 1
+  independent_source_b_count: 2
+levels:
+  SOURCE_A: [government, sasac, official_company, annual_report, official_manual]
+  SOURCE_B: [industry_association, authoritative_media, university, research_institute]
+  SOURCE_C: [recruitment, commercial_database, marketplace, channel]
+  SOURCE_D: [ordinary_media, forum, social_media, search_snippet]
+blocked_core_evidence: [SOURCE_C, SOURCE_D]
+

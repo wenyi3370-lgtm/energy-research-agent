@@ -1,0 +1,66 @@
+{
+  "id": "monitor-schedule-trigger-v1",
+  "name": "定时监测调度（Monitor Schedule）",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {"field": "hours", "hoursInterval": 1}
+          ],
+          "triggerAtHour": 9,
+          "triggerAtMinute": 0
+        }
+      },
+      "id": "n8n-node-schedule-monitor",
+      "name": "每小时触发",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-200, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://research-api:8000/api/v1/monitor/run",
+        "options": {}
+      },
+      "id": "n8n-node-http-monitor",
+      "name": "调用监测接口",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('调用监测接口').first().json;\nreturn [{ json: {\n  message: '[定时监测] 本次执行 ' + body.count + ' 个到期任务：' + (body.ran || []).map(r => r.task_id + '(' + r.status + ')').join(', ') || '无到期任务'\n}}];"
+      },
+      "id": "n8n-node-code-monitor-summary",
+      "name": "汇总执行结果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [180, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://research-api:8000/api/v1/triggers/feishu",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({requested_by: 'watchdog', company: '监测通知', research_type: 'other', notes: $json.message}) }}",
+        "options": {}
+      },
+      "id": "n8n-node-http-monitor-notify",
+      "name": "群内汇报（占位）",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [360, 0]
+    }
+  ],
+  "connections": {
+    "每小时触发": {"main": [[{"node": "调用监测接口", "type": "main", "index": 0}]]},
+    "调用监测接口": {"main": [[{"node": "汇总执行结果", "type": "main", "index": 0}]]},
+    "汇总执行结果": {"main": [[{"node": "群内汇报（占位）", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1"},
+  "pinData": {}
+}

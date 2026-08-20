@@ -1,0 +1,84 @@
+# Failure Case Library (Phase 13) — cases are written from real incidents,
+# including the 2026-08-19 LLM quota outage that interrupted this very
+# project's Phase 2 subagent.
+schema_version: "1.0"
+cases:
+  - case_id: "FC-001"
+    title: "LLM 计费周期配额耗尽（403 usage limit）"
+    phase: "research"
+    symptom: "llm.request 返回 403：You've reached your usage limit for this billing cycle"
+    root_cause: "provider 计费周期配额用尽；失败发生在任意 LLM 调用点（含子 agent 委派）"
+    detection: "error 字符串包含 'usage limit' / '403'；gateway 调用连续失败且 retryable 判定为瞬时错误"
+    recovery: "停止自动重试（配额类错误重试无意义）；保留 run 于 FAILED；通知管理员升级套餐或等待刷新；FAILED→RETRYING 仅在配额恢复后手动触发"
+    prevent: "在 gateway 外层监控 llm_calls/token 用量（automation.observability.CountingGateway），配额阈值预警；对 quota 类错误单独归类为 permanent"
+    tags: ["quota", "llm", "403", "cost"]
+
+  - case_id: "FC-002"
+    title: "搜索适配器不可用（fail-closed）"
+    phase: "research"
+    symptom: "SearchExecutor 返回 blocked envelope：Approved adapter is not configured"
+    root_cause: "AnySearch / Kimi WebBridge 未配置或 health() 不可用"
+    detection: "outcome.review_reasons 含 'adapter not available'；evidence_count == 0"
+    recovery: "检查 EER_* 凭证与 vendor skill 根目录；修复后重试 run（FAILED→RETRYING→QUEUED）"
+    prevent: "OrchestratingExecutor.from_environment 用 UnconfiguredSearchAdapter 兜底，绝不静默降级为猜测数据"
+    tags: ["adapter", "fail-closed", "search"]
+
+  - case_id: "FC-003"
+    title: "发布器失败（publisher failed）"
+    phase: "publish"
+    symptom: "artifact manifest 中 excel/word/html 状态为 failed；审计报告 ARTIFACT_NOT_PUBLISHED"
+    root_cause: "publisher 依赖缺失（如 pandas/openpyxl）、磁盘问题或绑定外事实被审计拒绝"
+    detection: "ArtifactConsistencyAuditor findings 非空；ArtifactResult.status == failed"
+    recovery: "安装缺失依赖（Phase 4 已把 requests/openpyxl/pandas 声明进 pyproject）；修复后对同一冻结包重跑发布"
+    prevent: "发布前跑 publisher health()；fixture 模式必须显式标注，生产 run 禁止落入 fixture 后门"
+    tags: ["publisher", "artifact", "dependencies"]
+
+  - case_id: "FC-004"
+    title: "数据饱和未达成（saturation PARTIAL/BLOCKED）"
+    phase: "research"
+    symptom: "DataSaturationValidator findings 列出 missing_rounds / floor 未达标"
+    root_cause: "R1-R3 三轮未完成、来源/全文/原始抓取数量不足，或边际新增率未进入饱和区"
+    detection: "outcome.review_reasons 含 SAT- 前缀 findings"
+    recovery: "按 missing_rounds 补搜（增加查询预算或换适配器）；关键缺口闭合后重新执行；饱和性缺口需人工确认接受"
+    prevent: "把 completion_contract 与 budget 写入计划；调度器（Phase 14）对监控类任务自动续跑"
+    tags: ["saturation", "quality", "budget"]
+
+  - case_id: "FC-005"
+    title: "LLM 网关超时/上游故障（transient）"
+    phase: "research"
+    symptom: "GatewayError/TimeoutError 在 extraction 阶段抛出"
+    root_cause: "上游 provider 不稳定；属于瞬时错误"
+    detection: "is_transient() == True；error_type 为 GatewayError/TimeoutError/ConnectionError"
+    recovery: "按 RetryPolicy 指数退避重试（base 5s，上限 300s，上限 3 次）；多次失败后转 FAILED 通知人工"
+    prevent: "gateway 包装层记录 latency_ms；失败率超阈值时告警"
+    tags: ["gateway", "transient", "timeout"]
+
+  - case_id: "FC-006"
+    title: "任务重复提交（duplicate task_id / idempotency_key）"
+    phase: "trigger"
+    symptom: "POST /api/v1/research 返回 409 DUPLICATE_TASK"
+    root_cause: "Feishu 表单重复回传 / n8n 重放 / 调用方未携带幂等键"
+    detection: "HTTP 409 + error.type == DUPLICATE_TASK"
+    recovery: "带同一 idempotency_key 重放会返回原 run 状态（幂等语义），无需新建；业务侧确认是否期望新任务"
+    prevent: "所有触发器（Feishu/n8n/API）必须携带稳定幂等键；DB 唯一约束兜底（research_tasks.idempotency_key）"
+    tags: ["idempotency", "trigger", "409"]
+
+  - case_id: "FC-007"
+    title: "真实研究链路首次跑通问题集（markdown/JSON/凭证）"
+    phase: "research"
+    symptom: "真实模式 run 反复 FAILED/BLOCKED：证据 0、Structured response failed validation、CLI 输出账号注册信息"
+    root_cause: "① AnySearch CLI 输出为 markdown 而非 JSON（_parse_output 只解析 JSON）；② LLM 抽取 prompt 未附 schema → 模型自创字段；③ 匿名调用 CLI 首跑输出自动注册信息而非结果；④ 单页抽取失败使整 run 失败"
+    detection: "evidence_count==0 且 review_reasons 含 source floor / no raw capture；error_type=GatewayError 带 raw excerpt"
+    recovery: "四类修复已合入：markdown 结果解析（_parse_markdown_results）、schema+few-shot 提示词、JSON 模式+日期/URL 归一、AnySearch API key 写入 vendor/skills/anysearch/scripts/.env、单页失败跳过并上浮"
+    prevent: "首次部署真实模式前，在容器内跑一次 anysearch 单查确认返回带 URL 的结果；LLM 抽取失败页会出现在 review_reasons（N page extraction(s) failed）"
+    tags: ["real-research", "anysearch", "extraction", "llm"]
+
+  - case_id: "FC-008"
+    title: "真实研究证据冲突导致 BLOCKED（UNRESOLVED_CORE_CONFLICT）"
+    phase: "validation"
+    symptom: "run BLOCKED，review_reasons 含 UNRESOLVED_CORE_CONFLICT: <field>；证据已大量采集（evidence_count>0）"
+    root_cause: "不同来源对同一字段（如实际控制人/股权结构）说法不一致；冲突按铁律标记 BLOCKING 且系统拒绝静默裁决"
+    detection: "validation_status==BLOCKED 且 findings 含 UNRESOLVED_CORE_CONFLICT"
+    recovery: "人工查看冲突 claim（见 docs/automation/runbook.md）；判定口径后决定：统一口径重跑 或 接受差异不发布；稳定冲突重跑仍会 BLOCKED（保护机制）"
+    prevent: "这是设计行为不是故障；人工裁决写入证据审计的机制已列入路线图"
+    tags: ["conflict", "blocked", "validation", "human-in-the-loop"]

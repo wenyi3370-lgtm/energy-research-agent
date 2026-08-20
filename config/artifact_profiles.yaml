@@ -1,0 +1,63 @@
+schema_version: "1.0"
+word:
+  heading_depth: 3
+  automatic_toc: true
+  default_profile: full_decision_report
+  full_decision_report:
+    minimum_chinese_characters: 15000
+    target_maximum_chinese_characters: 30000
+    minimum_rendered_pages: 30
+    minimum_heading_1_sections: 13
+    minimum_analysis_characters_before_visual: 50
+    target_paragraphs_per_chapter: [4, 6]
+    target_characters_per_analysis_paragraph: [200, 350]
+    require_rendered_pdf: true
+    require_every_page_inspected: true
+    require_figure_or_table_per_core_chapter: true
+    require_visual_manifest: true
+    minimum_formal_figures: 13
+    minimum_visual_families: 3
+    maximum_bar_family_ratio: 0.60
+    require_three_line_tables: true
+    require_figure_source_notes: true
+    require_png_300dpi_and_editable_svg: true
+    require_verified_image_publication_manifest: true
+    maximum_real_images_per_chapter: 6
+    require_image_caption_and_source: true
+    real_images_supplement_charts: true
+  concise_report:
+    enabled_only_by_explicit_user_request: true
+    minimum_chinese_characters: 6000
+    minimum_rendered_pages: 12
+ppt:
+  target_slides: 17
+  minimum_slides: 15
+  maximum_slides: 20
+  formal_route: embedded-pptmaster-svg-v1
+  minimum_layout_families: 4
+  maximum_text_only_slide_ratio: 0.0
+  minimum_visual_fix_cycles: 1
+  require_action_titles: true
+  require_source_date_bias_footer: true
+  require_contact_sheet: true
+  require_all_slides_rendered_and_inspected: true
+  require_full_rerender_after_fix: true
+  require_storyline_and_evidence_map: true
+  maximum_consecutive_same_layout: 2
+  minimum_chart_font_pt: 8
+  maximum_geometry_overlap_pt: 3
+  require_token_aware_wrap: true
+  prohibit_wrapped_kpi_units: true
+  prohibit_wrapped_page_numbers: true
+  require_verified_image_publication_manifest: true
+  require_all_contracted_images_embedded: true
+  require_image_caption_and_source: true
+  real_images_supplement_charts: true
+  fallback_is_quality_equivalent: false
+html:
+  standalone: true
+  responsive_widths: [360, 768, 1440]
+  header_height_px: 72
+product_html:
+  minimum_compare: 2
+  maximum_compare: 4

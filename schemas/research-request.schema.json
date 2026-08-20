@@ -1,0 +1,48 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    },
+    "raw_company_name": {
+      "minLength": 1,
+      "title": "Raw Company Name",
+      "type": "string"
+    },
+    "locale": {
+      "default": "zh-CN",
+      "title": "Locale",
+      "type": "string"
+    },
+    "as_of_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "As Of Date"
+    },
+    "optional_scope": {
+      "additionalProperties": true,
+      "title": "Optional Scope",
+      "type": "object"
+    }
+  },
+  "required": [
+    "request_id",
+    "raw_company_name"
+  ],
+  "title": "ResearchRequest",
+  "type": "object"
+}

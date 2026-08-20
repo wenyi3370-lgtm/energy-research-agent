@@ -1,0 +1,115 @@
+[
+  {
+    "source_url": "https://acme-energy.example.com/about",
+    "source_title": "示例能源装备有限公司 - 企业简介",
+    "publisher": "示例能源装备有限公司",
+    "source_kind": "official_company",
+    "extraction_method": "recorded_fixture",
+    "is_search_snippet": false,
+    "entities": [
+      {
+        "entity_key": "acme",
+        "canonical_name": "示例能源装备有限公司",
+        "entity_type": "company",
+        "aliases": ["示例能源"],
+        "official_website": "https://acme-energy.example.com",
+        "registration_region": "四川省成都市"
+      }
+    ],
+    "claims": [
+      {
+        "entity_key": "acme",
+        "field_name": "canonical_company_name",
+        "value": "示例能源装备有限公司",
+        "value_type": "string",
+        "raw_text": "公司全称：示例能源装备有限公司",
+        "context_text": "示例能源装备有限公司是一家储能装备制造企业。",
+        "qualifier": "exact"
+      },
+      {
+        "entity_key": "acme",
+        "field_name": "process",
+        "value": ["机加工", "装配", "测试"],
+        "value_type": "array",
+        "raw_text": "拥有机加工、装配和测试生产线",
+        "context_text": "公司拥有机加工、装配和测试生产线。",
+        "qualifier": "exact"
+      },
+      {
+        "entity_key": "acme",
+        "field_name": "roof_area",
+        "value": 12000,
+        "value_type": "number",
+        "unit": "m2",
+        "raw_text": "厂房屋顶面积约12000平方米",
+        "context_text": "一期厂房屋顶面积约12000平方米。",
+        "qualifier": "approximately"
+      },
+      {
+        "entity_key": "acme",
+        "field_name": "product_catalog_scope",
+        "value": {
+          "official_product_centers": ["https://acme-energy.example.com/products"],
+          "enumerated": true,
+          "catalog_items": ["工商业液冷储能柜"]
+        },
+        "value_type": "object",
+        "raw_text": "官网产品中心共列示工商业液冷储能柜一类产品。",
+        "context_text": "已枚举官网产品中心及其全部产品详情页。",
+        "qualifier": "exact"
+      }
+    ],
+    "factories": [
+      {
+        "factory_key": "acme-factory-1",
+        "operator_entity_key": "acme",
+        "name": "成都生产基地",
+        "address": "四川省成都市示例大道1号",
+        "processes": ["机加工", "装配", "测试"]
+      }
+    ],
+    "products": [
+      {
+        "product_key": "acme-product-1",
+        "entity_key": "acme",
+        "name": "工商业液冷储能柜",
+        "brand": "ACME",
+        "model": "AC-100-215",
+        "category": "储能设备",
+        "description": "面向工商业用户侧应用",
+        "parameters": [
+          {"name": "额定容量", "value": 215, "unit": "kWh", "claim_ids": []}
+        ]
+      }
+    ],
+    "images": [
+      {
+        "image_key": "acme-logo",
+        "entity_key": "acme",
+        "source_url": "https://acme-energy.example.com/assets/logo.png",
+        "image_type": "logo",
+        "width": 800,
+        "height": 300,
+        "mime_type": "image/png",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "phash": "1111222233334444",
+        "alt_text": "示例能源装备有限公司 Logo",
+        "surrounding_text": "示例能源装备有限公司官网"
+      },
+      {
+        "image_key": "acme-product-image",
+        "entity_key": "acme",
+        "product_key": "acme-product-1",
+        "source_url": "https://acme-energy.example.com/assets/ac-100-215.jpg",
+        "image_type": "product",
+        "width": 1200,
+        "height": 900,
+        "mime_type": "image/jpeg",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "phash": "5555666677778888",
+        "alt_text": "示例能源装备有限公司 AC-100-215 储能柜",
+        "surrounding_text": "AC-100-215 工商业液冷储能柜产品页"
+      }
+    ]
+  }
+]
