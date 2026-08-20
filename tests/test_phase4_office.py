@@ -48,6 +48,10 @@ class Phase4OfficeTests(unittest.TestCase):
             self.assertIsNotNone(workbook["证据主表"].freeze_panes)
 
     def test_word_publisher_contains_real_toc_and_page_fields(self) -> None:
+        from docx import Document
+        from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+
         with tempfile.TemporaryDirectory() as temp:
             bundle, manifest = self._bundle(temp)
             binding = next(item for item in manifest.artifacts if item.type == ArtifactType.WORD)
@@ -61,16 +65,30 @@ class Phase4OfficeTests(unittest.TestCase):
             self.assertIn("PAGE", footer_xml)
             self.assertIn("tblLayout", document_xml)
             self.assertNotIn('w:val="TableGrid"', document_xml)
-            self.assertGreaterEqual(document_xml.count("<w:drawing>"), 13)
             self.assertIn("数据来源：证据冻结", document_xml)
+            report = Document(target)
+            self.assertTrue(report.tables)
+            for table in report.tables:
+                self.assertEqual(table.alignment, WD_TABLE_ALIGNMENT.CENTER)
+                for row in table.rows:
+                    for cell in row.cells:
+                        self.assertEqual(cell.vertical_alignment, WD_CELL_VERTICAL_ALIGNMENT.CENTER)
+                        for paragraph in cell.paragraphs:
+                            self.assertEqual(paragraph.alignment, WD_ALIGN_PARAGRAPH.CENTER)
+                            self.assertEqual(paragraph.paragraph_format.first_line_indent, 0)
+                            self.assertEqual(paragraph.paragraph_format.left_indent, 0)
+                            self.assertEqual(paragraph.paragraph_format.right_indent, 0)
             visual_manifest = target.parent / "report_assets" / "visual_manifest.json"
             self.assertTrue(visual_manifest.is_file())
             payload = json.loads(visual_manifest.read_text(encoding="utf-8"))
-            self.assertGreaterEqual(len(payload["visuals"]), 13)
-            self.assertGreaterEqual(len({item["family"] for item in payload["visuals"]}), 3)
+            self.assertGreaterEqual(document_xml.count("<w:drawing>"), len(payload["visuals"]))
+            self.assertTrue(all(item["renderer"] == "lieflat-charts-gallery-port-svg-v2" for item in payload["visuals"]))
+            self.assertTrue(all(item["template_source"] and item["template_card_title"] for item in payload["visuals"]))
+            self.assertTrue(all(item["template_id"] in {"F4", "F5", "L13"} for item in payload["visuals"]))
             for item in payload["visuals"]:
                 self.assertTrue((target.parent / "report_assets" / "figures" / f"{item['visual_id']}.png").is_file())
                 self.assertTrue((target.parent / "report_assets" / "figures" / f"{item['visual_id']}.svg").is_file())
+                self.assertTrue((target.parent / "report_assets" / "figures" / f"{item['visual_id']}.html").is_file())
 
 
 if __name__ == "__main__":

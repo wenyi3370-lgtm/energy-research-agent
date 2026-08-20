@@ -12,7 +12,9 @@ class SearchExecutor:
         results: list[SearchResultEnvelope] = []
         page_budget = int(plan.budget.get("max_pages", 120))
         used_pages = 0
-        for query in plan.queries:
+        round_order = {"R1": 0, "R2": 1, "R3": 2}
+        ordered_queries = sorted(enumerate(plan.queries), key=lambda row: (round_order[row[1].collection_round], row[0]))
+        for _, query in ordered_queries:
             if used_pages >= page_budget:
                 results.append(SearchResultEnvelope(
                     adapter=query.adapter_preference, query_id=query.query_id, status="blocked",

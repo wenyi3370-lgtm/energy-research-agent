@@ -28,15 +28,15 @@ class ArtifactPlanner:
             self._binding(ArtifactType.WORD, claim_ids, image_ids),
             self._binding(ArtifactType.ENTERPRISE_HTML, claim_ids, image_ids),
         ]
-        if product_detection and product_detection.dashboard_decision == ProductDashboardDecision.GENERATE:
-            bindings.append(self._binding(ArtifactType.PRODUCT_HTML, claim_ids, image_ids))
-        else:
-            bindings.append(ArtifactBinding(
-                artifact_id=new_sortable_id("ART"),
-                type=ArtifactType.PRODUCT_HTML,
-                status=ArtifactStatus.SKIPPED,
-                skip_reason=(product_detection.reason if product_detection else "Product detection has not qualified physical products"),
-            ))
+        bindings.append(ArtifactBinding(
+            artifact_id=new_sortable_id("ART"),
+            type=ArtifactType.PRODUCT_HTML,
+            status=ArtifactStatus.SKIPPED,
+            skip_reason=(
+                "Product intelligence is integrated into enterprise_research_dashboard.html; "
+                + (product_detection.reason if product_detection else "no separate product deliverable is produced")
+            ),
+        ))
         return ArtifactManifest(
             artifact_manifest_id=new_sortable_id("AM"),
             run_id=bundle.freeze.run_id,
@@ -52,4 +52,3 @@ class ArtifactPlanner:
             claim_ids=list(claim_ids),
             image_ids=list(image_ids),
         )
-

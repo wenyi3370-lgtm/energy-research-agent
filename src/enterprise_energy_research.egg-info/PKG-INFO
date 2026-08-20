@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: enterprise-energy-research
-Version: 0.8.1
+Version: 0.9.0
 Summary: Evidence-first enterprise industry and energy cooperation research workflow
 Requires-Python: >=3.10
 Requires-Dist: pydantic<3,>=2.7

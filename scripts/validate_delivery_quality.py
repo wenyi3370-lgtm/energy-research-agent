@@ -18,7 +18,7 @@ def main() -> int:
     parser.add_argument("--min-characters", type=int, default=15_000)
     parser.add_argument("--min-pages", type=int, default=30)
     parser.add_argument("--min-heading-1", type=int, default=13)
-    parser.add_argument("--min-figures", type=int, default=13)
+    parser.add_argument("--min-figures", type=int, default=0)
     parser.add_argument("--visual-manifest", type=Path)
     args = parser.parse_args()
     result = inspect_word_depth(

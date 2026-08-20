@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0",
+  "cases": [
+    {"fixture": "small_simple.json", "minimum_entities": 1, "minimum_sources": 1},
+    {"fixture": "normal_manufacturer.json", "minimum_entities": 1, "minimum_products": 1, "minimum_images": 1},
+    {"fixture": "large_group.json", "minimum_entities": 2, "minimum_factories": 2}
+  ]
+}

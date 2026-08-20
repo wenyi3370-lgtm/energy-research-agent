@@ -59,6 +59,10 @@ logger = logging.getLogger("enterprise_energy_research.automation.api")
 _RUN_ID_IN_PATH = re.compile(r"/api/v1/research/([^/]+)")
 
 
+class OperationalNotificationMisrouteError(ValueError):
+    """An operational scheduler message was sent to the research trigger."""
+
+
 def _error_response(request: Request, error_type: str, status: int, exc: BaseException) -> JSONResponse:
     match = _RUN_ID_IN_PATH.search(request.url.path)
     run_id = match.group(1) if match else None
@@ -99,17 +103,23 @@ def _register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         ConflictResolutionError, _make_error_handler("CONFLICT_RESOLUTION_INVALID", 409)
     )
+    app.add_exception_handler(
+        OperationalNotificationMisrouteError,
+        _make_error_handler("OPERATIONAL_NOTIFICATION_MISROUTED", 422),
+    )
 
 
 def _version() -> str:
     try:
         return metadata.version("enterprise-energy-research")
     except metadata.PackageNotFoundError:
-        return "0.8.1"
+        from ... import __version__
+        return __version__
 
 
 _PORTAL_HTML = """<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
 <title>企业研究助手</title><style>
 body{font-family:"Microsoft YaHei",sans-serif;background:#f7f8fa;margin:0;color:#111}
 .wrap{max-width:720px;margin:0 auto;padding:32px 20px 60px}
@@ -128,14 +138,14 @@ button:disabled{background:#9ca3af;cursor:not-allowed}
 .link{color:#1B365D;font-size:13px}
 </style></head><body><div class="wrap">
 <h1>企业研究助手</h1>
-<div class="sub">填写调研对象与范围 → 点「开始调查」。研究完成后，成果文件与通知会自动发到飞书群。</div>
+<div class="sub">填写调研对象与范围 → 点「开始调查」。企业研究仅由本页按钮启动，不会定时自动运行；明确失败会立即终止并通知飞书，悬挂任务由故障看门狗自动终止。</div>
 <div class="card"><h2>① 用一句话描述调研需求</h2>
 <label>例如：「调研宁德时代的主营业务和生产基地」或「研究泰国户用储能市场进入机会」</label>
 <textarea id="prompt" placeholder="用自然语言描述你的调研需求…"></textarea>
 <button id="parseBtn">解析需求并准备任务</button>
 <div id="status"></div>
 <div id="parsedCard" style="display:none;margin-top:14px;background:#f7f8fa;border:1px solid #d9e2ec;border-radius:8px;padding:12px">
-<label>AI 解析出的参数（如需修改请直接改，然后点「开始调查」）</label>
+<label>已准备的任务参数（如需修改，请返回上方重新描述或填写）</label>
 <div id="parsedFields"></div>
 <button id="startBtn" disabled>▶ 开始调查</button>
 </div>
@@ -154,19 +164,25 @@ button:disabled{background:#9ca3af;cursor:not-allowed}
 <button id="prepareBtn">用以上参数准备任务</button>
 </div>
 <div class="card"><h2>调查结果</h2>
+<div class="sub">故障看门狗每小时检查一次：仅终止超过 120 分钟无进展的调查并通知飞书，不创建任务、不自动重试。</div>
 <div id="runStatus"></div>
 <div class="actions" id="links" style="display:none">
 <a href="/docs" class="link">高级操作面板（评审/裁决/反馈）</a>
 <a href="#" id="viewResult" class="link">查看结果</a>
 </div>
+<button id="stopAllBtn" style="background:#b91c1c;margin-top:18px">⏹ 停止全部调查任务</button>
+<div id="stopAllStatus"></div>
 </div>
 <div class="card"><h2>每日情报（V2G & 储能日报）</h2>
-<button id="intelBtn">立即生成今日情报并推送</button><div id="intelStatus"></div>
+<button id="intelBtn">立即生成今日情报并推送</button>
+<button id="pauseBtn" style="background:#b91c1c;margin-left:8px">⏹ 停止推送</button>
+<button id="resumeBtn" style="background:#047857;margin-left:8px;display:none">▶ 恢复推送</button>
+<div id="intelStatus"></div>
 </div>
 <div class="card"><h2>依赖与部署</h2>
 <div class="sub" style="margin-bottom:8px">
 <b>依赖：</b>Docker Desktop（唯一必需）＋ DeepSeek API Key（真实抽取）＋ 可选飞书应用（通知）/ Kimi WebBridge（深度调研）。Python 无需安装。<br><br>
-<b>部署：</b>复制 <code>.env.example</code> 为 <code>.env</code> 并填入密钥 → <code>docker compose up -d --build</code> → 打开本页。n8n 定时任务（每日情报 10:00 北京时间 / 监测每小时）内置自动运行。<br><br>
+<b>部署：</b>复制 <code>.env.example</code> 为 <code>.env</code> 并填入密钥 → <code>docker compose up -d --build</code> → 打开本页。企业研究只在本页点击「开始调查」后运行；n8n 仅保留每日情报 10:00（北京时间）和纯故障看门狗。看门狗不会发起研究；日报可在本页暂停或恢复。<br><br>
 <b>文档：</b><a href="/docs" class="link">API 操作面板</a> ｜ README.md（仓库根）｜ docs/automation/（架构/Runbook/配置清单）
 </div>
 </div>
@@ -191,6 +207,7 @@ function renderParsed(parsed) {
     const text = Array.isArray(value) ? (value || []).join(', ') : (value || '');
     box.insertAdjacentHTML('beforeend', '<label>' + label + '</label><input data-k="' + key + '" value="' + text.replace(/"/g, '&quot;') + '">');
   }
+  box.querySelectorAll('input').forEach(input => input.readOnly = true);
   document.getElementById('parsedCard').style.display = 'block';
   document.getElementById('startBtn').disabled = false;
 }
@@ -219,27 +236,76 @@ document.getElementById('prepareBtn').onclick = async () => {
     const data = await call('POST', '/api/v1/research/prepare', body);
     currentRun = data.run_id;
     out.innerHTML = '<span class="ok">✅ 任务已准备：' + data.run_id + '</span>';
-    document.getElementById('startBtn').disabled = false;
+    renderParsed({company: body.company, country: body.country, product: body.product,
+      research_type: body.research_type, topics: body.topics, priority: 'normal'});
   } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
 };
 document.getElementById('startBtn').onclick = async () => {
   const out = document.getElementById('runStatus');
+  const button = document.getElementById('startBtn');
+  if (!currentRun) { out.innerHTML = '<span class="warn">❌ 请先准备任务</span>'; return; }
+  button.disabled = true;
   out.textContent = '正在启动调查…';
   try {
     const data = await call('POST', '/api/v1/research/' + currentRun + '/start', null);
     out.innerHTML = '<span class="ok">✅ ' + (data.message || ('已开始：' + data.status)) + '</span>';
     document.getElementById('links').style.display = 'block';
     document.getElementById('viewResult').href = '/api/v1/research/' + currentRun;
-  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
+  } catch (e) {
+    button.disabled = false;
+    out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>';
+  }
 };
 document.getElementById('intelBtn').onclick = async () => {
   const out = document.getElementById('intelStatus');
   out.textContent = '正在采集与推送今日情报（约 3-5 分钟）…';
   try {
     const data = await call('POST', '/api/v1/intelligence/daily', null);
-    out.innerHTML = '<span class="ok">✅ 已触发：' + data.date + '（同日重复触发不会重复采集）</span>';
+    out.innerHTML = data.paused
+      ? '<span class="warn">⏸ 推送已暂停，未采集（先点「恢复推送」）</span>'
+      : '<span class="ok">✅ 已触发：' + data.date + '（同日重复触发不会重复采集）</span>';
   } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
 };
+// —— 一键停止：调查任务 ——
+document.getElementById('stopAllBtn').onclick = async () => {
+  const out = document.getElementById('stopAllStatus');
+  if (!confirm('确定停止所有正在执行的调查任务吗？已停止的任务不会自动恢复。')) return;
+  out.textContent = '正在停止…';
+  try {
+    const data = await call('POST', '/api/v1/research/stop-all', null);
+    out.innerHTML = data.count > 0
+      ? '<span class="ok">✅ 已停止 ' + data.count + ' 个调查任务（' + data.stopped.map(s => s.run_id.slice(-6)).join(', ') + '）</span>'
+      : '<span class="ok">当前没有运行中的调查任务</span>';
+  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
+};
+// —— 一键停止：推送（停止 / 恢复两个独立按钮）——
+function setPushButtons(paused) {
+  document.getElementById('pauseBtn').style.display = paused ? 'none' : 'inline-block';
+  document.getElementById('resumeBtn').style.display = paused ? 'inline-block' : 'none';
+}
+document.getElementById('pauseBtn').onclick = async () => {
+  const out = document.getElementById('intelStatus');
+  try {
+    await call('POST', '/api/v1/intelligence/pause', null);
+    out.innerHTML = '<span class="warn">⏸ 推送已停止（每日情报定时触发将被拦截）</span>';
+    setPushButtons(true);
+  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
+};
+document.getElementById('resumeBtn').onclick = async () => {
+  const out = document.getElementById('intelStatus');
+  try {
+    await call('POST', '/api/v1/intelligence/resume', null);
+    out.innerHTML = '<span class="ok">✅ 推送已恢复（每天 10:00 正常推送）</span>';
+    setPushButtons(false);
+  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
+};
+// 页面加载时同步推送开关状态
+(async () => {
+  try {
+    const status = await call('GET', '/api/v1/intelligence/status', null);
+    setPushButtons(status.paused);
+  } catch (e) { /* 服务未就绪时忽略 */ }
+})();
 </script></body></html>"""
 
 
@@ -371,6 +437,19 @@ def create_app(
     app.state.automation_db = db
     _register_error_handlers(app)
 
+    def _intelligence_service():
+        """共享情报服务实例（含推送暂停开关）。"""
+        from ..intelligence import IntelligenceService
+
+        return IntelligenceService(
+            db=db,
+            workdir=service.workdir,
+            adapters=resolved_executor.adapters if hasattr(resolved_executor, "adapters") else {},
+            gateway=resolved_executor.wrapped_gateway.inner
+            if getattr(resolved_executor, "wrapped_gateway", None) else None,
+            notifier=service.notifier.adapter if service.notifier and service.notifier.adapter else None,
+        )
+
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
@@ -446,6 +525,15 @@ def create_app(
     @app.post("/api/v1/triggers/feishu", status_code=201)
     def feishu_trigger(payload: FeishuFormPayload, background: BackgroundTasks) -> dict:
         """Feishu form / Bitable webhook entry point (Phase 7)."""
+        if (
+            payload.requested_by.casefold() == "watchdog"
+            and payload.research_type == ResearchType.OTHER
+            and (payload.company or "").strip().casefold()
+            in {"监测通知", "monitor notification"}
+        ):
+            raise OperationalNotificationMisrouteError(
+                "scheduler summaries are operational notifications; use /api/v1/monitor/run"
+            )
         result = service.submit(payload.to_research_request())
         background.add_task(service.execute_run, result.run_id)
         return {
@@ -585,40 +673,61 @@ def create_app(
         """触发《V2G & 储能每日情报》采集与发布（每日一次，异步执行）。
 
         n8n 每天定时调用；同日重复调用返回已发布简报，不会重复采集。
+        推送被暂停（PAUSED）时直接返回，不采集不发布。
         情报采集使用当前搜索适配器（anysearch + kimi-webbridge）与 LLM 网关。
         """
-        from ..intelligence import IntelligenceService
-
-        intel = IntelligenceService(
-            db=db,
-            workdir=service.workdir,
-            adapters=resolved_executor.adapters if hasattr(resolved_executor, "adapters") else {},
-            gateway=resolved_executor.wrapped_gateway.inner
-            if getattr(resolved_executor, "wrapped_gateway", None) else None,
-            notifier=service.notifier.adapter if service.notifier and service.notifier.adapter else None,
-        )
+        intel = _intelligence_service()
+        if intel.is_paused():
+            return {"triggered": False, "paused": True, "message": "每日情报推送已暂停"}
         background.add_task(intel.run_daily)
         return {"triggered": True, "date": datetime.now().date().isoformat(), "ran_async": True}
 
     @app.get("/api/v1/intelligence/daily/latest")
     def intelligence_latest() -> dict:
         """最近一份情报日报（不触发采集）。"""
-        from ..intelligence import IntelligenceService
-
-        intel = IntelligenceService(
-            db=db, workdir=service.workdir, adapters={}, gateway=None
-        )
+        intel = _intelligence_service()
         brief = intel._load_published(datetime.now().date())
         if brief is None:
             return {"brief_date": None, "message": "今日情报尚未生成；POST /api/v1/intelligence/daily 触发"}
         return brief.model_dump(mode="json")
 
+    @app.post("/api/v1/research/stop-all")
+    def stop_all_research() -> dict:
+        """一键停止：取消所有排队中或正在执行的调查任务（不可自动重试）。"""
+        cancelled = service.cancel_running_runs()
+        return {
+            "stopped": [
+                {"run_id": item.run_id, "task_id": item.task_id, "status": str(item.status)}
+                for item in cancelled
+            ],
+            "count": len(cancelled),
+        }
+
+    @app.post("/api/v1/intelligence/pause")
+    def intelligence_pause() -> dict:
+        """一键停止推送：暂停每日情报（定时触发会被拦截）。"""
+        intel = _intelligence_service()
+        intel.pause()
+        return {"paused": True}
+
+    @app.post("/api/v1/intelligence/resume")
+    def intelligence_resume() -> dict:
+        """恢复每日情报推送。"""
+        intel = _intelligence_service()
+        intel.resume()
+        return {"paused": False}
+
+    @app.get("/api/v1/intelligence/status")
+    def intelligence_status() -> dict:
+        """情报推送开关状态。"""
+        return {"paused": _intelligence_service().is_paused()}
+
     @app.post("/api/v1/maintenance/recover-stale")
     def recover_stale() -> dict:
         """僵尸任务检测：把"研究中超时"的悬挂 run 标记为 FAILED（可重试）。
 
-        典型场景：容器重建杀掉了后台执行进程。本端点立即恢复，n8n 每小时
-        的监测工作流也会自动执行同样的检查。
+        典型场景：容器重建杀掉了后台执行进程。本端点立即终止悬挂 run，
+        独立的 n8n 故障看门狗每小时执行同样的检查；它不会创建或重试研究。
         """
         recovered = service.recover_stale_runs()
         return {
@@ -630,27 +739,21 @@ def create_app(
         }
 
     @app.post("/api/v1/monitor/run")
-    def monitor_run(background: BackgroundTasks) -> dict:
-        """Trigger all due watchlist items now (定时采集触发器, Phase 14).
+    def monitor_run() -> dict:
+        """Legacy watchlist endpoint; scheduled research is intentionally disabled.
 
-        Called periodically by the n8n Schedule Trigger workflow. Returns
-        immediately; due research tasks execute in the background (real
-        research takes minutes). Idempotent per scheduled window. Also
-        recovers stale (interrupted) runs before checking due items.
+        Enterprise research must be prepared and started from the local portal.
+        Returning a side-effect-free response keeps legacy callers safe without
+        silently creating research tasks.
         """
-        from ..monitor import MonitorRunner, load_watchlist
-
-        stale = service.recover_stale_runs()
-        runner = MonitorRunner(
-            service,
-            load_watchlist(project_root / "config" / "watchlist.yaml"),
-            db=db,
-            workdir=service.workdir,
-        )
-        due = runner.due_items(datetime.now())
-        if due:
-            background.add_task(runner.run_due, datetime.now())
-        return {"triggered": True, "due_count": len(due), "stale_recovered": len(stale), "ran_async": True}
+        return {
+            "triggered": False,
+            "disabled": True,
+            "due_count": 0,
+            "stale_recovered": 0,
+            "ran_async": False,
+            "message": "定时研究已禁用；请通过本地网页点击“开始调查”",
+        }
 
     @app.get("/", include_in_schema=False)
     def portal() -> Response:

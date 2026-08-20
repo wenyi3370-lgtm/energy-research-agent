@@ -8,6 +8,7 @@ from enterprise_energy_research.research.saturation import CollectionAttemptSumm
 from enterprise_energy_research.settings import load_yaml
 from enterprise_energy_research.validation.delivery_quality import PptVisualDeliveryRecord, inspect_ppt_visual_delivery
 from enterprise_energy_research.domain.enums import EnterpriseComplexity
+from enterprise_energy_research.domain.models import ConflictGroup, DataGap
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,6 +55,28 @@ class SaturationAndDeliveryQualityTests(unittest.TestCase):
         ]
         result = DataSaturationValidator(self.policy).assess(attempts, scoped_goal_families=["identity"])
         self.assertEqual(result.status, "SATURATED")
+
+    def test_gap_driven_second_round_search(self) -> None:
+        planner = ResearchPlanner()
+        plan = planner.build("RUN-1", "ENT-1", "测试公司", EnterpriseComplexity.ENTERPRISE_NORMAL, {"max_queries": 90, "max_pages": 120})
+        queries = planner.gap_queries(plan, "测试公司", [DataGap(
+            gap_id="GAP-1", entity_id="ENT-1", field_name="roof_area", importance="critical",
+            reason="missing", next_action="检索环评与厂房建设资料",
+        )])
+        self.assertEqual(queries[0].collection_round, "R2")
+        self.assertEqual(queries[0].trigger, "gap")
+        self.assertEqual(queries[0].target_gap_ids, ["GAP-1"])
+
+    def test_conflict_driven_research(self) -> None:
+        planner = ResearchPlanner()
+        plan = planner.build("RUN-1", "ENT-1", "测试公司", EnterpriseComplexity.ENTERPRISE_NORMAL, {"max_queries": 90, "max_pages": 120})
+        queries = planner.conflict_queries(plan, "测试公司", [ConflictGroup(
+            conflict_group_id="CG-1", entity_id="ENT-1", field_name="revenue",
+            claim_ids=["CL-1", "CL-2"], rationale="口径不一致",
+        )])
+        self.assertEqual(queries[0].collection_round, "R3")
+        self.assertEqual(queries[0].trigger, "conflict")
+        self.assertEqual(queries[0].target_claim_ids, ["CL-1", "CL-2"])
 
     def test_budget_exhaustion_with_missing_rounds_blocks(self) -> None:
         result = DataSaturationValidator(self.policy).assess(

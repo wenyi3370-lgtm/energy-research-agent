@@ -63,6 +63,14 @@ class StaleRunError(RuntimeError):
     """
 
 
+class UserCancelledError(ValueError):
+    """Raised when an operator stops a running task from the control panel.
+
+    Marked permanent (not retryable): a user-initiated cancel should not
+    auto-retry; the operator re-runs explicitly if needed.
+    """
+
+
 def _as_utc(value: datetime) -> datetime:
     """Normalize datetimes from the DB (naive on SQLite, aware on Postgres)."""
     if value.tzinfo is None:
@@ -158,6 +166,14 @@ class ResearchService:
                     outcome = self.executor.research_and_validate(
                         run_id, request, self.workdir
                     )
+                # A stop-all request or stale-run watchdog may have marked the
+                # run FAILED while the executor was blocked. Re-read the row
+                # before any downstream transition so a late executor return
+                # can never revive, validate, freeze or publish a terminated run.
+                session.expire_all()
+                current = self._require_run(repo, run_id)
+                if TaskStatus(current.status) == TaskStatus.FAILED:
+                    return self._build_result(current)
                 repo.update_run_status(run_id, TaskStatus.EVIDENCE_COLLECTED, reason="evidence ingested")
                 repo.update_run_status(run_id, TaskStatus.VALIDATING, reason="validation gate")
                 if outcome.validation_status == ValidationStatus.BLOCKED:
@@ -407,6 +423,36 @@ class ResearchService:
                 )
                 recovered.append(result)
             return recovered
+        finally:
+            session.close()
+
+    def cancel_running_runs(self) -> list[ResearchResult]:
+        """Stop all queued or running research tasks (一键停止调查).
+
+        Each QUEUED/RESEARCHING run is marked FAILED with ``UserCancelledError``
+        (permanent, not retryable) and triggers the usual notification.
+        Used by the control-panel stop button.
+        """
+        from sqlalchemy import select
+
+        from .db.models import ResearchRunRow
+
+        session = self.db.session()
+        cancelled: list[ResearchResult] = []
+        try:
+            rows = session.execute(
+                select(ResearchRunRow).where(
+                    ResearchRunRow.status.in_(
+                        [str(TaskStatus.QUEUED), str(TaskStatus.RESEARCHING)]
+                    )
+                )
+            ).scalars().all()
+            repo = TaskRepository(session)
+            for row in rows:
+                cancelled.append(
+                    self._fail(repo, row.run_id, UserCancelledError(f"run {row.run_id} cancelled by operator"))
+                )
+            return cancelled
         finally:
             session.close()
 

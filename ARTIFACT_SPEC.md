@@ -18,13 +18,25 @@ outputs/{canonical_company}/{run_id}/
 │  ├─ energy_profile.json
 │  ├─ solutions.json
 │  └─ artifact_manifest.json
-├─ 02_excel/调研底稿.xlsx
-├─ 03_word/企业深化调研报告.docx
-├─ 04_html/企业整体架构与多厂对比看板.html
-├─ 04_html/产品参数横向对比看板.html   # conditional
-├─ 05_ppt/企业产业与能源合作汇报.pptx
-├─ 06_validation/validation_report.json
-├─ 06_validation/validation_report.md
+├─ 02_research_quality/
+│  ├─ research_quality.json
+│  └─ saturation_report.json
+├─ 03_visual_assets/
+│  ├─ visual_manifest.json
+│  ├─ figures/{visual_id}.html
+│  ├─ figures/{visual_id}.svg
+│  ├─ figures/{visual_id}.png
+│  ├─ image_discovery_manifest.json
+│  ├─ image_evidence_manifest.json
+│  └─ image_publication_manifest.json
+├─ 04_word/enterprise_research.docx
+├─ 05_excel/enterprise_research.xlsx
+├─ 06_html/enterprise_research_dashboard.html
+├─ 06_html/enterprise_research_dashboard_assets/  # audit manifests; HTML remains single-file
+├─ 07_validation/validation_report.json
+├─ 07_validation/html_visual_validation.json
+├─ 07_validation/artifact_consistency_report.json
+├─ 08_ppt/enterprise_research.pptx                # when requested
 └─ checksums.sha256
 ```
 
@@ -90,13 +102,13 @@ Rules:
 
 - Apply [references/office-visual-production.md](references/office-visual-production.md) and `config/office_visual_policy.yaml`; these supersede generic defaults when a visual rule conflicts.
 - Use A4 with approximately 2.54 cm margins. Body is 12 pt SimSun plus Times New Roman, exactly 22 pt line spacing, two-character first-line indent and justified alignment. Heading 1/2/3 are 22/14/12 pt with controlled spacing and keep-with-next behavior.
-- Use formal three-line tables: 1.5 pt black top/bottom rules, 1 pt navy header rule, pale-blue header fill, no vertical/internal grid. `Table Grid` is prohibited in formal output.
+- Use formal three-line tables: 1.5 pt black top/bottom rules, 1 pt navy header rule, pale-blue header fill, no vertical/internal grid. Center the table on the page; center every cell horizontally and vertically; explicitly set every cell paragraph's first-line, left and right indents to zero. `Table Grid` is prohibited in formal output.
 - Default formal depth is 15,000–30,000 Chinese characters and at least 30 rendered pages. Use the concise profile only when explicitly requested by the user.
 - Target 4–6 evidence-backed analytical paragraphs per core chapter, normally 200–350 Chinese characters each. Every Heading 1/2 has at least 50 characters of substantive analysis before its first visual.
 - Every core chapter contains at least one decision-useful figure/table. If numeric evidence is unavailable, use an explicitly labeled framework/process diagram rather than invented data.
-- When there are at least six visuals, use at least three visual families; the bar family may not exceed 60%, one canonical chart type may not repeat more than twice, and single-axis comparison charts may not exceed four.
-- Follow the fixed sequence analysis paragraph → “见图/表 N-x” → visual → caption → `数据来源：`. Every visual must exist as 300 DPI PNG and editable SVG; chart text is at least 8 pt and a chart may not carry its own competing page title.
-- Build `image_publication_manifest.json` separately from the chart manifest. Revalidate every selected real image against its archived SHA-256, MIME and dimensions, normalize it to an offline PNG, and insert it in the mapped cover/entity/product/factory/process/certificate chapter. Real images supplement all required charts and never replace them. Every non-cover image has a `图 N-Px` caption and exact original-page source note.
+- Use only Lieflat catalog data-chart families whose explicit data contracts match the frozen inputs. Record at least three audited candidates, the chosen template ID and rationale. Do not use process, relationship, hierarchy, decision-tree or legacy native chart families as fallback.
+- Follow the fixed sequence analysis paragraph → “见图/表 N-x” → visual → caption → `数据来源：`. Every visual must exist as offline standalone HTML, 300 DPI PNG and editable SVG; chart text is at least 8 pt and a chart may not carry its own competing page title.
+- Build `image_publication_manifest.json` separately from the chart manifest. Revalidate every selected real image against its archived SHA-256, MIME and dimensions, normalize it to an offline PNG, and insert it in the mapped cover/entity/product/factory/process/certificate chapter. Images never substitute for a qualifying data chart and never trigger a fabricated chart. Every non-cover image has a `图 N-Px` caption and exact original-page source note.
 - Use Heading 1-3 styles and a Word TOC field; never hand-write TOC pages.
 - For `GROUP_LARGE`, list every publicly identified member and expand material entities; do not claim completeness without proof.
 - For `SMALL_SIMPLE`, shorten the entity-depth section automatically.
@@ -204,7 +216,7 @@ Formal PPT requirements:
 
 ## 8. Artifact manifest and charts
 
-Before publishing, bind each section/slide/sheet/widget to claim, image and chart IDs. `visual_manifest.json` is mandatory and a visual record includes title, analytical purpose, family, canonical type, source claim/image IDs, transformation, units, display rounding and expected artifact locations. Publishers may format/round only according to this record. Word and PPT must reference the same visual ID when they present the same analysis.
+Before publishing, bind each section/slide/sheet/widget to claim, source, image and chart IDs. `visual_manifest.json` is mandatory and a visual record includes title, analytical purpose, family, canonical type, data/analysis/schematic class, source claim/source/image IDs, transformation, units, display rounding and Word/HTML/PPT targets. Publishers may format/round only according to this record. Word, unified HTML and PPT must reference the same visual ID when they present the same analysis.
 
 ## 9. Packaging rules
 

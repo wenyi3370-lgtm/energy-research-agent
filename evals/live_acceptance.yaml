@@ -1,0 +1,33 @@
+schema_version: "1.0"
+description: Fixed real-company panel for opt-in live acceptance; live execution requires approved adapters, credentials where applicable, and an explicit cost budget.
+companies:
+  - name: 宁德时代新能源科技股份有限公司
+    sector: power_battery_and_storage
+  - name: 比亚迪股份有限公司
+    sector: automotive_and_energy
+  - name: 阳光电源股份有限公司
+    sector: pv_and_storage
+  - name: 远景能源有限公司
+    sector: wind_and_energy_digitalization
+  - name: 国轩高科股份有限公司
+    sector: power_battery_and_storage
+required_metrics:
+  - run_time_seconds
+  - search_calls
+  - sources
+  - verified_claims
+  - critical_gaps
+  - goal_coverage
+  - word_pages
+  - visuals
+  - images
+  - artifact_consistency
+  - estimated_cost
+required_outputs:
+  - 01_evidence
+  - 02_research_quality
+  - 03_visual_assets
+  - 04_word
+  - 05_excel
+  - 06_html
+  - 07_validation

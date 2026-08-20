@@ -1,0 +1,29 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[full,test]"
+      - name: Unit, integration and recorded-fixture tests
+        run: python -m unittest discover -s tests -v
+      - name: Recorded research eval
+        run: python scripts/run_recorded_research_eval.py --output build/evals/recorded_research_eval.json
+      - name: Automation eval
+        run: python scripts/run_automation_eval.py
+      - name: Embedded vendor manifest
+        run: python scripts/vendor_skills.py verify
+      - name: JSON and schema syntax
+        run: python -c "import json,pathlib; [json.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('schemas').glob('*.json')]"
+      - name: Docker build
+        run: docker build -t enterprise-energy-research:${{ github.sha }} .

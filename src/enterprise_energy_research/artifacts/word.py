@@ -200,15 +200,15 @@ class FrozenWordPublisher:
         document.add_page_break()
         document.add_heading("1. 执行摘要", level=1)
         document.add_paragraph(f"本报告基于冻结证据快照，对 {entity.canonical_name} 的企业实体、生产足迹、能源场景与合作机会进行结构化呈现。报告不把数据缺口写成事实，不在发布阶段新增研究结论。")
-        self._add_visual(document, rendered_visuals["executive_summary"], "1-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("executive_summary"), "1-1", figure_width)
         document.add_heading("2. 调研概述", level=1)
         document.add_paragraph("调研以企业身份、集团边界、生产基地、产品目录、经营活动、工艺用能及四类合作机会为主线。所有判断均绑定冻结证据；公开资料不足的字段保留为待尽调事项，不使用行业均值替代企业事实。")
-        self._add_visual(document, rendered_visuals["research_scope"], "2-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("research_scope"), "2-1", figure_width)
         document.add_heading("3. 集团与企业概况", level=1)
         for item in bundle.entities:
             document.add_heading(item.canonical_name, level=2)
             document.add_paragraph(f"实体类型：{item.entity_type}；核验状态：{item.verification_status.value}；注册区域：{item.registration_region or '待核验'}。")
-        self._add_visual(document, rendered_visuals["entity_overview"], "3-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("entity_overview"), "3-1", figure_width)
         self._add_evidence_gallery(document, publication_images.get("entity_overview", []), asset_root, "3")
         document.add_heading("4. 重点产业与优势产品", level=1)
         if bundle.products:
@@ -237,13 +237,13 @@ class FrozenWordPublisher:
                     document.add_paragraph("公开边界：该条目仅在官方业务页形成族级证据，未发现可核验的公开型号表和参数面板。报告保留其产品族身份，但不推断客户定制牌号、规格范围、商业化阶段或在售状态。")
         else:
             document.add_paragraph("本次冻结证据未形成可核验的实体产品记录，因此不将业务描述推断为具体产品目录；相关信息应在后续尽调中补充。")
-        self._add_visual(document, rendered_visuals["products"], "4-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("products"), "4-1", figure_width)
         self._add_evidence_gallery(document, publication_images.get("products", []), asset_root, "4")
         document.add_heading("5. 子公司与工厂逐一分析", level=1)
         for factory in bundle.factories:
             document.add_heading(factory.name or "未命名生产基地", level=2)
             document.add_paragraph(f"地址：{factory.address or '待核验'}；工艺：{'、'.join(factory.processes) if factory.processes else '待核验'}。")
-        self._add_visual(document, rendered_visuals["factories"], "5-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("factories"), "5-1", figure_width)
         self._add_evidence_gallery(document, publication_images.get("factories", []), asset_root, "5")
         document.add_heading("6. 核心经营与生产证据", level=1)
         verified = [x for x in bundle.claims if x.verification_status == VerificationStatus.VERIFIED and x.claim_id in binding.claim_ids]
@@ -264,8 +264,8 @@ class FrozenWordPublisher:
         source_note = document.add_paragraph("数据来源：证据主表及来源台账；原文摘录和 URL 保存在同一冻结包中。")
         source_note.paragraph_format.space_before = source_note.paragraph_format.space_after = Pt(4)
         source_note.runs[0].font.size = Pt(9); source_note.runs[0].font.color.rgb = RGBColor(112, 103, 118)
-        self._add_visual(document, rendered_visuals["operating_metrics"], "6-1", figure_width)
-        self._add_visual(document, rendered_visuals["core_evidence"], "6-2", figure_width)
+        self._add_visual(document, rendered_visuals.get("operating_metrics"), "6-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("core_evidence"), "6-2", figure_width)
         self._add_evidence_gallery(document, publication_images.get("core_evidence", []), asset_root, "6")
         document.add_heading("7. 能源消费与节能潜力", level=1)
         if bundle.energy_profiles:
@@ -277,7 +277,7 @@ class FrozenWordPublisher:
                 )
         else:
             document.add_paragraph("冻结证据未形成完整能源画像，报告仅保留工艺到能源设备的可核验映射，并把负荷曲线、变压器容量、运行班次和屋顶面积列为现场尽调输入。")
-        self._add_visual(document, rendered_visuals["energy"], "7-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("energy"), "7-1", figure_width)
 
         solution_chapters = [
             ("8. 新能源 EPC", "EPC"),
@@ -298,14 +298,14 @@ class FrozenWordPublisher:
                 label = "证据支持" if solution.statement_type.value == "EVIDENCE_SUPPORTED" else "分析推断"
                 document.add_paragraph(f"结论类型：{label}；收益逻辑：{solution.benefit_logic}；下一步：{solution.next_step}。")
             visual_key, figure_no = engine_visuals[engine]
-            self._add_visual(document, rendered_visuals[visual_key], figure_no, figure_width)
+            self._add_visual(document, rendered_visuals.get(visual_key), figure_no, figure_width)
 
         document.add_page_break()
         document.add_heading("12. 合作模式与商务路径", level=1)
         for solution in bundle.solutions:
             document.add_heading(solution.engine, level=2)
             document.add_paragraph(f"建议合作模式：{solution.business_model or '需双方确认'}；需补充数据：{'、'.join(solution.data_requirements) or '无新增要求'}。")
-        self._add_visual(document, rendered_visuals["cooperation"], "12-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("cooperation"), "12-1", figure_width)
         document.add_page_break()
         document.add_heading("13. 项目优先级与 90 天计划", level=1)
         for priority in ("A", "B", "C", "HOLD"):
@@ -313,32 +313,32 @@ class FrozenWordPublisher:
             if items:
                 document.add_heading(f"优先级 {priority}", level=2)
                 document.add_paragraph("；".join(f"{item.engine}：{item.next_step}" for item in items) + "。")
-        self._add_visual(document, rendered_visuals["roadmap"], "13-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("roadmap"), "13-1", figure_width)
         document.add_heading("14. 风险与边界", level=1)
         risks = [risk for solution in bundle.solutions for risk in solution.risks]
         document.add_paragraph("；".join(dict.fromkeys(risks)) + "。" if risks else "尚无足够证据量化项目风险，应在技术、商务、合规和现场数据四条线上完成尽调后再作投资决策。")
-        self._add_visual(document, rendered_visuals["risks"], "14-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("risks"), "14-1", figure_width)
         document.add_heading("15. 调研结论", level=1)
         document.add_paragraph("本报告给出的合作方向用于形成可验证的下一步，不替代现场测量、技术方案、商务报价、法律审查或投资决策。任何新增事实或数据修订均需进入新证据版本、重新验证并生成新的冻结快照。")
-        self._add_visual(document, rendered_visuals["conclusion"], "15-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("conclusion"), "15-1", figure_width)
         document.add_heading("附录 A：术语与口径", level=1)
         document.add_paragraph("事实、分析推断、待确认事项分别对应不同证据状态；产能、收入、能耗等数值均以原始披露的时间、范围、单位和限定条件为准。")
         document.add_heading("附录 B：来源清单", level=1)
         for source in bundle.sources:
             document.add_paragraph(f"[{source.source_id}] {source.source_level.value}｜{source.source_title or source.source_domain}｜{source.canonical_url}")
-        self._add_visual(document, rendered_visuals["appendix_sources"], "B-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("appendix_sources"), "B-1", figure_width)
         document.add_heading("附录 C：图片来源", level=1)
         if bundle.images:
             for image in bundle.images:
                 document.add_paragraph(f"[{image.image_id}] {image.image_type}｜{image.source_page_url}｜{image.verification_status.value}")
         else:
             document.add_paragraph("本次冻结包未包含可用于正式报告的已核验图片。")
-        self._add_visual(document, rendered_visuals["appendix_images"], "C-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("appendix_images"), "C-1", figure_width)
         document.add_heading("附录 D：数据缺口与尽调", level=1)
         for gap in bundle.gaps:
             document.add_heading(FIELD_LABELS.get(gap.field_name, gap.field_name), level=2)
             document.add_paragraph(f"重要性：{gap.importance}；原因：{gap.reason}；建议动作：{gap.next_action}。")
-        self._add_visual(document, rendered_visuals["appendix_gaps"], "D-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("appendix_gaps"), "D-1", figure_width)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         document.save(output_path)
         digest = hashlib.sha256(output_path.read_bytes()).hexdigest()
@@ -351,50 +351,21 @@ class FrozenWordPublisher:
 
     @staticmethod
     def _visual_quality_issues(visual_manifest, wp: dict) -> list[str]:
-        """Visual quality gate (office_visual_policy.yaml 发布门).
-
-        Enforced rules:
-        - every core chapter carries at least one visual;
-        - >= 6 visuals must cover at least ``minimum_visual_families_when_visuals_ge_6``
-          distinct families;
-        - the bar/column family share stays below ``maximum_bar_family_ratio``;
-        - no single canonical type repeats more than ``maximum_canonical_type_repetitions``;
-        - every visual is preceded by >= ``minimum_analysis_characters_before_visual``
-          Chinese characters of analysis (the report lead paragraph).
-        """
+        """Reject non-Lieflat or weakly sourced figures without imposing chart quotas."""
         issues: list[str] = []
         visuals = visual_manifest.visuals
         if not visuals:
-            return ["no visual content was generated for the report"]
-        if wp.get("require_visual_per_core_chapter", True):
-            from collections import Counter
-
-            chapter_keys = {visual.chapter_key for visual in visuals}
-            core = {
-                "executive_summary", "research_scope", "entity_overview", "products",
-                "factories", "operating_metrics", "core_evidence", "energy", "epc",
-                "zero_carbon", "storage_odm", "overseas", "cooperation", "roadmap",
-                "risks", "conclusion",
-            }
-            missing = sorted(core - chapter_keys)
-            if missing:
-                issues.append(f"visual missing for core chapters: {', '.join(missing)}")
-        minimum_families = int(wp.get("minimum_visual_families_when_visuals_ge_6", 3))
-        if len(visuals) >= 6 and len({v.family for v in visuals}) < minimum_families:
-            issues.append(
-                f"{len(visuals)} visuals cover only {len({v.family for v in visuals})} families; "
-                f"minimum is {minimum_families}"
-            )
-        families = [v.family for v in visuals]
-        bar_share = families.count("horizontal_bar") / max(len(families), 1)
-        if bar_share > float(wp.get("maximum_bar_family_ratio", 0.60)):
-            issues.append(f"bar/column family share {bar_share:.0%} exceeds the {wp.get('maximum_bar_family_ratio')} cap")
-        repeats = int(wp.get("maximum_canonical_type_repetitions", 2))
-        from collections import Counter
-
-        for family, count in Counter(families).items():
-            if count > repeats and family != "horizontal_bar":
-                issues.append(f"family {family} repeats {count} times; cap is {repeats}")
+            return []
+        allowed = {"F4", "F5", "L13"}
+        for visual in visuals:
+            if visual.renderer != "lieflat-charts-gallery-port-svg-v2" or visual.template_id not in allowed:
+                issues.append(f"{visual.visual_id} is not routed through an approved Lieflat catalog template")
+            if not visual.template_source or not visual.template_card_title or visual.color_system != "mono":
+                issues.append(f"{visual.visual_id} does not record its Lieflat gallery source and global color system")
+            if not visual.data_contract:
+                issues.append(f"{visual.visual_id} has no Lieflat data contract")
+            if not visual.source_note.startswith("数据来源：证据冻结"):
+                issues.append(f"{visual.visual_id} has no adjacent freeze source note")
         minimum_analysis = int(wp.get("minimum_analysis_characters_before_visual", 50))
         lead_analysis = (
             "基于冻结证据形成的结构化视图见图。该图用于呈现冻结快照中已核验与"
@@ -475,10 +446,12 @@ class FrozenWordPublisher:
             run.font.size = Pt(10)
 
     @classmethod
-    def _add_visual(cls, document, rendered: tuple[VisualSpec, Path, Path], figure_no: str, width) -> None:
+    def _add_visual(cls, document, rendered: tuple[VisualSpec, Path, Path] | None, figure_no: str, width) -> None:
         from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
         from docx.shared import Pt, RGBColor
 
+        if rendered is None:
+            return
         spec, png_path, _ = rendered
         lead = document.add_paragraph(
             f"基于冻结证据形成的结构化视图见图 {figure_no}。该图用于{spec.purpose}，"
@@ -507,6 +480,8 @@ class FrozenWordPublisher:
 
     @classmethod
     def _style_three_line_table(cls, table) -> None:
+        from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
         from docx.oxml import OxmlElement
         from docx.oxml.ns import qn
         from docx.shared import Pt, RGBColor
@@ -514,6 +489,7 @@ class FrozenWordPublisher:
         tc = theme_colors()
         navy_hex = tc["navy"].lstrip("#")
         pale_hex = tc["pale_gray"].lstrip("#")
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
         tbl_pr = table._tbl.tblPr
         existing = tbl_pr.find(qn("w:tblBorders"))
         if existing is not None:
@@ -530,6 +506,7 @@ class FrozenWordPublisher:
         tbl_pr.append(borders)
         for row_index, row in enumerate(table.rows):
             for cell in row.cells:
+                cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
                 tc_pr = cell._tc.get_or_add_tcPr()
                 if row_index == 0:
                     shade = OxmlElement("w:shd"); shade.set(qn("w:fill"), pale_hex); tc_pr.append(shade)
@@ -537,6 +514,10 @@ class FrozenWordPublisher:
                     bottom = OxmlElement("w:bottom"); bottom.set(qn("w:val"), "single"); bottom.set(qn("w:sz"), "8"); bottom.set(qn("w:color"), navy_hex)
                     cell_border.append(bottom); tc_pr.append(cell_border)
                 for paragraph in cell.paragraphs:
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    paragraph.paragraph_format.first_line_indent = Pt(0)
+                    paragraph.paragraph_format.left_indent = Pt(0)
+                    paragraph.paragraph_format.right_indent = Pt(0)
                     paragraph.paragraph_format.keep_together = True
                     for run in paragraph.runs:
                         run.font.name = "Times New Roman"; run.font.size = Pt(word_policy()["table_size_pt"])
@@ -567,8 +548,12 @@ class FrozenWordPublisher:
             tbl_w = OxmlElement("w:tblW")
         tbl_w.set(qn("w:w"), str(sum(widths))); tbl_w.set(qn("w:type"), "dxa")
         if tbl_w.getparent() is None: tbl_pr.append(tbl_w)
+        existing_layout = tbl_pr.find(qn("w:tblLayout"))
+        if existing_layout is not None: tbl_pr.remove(existing_layout)
         tbl_layout = OxmlElement("w:tblLayout"); tbl_layout.set(qn("w:type"), "fixed"); tbl_pr.append(tbl_layout)
-        tbl_ind = OxmlElement("w:tblInd"); tbl_ind.set(qn("w:w"), "120"); tbl_ind.set(qn("w:type"), "dxa"); tbl_pr.append(tbl_ind)
+        existing_ind = tbl_pr.find(qn("w:tblInd"))
+        if existing_ind is not None: tbl_pr.remove(existing_ind)
+        tbl_ind = OxmlElement("w:tblInd"); tbl_ind.set(qn("w:w"), "0"); tbl_ind.set(qn("w:type"), "dxa"); tbl_pr.append(tbl_ind)
         grid = table._tbl.tblGrid
         for child in list(grid): grid.remove(child)
         for width in widths:

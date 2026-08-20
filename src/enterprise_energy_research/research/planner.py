@@ -2,26 +2,54 @@ from __future__ import annotations
 
 from enterprise_energy_research.domain.enums import EnterpriseComplexity, SourceLevel
 from enterprise_energy_research.domain.ids import RunSequence, new_sortable_id
-from enterprise_energy_research.domain.models import ResearchPlan, ResearchQuery
+from enterprise_energy_research.domain.models import ConflictGroup, DataGap, ResearchPlan, ResearchQuery
 
 
-BASE_TOPICS = [
-    ("identity", "官网 注册主体 曾用名 母公司 实际控制人"),
-    ("organization", "组织架构 股权 子公司 成员企业"),
-    ("factories", "生产基地 工厂 厂区 地址 生产线"),
-    ("business", "主营业务 产业布局 核心客户 经营数据"),
-    ("product_centers", "官网 产品中心 产品目录 子公司 产品品牌"),
-    ("product_catalog", "产品分类 产品系列 产品清单 catalog portfolio"),
+GOAL_FAMILIES: tuple[tuple[str, str], ...] = (
+    ("company_identity", "官网 注册主体 曾用名 统一社会信用代码"),
+    ("ownership_structure", "股权结构 母公司 实际控制人"),
+    ("organization", "组织架构 成员企业 管理层"),
+    ("subsidiaries", "子公司 控股公司 参股公司 名录"),
+    ("factories", "生产基地 工厂 厂区 地址"),
+    ("locations", "总部 园区 基地 地理位置"),
+    ("financials", "年报 财务报告 经营数据"),
+    ("revenue", "营业收入 营收 年度"),
+    ("profit", "净利润 利润总额 年度"),
+    ("employees", "员工人数 人员规模 招聘"),
+    ("capacity", "产能 年产 技改 投资项目"),
+    ("production_lines", "生产线 工艺 设备 环评"),
+    ("products", "产品中心 产品分类 产品清单"),
+    ("product_series", "产品系列 产品族 分类目录"),
     ("product_models", "产品型号 牌号 series model SKU"),
     ("product_parameters", "技术参数 规格书 datasheet 手册 PDF"),
-    ("product_applications", "产品应用场景 客户 行业 解决方案"),
-    ("product_launches", "新品 发布 迭代 首发 产品矩阵"),
-    ("energy", "工艺 设备 用电 天然气 蒸汽 空压 冷冻 变压器"),
-    ("green", "绿色工厂 节能 碳 光伏 储能 能评 环评"),
-    ("overseas", "出口 海外客户 海外工厂 经销商 认证"),
-    ("projects", "招投标 项目 投资 产能 新闻 招聘"),
-    ("images", "企业logo 厂区照片 产品照片 生产线"),
-]
+    ("customers", "核心客户 中标 供应关系 应用案例"),
+    ("suppliers", "供应商 采购 招标 供应链"),
+    ("certifications", "认证 体系 证书 检测报告"),
+    ("technology", "核心技术 研发平台 技术路线"),
+    ("patents", "专利 发明专利 知识产权"),
+    ("industry_position", "行业地位 市占率 排名 竞争力"),
+    ("energy_consumption", "综合能耗 用电量 能源消费"),
+    ("energy_equipment", "变压器 锅炉 空压机 冷机 设备"),
+    ("electricity_load", "电力负荷 峰谷 需量 负荷曲线"),
+    ("natural_gas", "天然气 用气量 燃气锅炉"),
+    ("compressed_air", "压缩空气 空压站 空压机"),
+    ("heat", "蒸汽 热力 供热 冷热负荷"),
+    ("waste_heat", "余热 余压 回收 节能改造"),
+    ("roof_area", "屋顶面积 厂房面积 光伏可用面积"),
+    ("renewable_energy", "绿色电力 可再生能源 光伏"),
+    ("energy_projects", "能源项目 光伏 储能 充电站"),
+    ("carbon_projects", "碳盘查 零碳工厂 碳项目"),
+    ("EPC_opportunities", "新能源 EPC 综合能源 项目机会"),
+    ("energy_saving_opportunities", "节能诊断 节能改造 合同能源管理"),
+    ("storage_opportunities", "储能 削峰填谷 需量管理"),
+    ("V2G_opportunities", "V2G 车网互动 双向充放电"),
+    ("overseas_opportunities", "海外 出口 工厂 经销商 认证"),
+    ("risks", "经营风险 合规风险 项目风险"),
+    ("image_evidence", "企业logo 总部 厂区 生产线 产品 证书 图片"),
+)
+
+# Backward-compatible alias for callers that imported the old symbol.
+BASE_TOPICS = list(GOAL_FAMILIES)
 
 ROUND_SUFFIXES = {
     "R1": ("coverage", "候选来源 官方目录 公开披露"),
@@ -30,28 +58,24 @@ ROUND_SUFFIXES = {
 }
 
 BROWSER_DEPTH_TOPICS = {
-    "product_centers", "product_catalog", "product_models", "product_parameters",
-    "product_applications", "product_launches", "images", "subsidiary_roster",
+    "products", "product_series", "product_models", "product_parameters",
+    "image_evidence", "subsidiaries", "organization", "factories", "production_lines",
 }
 
 
 class ResearchPlanner:
     def build(self, run_id: str, entity_id: str, canonical_name: str, complexity: EnterpriseComplexity, budget: dict[str, int]) -> ResearchPlan:
         sequence = RunSequence()
-        topics = list(BASE_TOPICS)
-        if complexity == EnterpriseComplexity.GROUP_LARGE:
-            topics.extend([
-                ("subsidiary_roster", "集团成员企业 子公司 名录 组织结构"),
-                ("subsidiary_factories", "下属公司 生产基地 工厂 产品 工艺"),
-            ])
-        elif complexity == EnterpriseComplexity.SMALL_SIMPLE:
-            topics = [item for item in topics if item[0] not in {"organization"}]
+        topics = list(GOAL_FAMILIES)
         max_queries = int(budget.get("max_queries", 80))
         queries: list[ResearchQuery] = []
         seen: set[str] = set()
         for topic, suffix in topics:
+            if len(queries) + len(ROUND_SUFFIXES) > max_queries:
+                break
             for round_name, (round_goal, round_suffix) in ROUND_SUFFIXES.items():
-                query_text = f'"{canonical_name}" {suffix} {round_suffix}'
+                official_hint = "官网 官方 年报 政府" if round_name == "R1" else ""
+                query_text = f'"{canonical_name}" {suffix} {official_hint} {round_suffix}'.strip()
                 normalized = " ".join(query_text.lower().split())
                 if normalized in seen or len(queries) >= max_queries:
                     continue
@@ -69,14 +93,58 @@ class ResearchPlanner:
                     requires_browser=browser_round,
                     collection_round=round_name,
                     round_goal=round_goal,
-                    high_priority=topic not in {"images", "product_launches"},
+                    high_priority=topic != "image_evidence",
+                    trigger=("official_discovery" if round_name == "R1" else "catalog_enumeration" if topic in {"products", "product_series", "product_models", "product_parameters"} else "triangulation" if round_name == "R3" else "baseline"),
                 ))
         return ResearchPlan(
             plan_id=new_sortable_id("PLAN"), run_id=run_id, complexity=complexity,
             queries=queries, budget=budget,
-            completion_contract=[
-                "identity", "organization", "factories", "business", "product_catalog_scope",
-                "product_catalog_items", "product_models", "product_parameters", "product_applications",
-                "energy", "images",
-            ],
+            completion_contract=[name for name, _ in GOAL_FAMILIES],
+            scoped_goal_families=[name for name, _ in GOAL_FAMILIES],
+            requires_catalog_enumeration=True,
         )
+
+    def gap_queries(self, plan: ResearchPlan, canonical_name: str, gaps: list[DataGap]) -> list[ResearchQuery]:
+        """Generate R2 searches from real Evidence Gap records, never generic retry text."""
+        queries: list[ResearchQuery] = []
+        for gap in gaps:
+            family = self._family_for_field(gap.field_name)
+            query_text = f'"{canonical_name}" {gap.field_name} {gap.next_action} 原文 明细 PDF'
+            queries.append(ResearchQuery(
+                query_id=new_sortable_id("QRY-GAP"), entity_id=gap.entity_id or "UNKNOWN", topic=family,
+                query=query_text, purpose=f"R2 gap-driven search for {gap.gap_id}: {gap.reason}",
+                preferred_source_levels=[SourceLevel.SOURCE_A, SourceLevel.SOURCE_B],
+                adapter_preference="kimi_webbridge" if family in BROWSER_DEPTH_TOPICS else "anysearch",
+                max_results=10, requires_browser=family in BROWSER_DEPTH_TOPICS,
+                collection_round="R2", round_goal="depth", high_priority=gap.importance != "minor",
+                trigger="gap", target_gap_ids=[gap.gap_id],
+            ))
+        return queries
+
+    def conflict_queries(self, plan: ResearchPlan, canonical_name: str, conflicts: list[ConflictGroup]) -> list[ResearchQuery]:
+        """Generate R3 independent-origin searches for unresolved conflicting claims."""
+        queries: list[ResearchQuery] = []
+        for conflict in conflicts:
+            if conflict.resolution != "unresolved":
+                continue
+            family = self._family_for_field(conflict.field_name)
+            queries.append(ResearchQuery(
+                query_id=new_sortable_id("QRY-CONFLICT"), entity_id=conflict.entity_id, topic=family,
+                query=f'"{canonical_name}" {conflict.field_name} 公告 政府 年报 交叉验证',
+                purpose=f"R3 conflict-driven triangulation for {conflict.conflict_group_id}",
+                preferred_source_levels=[SourceLevel.SOURCE_A, SourceLevel.SOURCE_B],
+                adapter_preference="anysearch", max_results=10,
+                collection_round="R3", round_goal="triangulation", high_priority=True,
+                trigger="conflict", target_conflict_ids=[conflict.conflict_group_id],
+                target_claim_ids=list(conflict.claim_ids),
+            ))
+        return queries
+
+    @staticmethod
+    def _family_for_field(field_name: str) -> str:
+        normalized = field_name.lower()
+        for family, _ in GOAL_FAMILIES:
+            if family.lower() in normalized or normalized in family.lower():
+                return family
+        aliases = {"identity": "company_identity", "factory": "factories", "product": "products", "energy": "energy_consumption"}
+        return next((family for token, family in aliases.items() if token in normalized), "risks")

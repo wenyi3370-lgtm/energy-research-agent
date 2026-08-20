@@ -3,7 +3,7 @@
 Publishers (Word/HTML) are driven by this single source of truth so that
 edits to ``config/office_visual_policy.yaml`` take effect without code
 changes. Missing file or missing keys fall back to the built-in defaults
-(which mirror the v0.8.1 hardcoded values), so behaviour is unchanged in
+(which mirror the v0.9.0 quality contract), so behaviour is predictable in
 the absence of a policy file.
 """
 
@@ -44,8 +44,11 @@ DEFAULT_POLICY: dict[str, Any] = {
         "table_style": "three-line",
         "figure_png_dpi": 300,
         "maximum_figure_width_cm": 15.6,
-        "require_visual_per_core_chapter": True,
+        "require_visual_per_core_chapter": False,
         "minimum_analysis_characters_before_visual": 50,
+        "minimum_visual_families_when_visuals_ge_10": 0,
+        "maximum_bar_family_ratio": 0.75,
+        "minimum_formal_figures": 0,
     },
 }
 

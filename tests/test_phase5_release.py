@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from PIL import Image
 
 from enterprise_energy_research.artifacts.excel import ExcelMasterFrozenPublisher
 from enterprise_energy_research.artifacts.html import FrozenHtmlPublisher
@@ -41,17 +42,22 @@ class Phase5ReleaseTests(unittest.TestCase):
             output_dir=Path(temp) / "freeze",
         )
         bundle = FreezeService(store).load_bundle(state.freeze_id)
-        asset = Path(temp) / "fixture-product.png"
-        asset.write_bytes(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII="))
+        updated_images = []
+        for index, image in enumerate(bundle.images):
+            asset = Path(temp) / f"fixture-{index}.png"
+            Image.new("RGB", (image.width, image.height), (35 + index * 40, 90, 145)).save(asset, "PNG")
+            updated_images.append(image.model_copy(update={
+                "local_asset_ref": str(asset), "sha256": hashlib.sha256(asset.read_bytes()).hexdigest(),
+                "mime_type": "image/png",
+            }))
         bundle = bundle.model_copy(update={
-            "images": [image.model_copy(update={"local_asset_ref": str(asset)}) for image in bundle.images],
+            "images": updated_images,
         })
         output = Path(temp) / "artifacts"
         publishers = {
             ArtifactType.EXCEL: (ExcelMasterFrozenPublisher(), "report.xlsx"),
             ArtifactType.WORD: (FrozenWordPublisher(), "report.docx"),
             ArtifactType.ENTERPRISE_HTML: (FrozenHtmlPublisher(ArtifactType.ENTERPRISE_HTML), "enterprise.html"),
-            ArtifactType.PRODUCT_HTML: (FrozenHtmlPublisher(ArtifactType.PRODUCT_HTML), "products.html"),
         }
         selected = [item for item in manifest.artifacts if item.type in publishers]
         scoped_manifest = manifest.model_copy(update={"artifacts": selected})

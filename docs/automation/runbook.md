@@ -49,11 +49,12 @@ curl -X POST http://localhost:8000/api/v1/research/{run_id}/resume
 
 ## 僵尸任务检测（自动保险）
 
-容器重建/进程被杀会让正在执行的 run 悬挂在 RESEARCHING。系统自动恢复：
+执行链抛出明确异常时会立即把 run 标记为 FAILED、停止后续步骤并推送飞书。容器重建/进程被杀等情况可能不抛异常，会让 run 悬挂在 RESEARCHING；故障看门狗负责补偿：
 
-- **触发**：`POST /api/v1/maintenance/recover-stale`（n8n 每小时监测时自动执行）
+- **触发**：n8n 工作流 `research-failure-watchdog-v1` 每小时调用 `POST /api/v1/maintenance/recover-stale`
 - **规则**：RESEARCHING 且 `started_at` 超过 **120 分钟**无进展 → 标记 FAILED（retryable=True，错误信息注明"executor process interrupted"）→ 触发飞书失败通知
-- **处置**：FAILED 后 `POST /retry` 重新执行（正常研究 10-20 分钟，阈值不会误伤）
+- **安全边界**：看门狗没有研究提交、watchlist、retry 或飞书触发节点；它只终止悬挂任务并通知，不创建研究、不自动重试
+- **处置**：如需重试，必须由人工调用 `POST /retry`（正常研究 10-20 分钟，阈值不会误伤）
 - **手动**：`curl -X POST http://localhost:8000/api/v1/maintenance/recover-stale`
 
 ## 关键查询

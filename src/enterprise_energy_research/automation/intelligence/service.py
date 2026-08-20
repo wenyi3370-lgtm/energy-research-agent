@@ -48,6 +48,9 @@ class IntelligenceService:
     def run_daily(self, brief_date: date | None = None) -> DailyBrief | None:
         """采集+加工+发布当日情报；同日重复调用直接返回已有简报。"""
         brief_date = brief_date or date.today()
+        if self.is_paused():
+            logger.info("intelligence is paused; daily run skipped for %s", brief_date)
+            return None
         if self._already_published(brief_date):
             logger.info("intelligence for %s already published today; skip", brief_date)
             return self._load_published(brief_date)
@@ -131,6 +134,28 @@ class IntelligenceService:
                 ))
                 if not breaking.delivered:
                     logger.warning("breaking alert publish failed: %s", breaking.diagnostics)
+
+    # -- pause / resume（一键停止推送开关） ------------------------------------
+
+    def _pause_path(self) -> Path:
+        path = self.workdir / "intelligence"
+        path.mkdir(parents=True, exist_ok=True)
+        return path / "PAUSED"
+
+    def is_paused(self) -> bool:
+        return self._pause_path().is_file()
+
+    def pause(self) -> bool:
+        """暂停每日情报推送（按钮开关）；暂停期间定时触发会被拦截。"""
+        self._pause_path().touch()
+        return True
+
+    def resume(self) -> bool:
+        """恢复每日情报推送。"""
+        path = self._pause_path()
+        if path.is_file():
+            path.unlink()
+        return True
 
     # -- persistence --------------------------------------------------------
 

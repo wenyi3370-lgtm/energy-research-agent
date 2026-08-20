@@ -1,8 +1,8 @@
 schema_version: "1.0"
 default:
-  max_queries: 90
-  max_pages: 120
-  max_images: 40
+  max_queries: 180
+  max_pages: 240
+  max_images: 100
   max_model_calls: 100
   max_retries_per_node: 2
   max_elapsed_minutes: 90

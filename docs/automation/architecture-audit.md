@@ -1,7 +1,7 @@
 # Architecture Audit — Enterprise Energy Research Skill（自动化改造前审计）
 
 - 审计日期：2026-08-19
-- 审计对象：`C:/Users/Wenyi Zhang/.agents/skills/enterprise-energy-research/`（v0.8.1）
+- 审计对象：`C:/Users/Wenyi Zhang/.agents/skills/enterprise-energy-research/`（v0.9.0 升级前基线）
 - 审计方式：文档全读（10 份顶层 Markdown + references/）+ `src/` 全量代码审阅 + tests/config/evals/schemas/scripts 检查 + 测试实跑
 - 测试基线：**51 / 51 通过**（`PYTHONPATH="src;tests" python -m unittest discover -s tests -v`，34.5s，0 失败 0 跳过）
 
@@ -15,7 +15,7 @@
 enterprise-energy-research/
 ├── README.md  SKILL.md  ARCHITECTURE.md  WORKFLOW.md  DATA_SCHEMA.md
 ├── VALIDATION_SPEC.md  ARTIFACT_SPEC.md  SOURCE_POLICY.md  IMPLEMENTATION_PLAN.md
-├── pyproject.toml                # v0.8.1, src 布局, 唯一 console script: enterprise-energy-research
+├── pyproject.toml                # v0.9.0, src 布局, 唯一 console script: enterprise-energy-research
 ├── agents/openai.yaml            # 仅 UI 元数据（展示卡片），无运行时逻辑
 ├── config/                       # 7 个 YAML（default/source_policy/enterprise_rules/
 │                                 #   artifact_profiles/collection_saturation_policy/
@@ -145,7 +145,7 @@ enterprise-energy-research/
 | Golden eval 扩展（≥10 任务，复用 evals/ 机制） | `evals/` 扩充 | Phase 12 |
 | Failure Case Library | `docs/failure-cases/` | Phase 13 |
 | Schedule Trigger + watchlist.yaml + Change Detection | `automation/monitor/` | Phase 14 |
-| Dockerfile / docker-compose.yml（research-api + postgres + n8n） | 仓库根 | Phase 15 |
+| Dockerfile / docker-compose.yml（research-api + postgres + n8n） | 仓库根 | v0.9.0 部署层 |
 | 12 份自动化文档 + 7 份 ADR | `docs/automation/`、`docs/adr/` | 全程 |
 
 **编排接线（关键新增）**：在 Application Service 内把已断裂的 `ResearchPlanner → SearchExecutor → EvidenceExtractor → Phase3Runner → finalize_evidence → ArtifactPublicationService → ArtifactConsistencyAuditor` 接成一条由状态机驱动的确定性流水线——这是"新增编排代码"，不是重构研究内核。
@@ -170,7 +170,7 @@ enterprise-energy-research/
 3. **Python 版本**：pyproject `>=3.10` vs ARCHITECTURE.md:193 "Python 3.11+"。
 4. **组件缺失**：ARCHITECTURE.md:49 的 `InputNormalizer` 无对应实现（仅 LangGraph 节点名）；计划的 `graph/nodes/`、`templates/`、`tests/{unit,integration,golden,e2e}` 目录结构不存在。
 5. **evidence 版本机制**：`evidence_records` 主键 `(run_id, kind, record_id)` 不含 `evidence_version`（`store.py:113`），"冻结后写新版本"（`store.py:184` 错误文案）对同 record_id 实际做不到。
-6. **过期注释/版本号**：`graph/runner.py:19-21` docstring 说 Phase 3 未实现（已实现）；`cli.py:57` 硬编码 `code_version="0.2.0"`（pyproject 为 0.8.1）。
+6. **升级前版本问题**：`graph/runner.py:19-21` 曾有过期 docstring；CLI 曾硬编码旧 `code_version`，现统一由包版本读取。
 7. **schemas 数量**：ARCHITECTURE.md:179 列 6 个，磁盘 11 个。
 8. **VALIDATION_SPEC 场景编号**：标题称 24 个场景，实际列到 40，且 34/35 各出现两次。
 9. **`.env` 支持半成品**：`Settings` 未配置 `env_file`，`.env.example` 仅是文档。

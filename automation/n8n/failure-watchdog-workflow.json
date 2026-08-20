@@ -1,0 +1,59 @@
+{
+  "id": "research-failure-watchdog-v1",
+  "name": "研究故障看门狗（只终止悬挂任务）",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "n8n-node-schedule-failure-watchdog",
+      "name": "每小时检查悬挂任务",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://research-api:8000/api/v1/maintenance/recover-stale",
+        "options": {}
+      },
+      "id": "n8n-node-http-failure-watchdog",
+      "name": "终止超时任务并通知",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "每小时检查悬挂任务": {
+      "main": [
+        [
+          {
+            "node": "终止超时任务并通知",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

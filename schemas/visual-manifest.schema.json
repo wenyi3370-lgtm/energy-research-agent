@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sevc.example/schemas/visual-manifest.schema.json",
+  "title": "Cross-artifact Visual Manifest",
+  "type": "object",
+  "required": ["freeze_id", "visuals"],
+  "properties": {
+    "freeze_id": {"type": "string"},
+    "visuals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["visual_id", "title", "family", "source_claim_ids", "source_ids", "artifact_targets"],
+        "properties": {
+          "visual_id": {"type": "string"},
+          "title": {"type": "string"},
+          "family": {"type": "string"},
+          "source_claim_ids": {"type": "array", "items": {"type": "string"}},
+          "source_ids": {"type": "array", "items": {"type": "string"}},
+          "artifact_targets": {"type": "array", "items": {"enum": ["word", "html", "ppt"]}},
+          "visual_class": {"enum": ["data", "analysis", "schematic"]}
+        }
+      }
+    }
+  }
+}

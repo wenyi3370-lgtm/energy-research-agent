@@ -31,21 +31,46 @@ saturation:
   authoritative_source_can_satisfy_claim_with_one_origin: true
 
 goal_families:
-  - identity
+  - company_identity
+  - ownership_structure
   - organization
+  - subsidiaries
   - factories
-  - business
-  - product_centers
-  - product_catalog
+  - locations
+  - financials
+  - revenue
+  - profit
+  - employees
+  - capacity
+  - production_lines
+  - products
+  - product_series
   - product_models
   - product_parameters
-  - product_applications
-  - product_launches
-  - energy
-  - green
-  - overseas
-  - projects
-  - images
+  - customers
+  - suppliers
+  - certifications
+  - technology
+  - patents
+  - industry_position
+  - energy_consumption
+  - energy_equipment
+  - electricity_load
+  - natural_gas
+  - compressed_air
+  - heat
+  - waste_heat
+  - roof_area
+  - renewable_energy
+  - energy_projects
+  - carbon_projects
+  - EPC_opportunities
+  - energy_saving_opportunities
+  - storage_opportunities
+  - V2G_opportunities
+  - overseas_opportunities
+  - risks
+  - image_evidence
 
 exceptions:
   allowed_type: public_evidence_gap

@@ -4,6 +4,7 @@ from collections import defaultdict
 
 from enterprise_energy_research.domain.enums import VerificationStatus
 from enterprise_energy_research.domain.models import Entity, ImageEvidence, Source
+from enterprise_energy_research.research.image_semantics import ImageSemanticRouter
 
 
 class ImageValidator:
@@ -20,7 +21,8 @@ class ImageValidator:
         entities_by_id = {entity.entity_id: entity for entity in entities}
         sources_by_id = {source.source_id: source for source in sources}
         phash_groups: dict[str, list[str]] = defaultdict(list)
-        for image in images:
+        for original_image in images:
+            image = ImageSemanticRouter.classify(original_image) if original_image.image_type == "other" else original_image
             phash_groups[image.phash].append(image.image_id)
         validated: list[ImageEvidence] = []
         for image in images:
@@ -59,4 +61,3 @@ class ImageValidator:
                 "entity_match_signals": signals,
             }))
         return validated
-

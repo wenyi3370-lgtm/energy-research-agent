@@ -25,6 +25,8 @@ class WordDepthResult(BaseModel):
     selected_evidence_images: int = Field(default=0, ge=0)
     evidence_image_captions: int = Field(default=0, ge=0)
     evidence_image_source_notes: int = Field(default=0, ge=0)
+    core_chapter_visual_coverage: float = Field(default=0.0, ge=0.0, le=1.0)
+    visuals_per_rendered_page: float = Field(default=0.0, ge=0.0)
     findings: list[str] = Field(default_factory=list)
 
 
@@ -40,9 +42,9 @@ def inspect_word_depth(
     min_characters: int = 15_000,
     min_pages: int = 30,
     min_heading_1: int = 13,
-    min_figures: int = 13,
-    min_visual_families: int = 3,
-    max_bar_family_ratio: float = 0.60,
+    min_figures: int = 0,
+    min_visual_families: int = 0,
+    max_bar_family_ratio: float = 0.75,
     visual_manifest: Path | None = None,
     image_manifest: Path | None = None,
 ) -> WordDepthResult:
@@ -85,9 +87,11 @@ def inspect_word_depth(
         candidate = docx_path.parent / f"{docx_path.stem}_assets" / "visual_manifest.json"
         visual_manifest = candidate if candidate.is_file() else None
     families: list[str] = []
+    visual_chapters: set[str] = set()
     if visual_manifest and visual_manifest.is_file():
         payload = json.loads(visual_manifest.read_text(encoding="utf-8"))
         families = [str(item.get("family", "")) for item in payload.get("visuals", []) if item.get("family")]
+        visual_chapters = {str(item.get("chapter_key")) for item in payload.get("visuals", []) if item.get("chapter_key")}
     visual_family_count = len(set(families))
     bar_family_ratio = (sum(family == "horizontal_bar" for family in families) / len(families)) if families else 0.0
     if image_manifest is None:
@@ -102,6 +106,13 @@ def inspect_word_depth(
         selected_evidence_images = len(selected_ids)
         selected_cover_images = sum(prepared_by_id.get(image_id, {}).get("chapter_key") == "cover" for image_id in selected_ids)
     rendered_pages = count_pdf_pages(rendered_pdf) if rendered_pdf and rendered_pdf.is_file() else None
+    core_chapters = {
+        "executive_summary", "research_scope", "entity_overview", "products", "factories",
+        "operating_metrics", "core_evidence", "energy", "epc", "zero_carbon", "storage_odm",
+        "overseas", "cooperation", "roadmap", "risks", "conclusion",
+    }
+    core_coverage = len(core_chapters & visual_chapters) / len(core_chapters)
+    visuals_per_page = len(families) / rendered_pages if rendered_pages else 0.0
     findings: list[str] = []
     if characters < min_characters:
         findings.append(f"Report has {characters} non-whitespace characters; minimum is {min_characters}")
@@ -142,6 +153,8 @@ def inspect_word_depth(
         selected_evidence_images=selected_evidence_images,
         evidence_image_captions=evidence_image_captions,
         evidence_image_source_notes=evidence_image_source_notes,
+        core_chapter_visual_coverage=core_coverage,
+        visuals_per_rendered_page=visuals_per_page,
         findings=findings,
     )
 

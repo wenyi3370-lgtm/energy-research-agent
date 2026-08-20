@@ -1,5 +1,8 @@
 # 定时监测与变化检测（Phase 14）
 
+> 当前部署策略：研究定时触发已停用。`MonitorRunner` 代码保留用于历史审计和
+> 手工差异分析，但不得接入 cron/n8n Schedule；企业研究统一从本地网页启动。
+
 `automation/monitor/`
 
 ## 组件
@@ -17,8 +20,7 @@
 ## 调度状态
 
 不引入新表：`last_run_at` 从 `research_runs`（active_run 的 created_at）推导，
-重启不丢、不重复触发。真实定时执行由外部（cron / n8n Schedule Trigger）调用
-`MonitorRunner.run_due(datetime.now())`，示例：
+重启不丢、不重复触发。以下代码仅用于开发测试，不应接入生产定时器：
 
 ```python
 from enterprise_energy_research.automation.monitor import MonitorRunner, load_watchlist

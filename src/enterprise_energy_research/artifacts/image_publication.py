@@ -16,23 +16,33 @@ from enterprise_energy_research.domain.models import ArtifactBinding, FrozenRese
 
 TYPE_CHAPTER = {
     "logo": "cover",
+    "headquarters": "entity_overview",
     "office": "entity_overview",
     "factory": "factories",
+    "workshop": "factories",
     "production_line": "factories",
     "location": "factories",
     "product": "products",
+    "product_application": "products",
+    "equipment": "factories",
     "certificate": "core_evidence",
+    "project": "cooperation",
     "other": "entity_overview",
 }
 
 TYPE_LABEL = {
     "logo": "企业标识",
     "office": "办公场景",
+    "headquarters": "企业总部",
     "factory": "生产基地",
+    "workshop": "生产车间",
     "production_line": "生产线",
     "location": "区位与基地",
     "product": "实体产品",
+    "product_application": "产品应用",
+    "equipment": "核心设备",
     "certificate": "认证与证书",
+    "project": "项目实景",
     "other": "企业图片证据",
 }
 
@@ -62,6 +72,8 @@ class ImagePublicationManifest(BaseModel):
     required_image_ids: list[str] = Field(default_factory=list)
     prepared_images: list[PublicationImage] = Field(default_factory=list)
     skipped_duplicate_image_ids: list[str] = Field(default_factory=list)
+    skipped_exact_duplicate_image_ids: list[str] = Field(default_factory=list)
+    skipped_perceptual_duplicate_image_ids: list[str] = Field(default_factory=list)
     diagnostics: list[str] = Field(default_factory=list)
     artifact_selections: dict[str, list[str]] = Field(default_factory=dict)
 
@@ -144,10 +156,18 @@ def prepare_publication_images(
     diagnostics: list[str] = []
     prepared: list[PublicationImage] = []
     duplicate_ids: list[str] = []
-    seen_phashes: set[str] = set()
+    exact_duplicate_ids: list[str] = []
+    perceptual_duplicate_ids: list[str] = []
+    seen_sha256: set[str] = set()
+    seen_phashes: list[str] = []
     for image in bound:
-        if image.phash in seen_phashes:
+        if image.sha256.lower() in seen_sha256:
             duplicate_ids.append(image.image_id)
+            exact_duplicate_ids.append(image.image_id)
+            continue
+        if any(_phash_distance(image.phash, seen) <= 4 for seen in seen_phashes):
+            duplicate_ids.append(image.image_id)
+            perceptual_duplicate_ids.append(image.image_id)
             continue
         source = resolve_archived_image(image, output_root, extra_search_roots)
         if source is None:
@@ -188,7 +208,8 @@ def prepare_publication_images(
                 width=image.width,
                 height=image.height,
             ))
-            seen_phashes.add(image.phash)
+            seen_sha256.add(image.sha256.lower())
+            seen_phashes.append(image.phash)
         except Exception as exc:
             diagnostics.append(f"{image.image_id}: {type(exc).__name__}: {exc}")
     manifest = ImagePublicationManifest(
@@ -196,10 +217,41 @@ def prepare_publication_images(
         required_image_ids=[image.image_id for image in bound],
         prepared_images=prepared,
         skipped_duplicate_image_ids=duplicate_ids,
+        skipped_exact_duplicate_image_ids=exact_duplicate_ids,
+        skipped_perceptual_duplicate_image_ids=perceptual_duplicate_ids,
         diagnostics=diagnostics,
     )
+    write_image_evidence_manifests(bundle.images, output_root)
     write_image_publication_manifest(manifest, output_root)
     return manifest
+
+
+def _phash_distance(left: str, right: str) -> int:
+    if left == right:
+        return 0
+    try:
+        return (int(left, 16) ^ int(right, 16)).bit_count()
+    except (TypeError, ValueError):
+        return max(len(str(left)), len(str(right)))
+
+
+def write_image_evidence_manifests(images: list[ImageEvidence], output_root: Path) -> tuple[Path, Path]:
+    """Write discovery and verified-evidence ledgers before publication selection."""
+    output_root.mkdir(parents=True, exist_ok=True)
+    fields = (
+        "image_id", "entity_id", "factory_id", "product_id", "image_type", "source_url",
+        "source_page_url", "source_title", "retrieved_at", "mime_type", "width", "height",
+        "sha256", "phash", "local_asset_ref", "verification_status",
+    )
+    def item(image: ImageEvidence) -> dict:
+        payload = image.model_dump(mode="json")
+        return {field: payload.get(field) for field in fields}
+    discovery = output_root / "image_discovery_manifest.json"
+    evidence = output_root / "image_evidence_manifest.json"
+    discovery.write_text(json.dumps({"schema_version": "1.0", "images": [item(image) for image in images]}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    verified = [image for image in images if image.verification_status == VerificationStatus.VERIFIED]
+    evidence.write_text(json.dumps({"schema_version": "1.0", "images": [item(image) for image in verified]}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return discovery, evidence
 
 
 def write_image_publication_manifest(manifest: ImagePublicationManifest, output_root: Path) -> Path:

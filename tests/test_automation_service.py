@@ -16,6 +16,7 @@ from enterprise_energy_research.automation.db import (
 )
 from enterprise_energy_research.automation.enums import ReviewDecision, TaskStatus
 from enterprise_energy_research.automation.executor import ExecutionOutcome
+from enterprise_energy_research.automation.feishu import FeishuNotifier, MockFeishuAdapter
 from enterprise_energy_research.automation.service import (
     ResearchService,
     RetryExhaustedError,
@@ -66,9 +67,12 @@ class StubExecutor:
         self.publish_error = publish_error
         self.research_calls = 0
         self.freeze_calls = 0
+        self.on_research = None
 
     def research_and_validate(self, run_id, request, workdir):
         self.research_calls += 1
+        if self.on_research is not None:
+            self.on_research(run_id)
         if self.validate_error is not None:
             raise self.validate_error
         return self.outcome
@@ -126,6 +130,13 @@ class TestSubmit(ServiceTestCase):
         self.service.submit(make_request())
         with self.assertRaises(DuplicateTaskError):
             self.service.submit(make_request())
+
+    def test_stop_all_cancels_prepared_queued_run(self):
+        queued = self.service.submit(make_request())
+        cancelled = self.service.cancel_running_runs()
+        self.assertEqual([item.run_id for item in cancelled], [queued.run_id])
+        self.assertEqual(cancelled[0].status, TaskStatus.FAILED)
+        self.assertFalse(cancelled[0].error.retryable)
 
 
 class TestExecuteRun(ServiceTestCase):
@@ -279,6 +290,45 @@ class TestFailuresAndRetry(ServiceTestCase):
         final = self.service.execute_run(result.run_id)
         self.assertEqual(final.status, TaskStatus.FAILED)
         self.assertTrue(final.error.retryable)
+
+    def test_explicit_failure_terminates_immediately_and_notifies(self):
+        adapter = MockFeishuAdapter()
+        self.service.notifier = FeishuNotifier(adapter)
+        self.executor.validate_error = RuntimeError("upstream failed")
+        result = self.service.submit(make_request())
+
+        final = self.service.execute_run(result.run_id)
+
+        self.assertEqual(final.status, TaskStatus.FAILED)
+        self.assertIsNotNone(final.finished_at)
+        self.assertEqual(self.executor.research_calls, 1)
+        self.assertEqual(self.executor.freeze_calls, 0)
+        self.assertEqual(len(adapter.sent), 1)
+        self.assertEqual(adapter.sent[0].status, "FAILED")
+        self.assertIn("upstream failed", adapter.sent[0].text)
+
+    def test_watchdog_failure_cannot_be_revived_by_late_executor_return(self):
+        from datetime import datetime, timedelta, timezone
+        from enterprise_energy_research.automation.db import TaskRepository
+
+        def terminate_as_stale(run_id):
+            with self._session() as session:
+                row = TaskRepository(session).get_run(run_id)
+                row.started_at = datetime.now(timezone.utc) - timedelta(hours=3)
+                session.commit()
+            recovered = self.service.recover_stale_runs(max_minutes=120)
+            self.assertEqual([item.run_id for item in recovered], [run_id])
+
+        self.executor.on_research = terminate_as_stale
+        submitted = self.service.submit(make_request())
+
+        final = self.service.execute_run(submitted.run_id)
+
+        self.assertEqual(final.status, TaskStatus.FAILED)
+        self.assertEqual(self.executor.freeze_calls, 0)
+        with self._session() as session:
+            row = TaskRepository(session).get_run(submitted.run_id)
+            self.assertEqual(row.status, "FAILED")
 
     def test_publish_failure_lands_in_failed(self):
         self.executor.publish_error = RuntimeError("disk full")

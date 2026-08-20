@@ -43,6 +43,13 @@ COMPONENTS = {
         "source": "local Codex Skill snapshot",
         "required": ["SKILL.md", "references/operations.md"],
     },
+    "lieflat-charts": {
+        "source": "larashero3-dotcom/lieflat-charts snapshot",
+        "required": [
+            "SKILL.md", "catalog.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
+            "templates/basics-gallery.html", "templates/lupi-gallery.html",
+        ],
+    },
 }
 
 FORBIDDEN_PARTS = {
@@ -50,7 +57,7 @@ FORBIDDEN_PARTS = {
     "jobs", "playwright-browsers",
 }
 FORBIDDEN_NAMES = {
-    "login_profiles.json", "browser-state-fingerprint.json", "global-context.jsonl", "cache.db",
+    ".env", "login_profiles.json", "browser-state-fingerprint.json", "global-context.jsonl", "cache.db",
 }
 SECRET_PATTERN = re.compile(
     r"(?im)^\s*(?!#)(?:export\s+)?[A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD|COOKIE)[A-Z0-9_]*\s*=\s*(?!your-|example|changeme|<|\$\{|\{\{|none\b|null\b)[^\s#][^\r\n]*$"

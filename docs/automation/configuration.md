@@ -68,12 +68,13 @@ curl -s -X POST http://localhost:8000/api/v1/research -H "Content-Type: applicat
 | Webhook 公网暴露 | 生产需 HTTPS 反代 + 飞书签名校验；webhook 路径 `/webhook/feishu-form-trigger` |
 | Feedback 节点 body | 替换示例 JSON 为真实反馈表单字段 |
 
-## 第 5 层：定时监测（🟡 可选）
+## 第 5 层：研究定时监测（已停用）
 
 | 配置项 | 说明 |
 |---|---|
-| `config/watchlist.yaml` | 按需 `enabled: true` 并确认 task 模板字段 |
-| 外部调度 | cron / n8n Schedule Trigger 调 `MonitorRunner.run_due(datetime.now())`（见 docs/automation/monitor.md） |
+| `config/watchlist.yaml` | 仅保留历史配置与变化检测能力，不用于自动启动研究 |
+| 研究触发 | 统一通过本地网页 `http://localhost:8000` 的「开始调查」按钮 |
+| 纯故障看门狗 | `research-failure-watchdog-v1` 每小时只调用 `/api/v1/maintenance/recover-stale`；不创建、不重试研究 |
 
 ## 第 6 层：策略调优（🟡 可选，改 YAML 即生效）
 

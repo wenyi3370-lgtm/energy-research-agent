@@ -62,7 +62,10 @@ class Phase3WorkflowTests(unittest.TestCase):
             self.assertEqual(len(store.list(state.run_id, "solution")), 4)
             self.assertTrue(all(item.verification_status == VerificationStatus.VERIFIED for item in store.list(state.run_id, "image")))
             product_artifact = next(item for item in manifest.artifacts if item.type.value == "product_html")
-            self.assertEqual(product_artifact.status.value, "PLANNED")
+            self.assertEqual(product_artifact.status.value, "SKIPPED")
+            self.assertIn("integrated", product_artifact.skip_reason)
+            enterprise_artifact = next(item for item in manifest.artifacts if item.type.value == "enterprise_html")
+            self.assertEqual(enterprise_artifact.status.value, "PLANNED")
 
     def test_company_alias_resolves_to_canonical_entity(self) -> None:
         _, batches = self._load("normal_manufacturer.json")

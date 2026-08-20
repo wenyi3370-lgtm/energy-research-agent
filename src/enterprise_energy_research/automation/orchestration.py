@@ -32,6 +32,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from ..adapters.anysearch import AnySearchCliAdapter
+from .. import __version__
 from ..adapters.base import SearchAdapter
 from ..adapters.kimi_webbridge import KimiWebBridgeAdapter
 from ..adapters.unconfigured import UnconfiguredSearchAdapter
@@ -49,6 +50,7 @@ from ..release.audit import ArtifactConsistencyAuditor
 from ..research.executor import SearchExecutor
 from ..research.extractor import EvidenceExtractor
 from ..research.planner import ResearchPlanner
+from ..research.quality import ResearchQualityCalculator, write_research_quality
 from ..research.saturation import CollectionAttemptSummary, DataSaturationValidator
 from ..settings import Settings, load_yaml
 from ..validation.core import CoreValidator
@@ -77,7 +79,7 @@ class OrchestratingExecutor:
         budgets_path: Path | None = None,
         saturation_policy_path: Path | None = None,
         enterprise_rules_path: Path | None = None,
-        code_version: str = "0.8.1",
+        code_version: str = __version__,
         publishers: dict | None = None,
     ) -> None:
         self.adapters = {
@@ -180,6 +182,13 @@ class OrchestratingExecutor:
                 for envelope in envelopes
                 for diag in envelope.diagnostics
             ),
+            scoped_goal_families=plan.scoped_goal_families,
+        )
+        quality_dir = run_dir / "outputs" / "02_research_quality"
+        quality_dir.mkdir(parents=True, exist_ok=True)
+        (quality_dir / "saturation_report.json").write_text(
+            json.dumps(saturation.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
         )
 
         reasons = list(saturation.findings)
@@ -217,6 +226,17 @@ class OrchestratingExecutor:
                 )
         if detection is not None:
             self._store_detection(run_dir, detection)
+        quality = ResearchQualityCalculator.assess(
+            saturation=saturation,
+            sources=store.list(run_id, "source"),
+            claims=store.list(run_id, "claim"),
+            products=store.list(run_id, "product"),
+            images=store.list(run_id, "image"),
+            gaps=store.list(run_id, "gap"),
+            conflicts=store.list(run_id, "conflict"),
+            product_detection=detection,
+        )
+        write_research_quality(quality, quality_dir)
 
         if not batches:
             # Zero ingestible evidence is a BLOCKED outcome, never a silent

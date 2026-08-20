@@ -13,7 +13,7 @@ class VendorEmbeddingTests(unittest.TestCase):
     def test_all_external_skills_are_embedded(self) -> None:
         self.assertEqual(
             set(EMBEDDED_SKILLS),
-            {"anysearch", "excel-master", "ppt-master", "frontend-design", "kimi-webbridge"},
+            {"anysearch", "excel-master", "ppt-master", "frontend-design", "kimi-webbridge", "lieflat-charts"},
         )
         for name in EMBEDDED_SKILLS:
             with self.subTest(name=name):
@@ -50,6 +50,15 @@ class VendorEmbeddingTests(unittest.TestCase):
             "LICENSE", "NOTICE", "scripts/anysearch_cli.py", "scripts/anysearch_cli.js",
             "scripts/anysearch_cli.ps1", "scripts/anysearch_cli.sh",
             "scripts/shared/constants.json", "scripts/shared/doc_spec.md",
+        ):
+            with self.subTest(relative=relative):
+                self.assertTrue((root / relative).is_file())
+
+    def test_lieflat_catalog_and_license_are_present(self) -> None:
+        root = embedded_skill_root("lieflat-charts")
+        for relative in (
+            "SKILL.md", "catalog.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
+            "templates/basics-gallery.html", "templates/lupi-gallery.html",
         ):
             with self.subTest(relative=relative):
                 self.assertTrue((root / relative).is_file())

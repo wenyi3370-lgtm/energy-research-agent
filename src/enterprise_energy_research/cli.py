@@ -25,6 +25,7 @@ from enterprise_energy_research.evidence.store import EvidenceStore
 from enterprise_energy_research.graph.runner import Phase2Runner
 from enterprise_energy_research.graph.state import ResearchState
 from enterprise_energy_research.settings import Settings
+from enterprise_energy_research import __version__
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -54,7 +55,7 @@ def synthetic_run(company_name: str, workdir: Path) -> dict[str, object]:
         canonical_entity_id=entity_id,
         complexity=EnterpriseComplexity.ENTERPRISE_NORMAL,
         config_hash=settings.config_hash(),
-        code_version="0.2.0",
+        code_version=__version__,
         model_gateway={
             "primary_provider": settings.primary_provider,
             "fallback_provider": settings.fallback_provider,
@@ -141,4 +142,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

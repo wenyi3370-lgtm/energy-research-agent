@@ -4,6 +4,7 @@ projects/
 research_capture/
 latest_rerun_output.json
 outputs/
+build/
 __pycache__/
 *.py[cod]
 .pytest_cache/

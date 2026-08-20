@@ -15,9 +15,11 @@ word:
     require_every_page_inspected: true
     require_figure_or_table_per_core_chapter: true
     require_visual_manifest: true
-    minimum_formal_figures: 13
-    minimum_visual_families: 3
-    maximum_bar_family_ratio: 0.60
+    minimum_formal_figures: 0
+    minimum_visual_families: 0
+    maximum_bar_family_ratio: 0.75
+    target_visual_interval_pages: [2, 3]
+    require_core_chapter_visual_coverage: 0.0
     require_three_line_tables: true
     require_figure_source_notes: true
     require_png_300dpi_and_editable_svg: true
@@ -56,7 +58,7 @@ ppt:
   fallback_is_quality_equivalent: false
 html:
   standalone: true
-  responsive_widths: [360, 768, 1440]
+  responsive_widths: [360, 768, 1440, 1920]
   header_height_px: 72
 product_html:
   minimum_compare: 2

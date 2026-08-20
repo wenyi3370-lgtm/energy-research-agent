@@ -8,6 +8,7 @@ from enterprise_energy_research.automation.contracts import ResearchRequest
 from enterprise_energy_research.automation.db import AutomationDatabase
 from enterprise_energy_research.automation.enums import TaskStatus
 from enterprise_energy_research.automation.executor import ExecutionOutcome
+from enterprise_energy_research.automation.feishu import FeishuNotifier, MockFeishuAdapter
 from enterprise_energy_research.automation.service import (
     ConflictNotFoundError,
     ConflictResolutionError,
@@ -182,6 +183,20 @@ class StaleRunRecoveryTests(unittest.TestCase):
         # 恢复后可重试
         requeued = self.service.retry(run_id)
         self.assertEqual(requeued.status, TaskStatus.QUEUED)
+
+    def test_stale_recovery_terminates_and_sends_failure_notification(self):
+        adapter = MockFeishuAdapter()
+        self.service.notifier = FeishuNotifier(adapter)
+        run_id = self._researching_run(hours_ago=3)
+
+        recovered = self.service.recover_stale_runs(max_minutes=120)
+
+        self.assertEqual(len(recovered), 1)
+        self.assertEqual(recovered[0].status, TaskStatus.FAILED)
+        self.assertEqual(len(adapter.sent), 1)
+        self.assertEqual(adapter.sent[0].run_id, run_id)
+        self.assertEqual(adapter.sent[0].status, "FAILED")
+        self.assertIn("研究失败", adapter.sent[0].text)
 
     def test_fresh_researching_run_not_touched(self):
         self._researching_run(hours_ago=0.2)  # 12 分钟前开始（正常范围）

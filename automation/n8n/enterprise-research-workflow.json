@@ -1,4 +1,5 @@
 {
+  "active": false,
   "name": "Enterprise Energy Research Automation",
   "nodes": [
     {
@@ -12,6 +13,7 @@
       "name": "Feishu Form Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
+      "disabled": true,
       "position": [
         -320,
         0

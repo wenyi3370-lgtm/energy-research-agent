@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sevc.example/schemas/research-quality.schema.json",
+  "title": "Research Quality Report",
+  "type": "object",
+  "required": [
+    "goal_coverage", "source_diversity", "official_source_ratio",
+    "verified_claim_ratio", "triangulated_claim_ratio", "catalog_coverage",
+    "parameter_coverage", "image_coverage", "critical_gap_count",
+    "conflict_count", "saturation_status"
+  ],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "goal_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+    "source_diversity": {"type": "integer", "minimum": 0},
+    "official_source_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+    "verified_claim_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+    "triangulated_claim_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+    "catalog_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+    "parameter_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+    "image_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+    "critical_gap_count": {"type": "integer", "minimum": 0},
+    "conflict_count": {"type": "integer", "minimum": 0},
+    "saturation_status": {"enum": ["SATURATED", "PARTIAL", "BLOCKED"]},
+    "diagnostics": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}

@@ -74,7 +74,7 @@ Aggregate status:
 ### `ArtifactValidator`
 
 - Excel: required sheets, table headers, numeric cell types, URLs and ID columns.
-- Word: required chapters/appendices, Heading 1-3, TOC field, captions, page fields, source mapping, 15,000+ characters and the formal depth profile. Also require at least one embedded formal visual per core chapter, adjacent source notes, three-line tables, `visual_manifest.json`, three or more visual families for 6+ visuals, and bar-family share at or below 60%. When verified real images are selected, require `image_publication_manifest.json`, exact binary revalidation, an embedded image for every selected ID, and a caption/source pair for every non-cover image.
+- Word: required chapters/appendices, Heading 1-3, TOC field, captions, page fields, source mapping, 15,000+ characters and 30+ rendered pages. Require catalog-backed Lieflat data charts only, adjacent source notes, three-line tables, `visual_manifest.json`, and HTML+SVG+300 DPI PNG siblings for every emitted chart. There is no chart quota: chapters without a matching data contract use prose/tables. Each Word PNG must be a direct rasterization of the same canonical SVG used by HTML; process, relationship, hierarchy, decision-tree, legacy native-chart and separately redrawn PNG fallbacks are blocking defects. When verified real images are selected, require all three image manifests, exact binary revalidation, an embedded image for every selected ID, and a caption/source pair for every non-cover image.
 - Enterprise HTML: required sections, embedded data, company header, source drawer and no network-critical dependencies.
 - Product HTML: generation route, 2-4 comparison, `—` for nulls and verified images.
 - Product HTML additionally requires verified locally archived images in cards, detail and comparison views, plus no network-critical image dependency.
@@ -108,7 +108,7 @@ Immediate blockers include:
 - product dashboard generated without qualifying products;
 - PPT outside 15-20 slides;
 - formal Word report below the configured character/page depth without an explicit concise-report request;
-- Word with a missing visual manifest, fewer formal figures than core chapters, missing figure source notes, grid tables, insufficient chart variety or bar-family overuse;
+- Word with a missing visual manifest, a non-catalog or legacy chart renderer, missing HTML/SVG/300-DPI-PNG siblings, missing figure source notes, grid tables, or a chart whose frozen data violates the selected Lieflat template contract;
 - Word/PPT with a selected verified image missing from the package, a binary/hash/MIME/dimension mismatch, a remote-only image, a missing image caption/source, or an image used to replace a required chart;
 - PPT delivered without all-slide render inspection or the required fix/full-rerender cycle;
 - PPT without storyline/evidence map, with three consecutive identical layouts, wrapped KPI/page tokens, chart text below 8 pt or geometry overlap/escape above 3 pt;

@@ -208,6 +208,8 @@ class AnySearchCliAdapter:
     @classmethod
     def _parse_output(cls, output: str, requested_url: str | None = None) -> list[SearchHit]:
         now = datetime.now(timezone.utc).isoformat()
+        if not output or not output.strip():
+            return []
         try:
             payload: Any = json.loads(output)
         except json.JSONDecodeError:
@@ -224,6 +226,35 @@ class AnySearchCliAdapter:
                     metadata={"format": "markdown"},
                 )
             ] if output else []
+
+        raw_hits = cls._find_result_items(payload)
+        hits: list[SearchHit] = []
+        for item in raw_hits:
+            url = item.get("url") or item.get("link") or item.get("source_url") or requested_url
+            text = item.get("content") or item.get("text") or item.get("snippet") or item.get("description")
+            hits.append(
+                SearchHit(
+                    requested_url=requested_url or url,
+                    final_url=url,
+                    title=item.get("title") or item.get("name"),
+                    text=str(text) if text is not None else None,
+                    status="ok" if (url or text) else "partial",
+                    retrieved_at=now,
+                    metadata={"format": "json", "raw": item},
+                )
+            )
+        if not hits and isinstance(payload, dict):
+            text = payload.get("content") or payload.get("text") or payload.get("result")
+            if isinstance(text, str) and text.strip():
+                hits.append(SearchHit(
+                    requested_url=requested_url,
+                    final_url=requested_url,
+                    text=text,
+                    status="partial",
+                    retrieved_at=now,
+                    metadata={"format": "json", "raw": payload},
+                ))
+        return hits
 
     @classmethod
     def _parse_markdown_results(cls, output: str, requested_url: str | None = None) -> list[SearchHit]:
@@ -275,28 +306,6 @@ class AnySearchCliAdapter:
                 retrieved_at=now,
                 metadata={"format": "markdown"},
             ))
-        return hits
-
-        raw_hits = cls._find_result_items(payload)
-        hits: list[SearchHit] = []
-        for item in raw_hits:
-            url = item.get("url") or item.get("link") or item.get("source_url") or requested_url
-            text = item.get("content") or item.get("text") or item.get("snippet") or item.get("description")
-            hits.append(
-                SearchHit(
-                    requested_url=requested_url or url,
-                    final_url=url,
-                    title=item.get("title") or item.get("name"),
-                    text=text,
-                    status="ok" if (url or text) else "partial",
-                    retrieved_at=now,
-                    metadata={"raw": item},
-                )
-            )
-        if not hits and isinstance(payload, dict):
-            text = payload.get("content") or payload.get("text") or payload.get("result")
-            if isinstance(text, str) and text.strip():
-                hits.append(SearchHit(requested_url=requested_url, final_url=requested_url, text=text, status="partial", retrieved_at=now, metadata={"raw": payload}))
         return hits
 
     @classmethod

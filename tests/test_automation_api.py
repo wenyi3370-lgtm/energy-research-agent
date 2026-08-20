@@ -89,6 +89,76 @@ class TestSubmitAndStatus(ApiTestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["status"], "ok")
 
+    def test_monitor_summary_cannot_be_submitted_as_research(self):
+        resp = self.client.post(
+            "/api/v1/triggers/feishu",
+            json={
+                "requested_by": "watchdog",
+                "company": "监测通知",
+                "research_type": "other",
+                "notes": "[定时监测] 到期任务 0 个",
+            },
+        )
+        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(
+            resp.json()["error"]["type"], "OPERATIONAL_NOTIFICATION_MISROUTED"
+        )
+
+    def test_legacy_monitor_endpoint_cannot_start_scheduled_research(self):
+        resp = self.client.post("/api/v1/monitor/run")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json(),
+            {
+                "triggered": False,
+                "disabled": True,
+                "due_count": 0,
+                "stale_recovered": 0,
+                "ran_async": False,
+                "message": "定时研究已禁用；请通过本地网页点击“开始调查”",
+            },
+        )
+
+    def test_portal_exposes_manual_research_and_daily_push_controls(self):
+        html = self.client.get("/").text
+        self.assertIn("企业研究仅由本页按钮启动，不会定时自动运行", html)
+        self.assertIn("/api/v1/research/prepare", html)
+        self.assertIn("/api/v1/research/' + currentRun + '/start", html)
+        self.assertIn("renderParsed({company: body.company", html)
+        self.assertIn("/api/v1/intelligence/pause", html)
+        self.assertIn("/api/v1/intelligence/resume", html)
+
+    def test_stop_all_cancels_prepared_portal_run(self):
+        prepared = self.client.post(
+            "/api/v1/research/prepare",
+            json=make_request().model_dump(mode="json"),
+        )
+        self.assertEqual(prepared.status_code, 201)
+        stopped = self.client.post("/api/v1/research/stop-all")
+        self.assertEqual(stopped.status_code, 200)
+        self.assertEqual(stopped.json()["count"], 1)
+        self.assertEqual(stopped.json()["stopped"][0]["status"], "FAILED")
+
+    def test_daily_push_pause_and_resume_persist(self):
+        self.assertEqual(
+            self.client.get("/api/v1/intelligence/status").json(), {"paused": False}
+        )
+        self.assertEqual(
+            self.client.post("/api/v1/intelligence/pause").json(), {"paused": True}
+        )
+        self.assertEqual(
+            self.client.get("/api/v1/intelligence/status").json(), {"paused": True}
+        )
+        blocked = self.client.post("/api/v1/intelligence/daily").json()
+        self.assertEqual(blocked["triggered"], False)
+        self.assertEqual(blocked["paused"], True)
+        self.assertEqual(
+            self.client.post("/api/v1/intelligence/resume").json(), {"paused": False}
+        )
+        self.assertEqual(
+            self.client.get("/api/v1/intelligence/status").json(), {"paused": False}
+        )
+
 
 class TestReviewApi(ApiTestCase):
     def test_review_gate_flow(self):

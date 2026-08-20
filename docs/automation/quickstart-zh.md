@@ -12,7 +12,7 @@
 |---|---|---|
 | **研究服务** | 收任务、做研究、出报告 | http://localhost:8000 |
 | **数据库** | 存任务和结果 | （不用管） |
-| **n8n 自动化** | 把"表单→研究→通知"串起来 | http://localhost:5678 |
+| **n8n 自动化** | 每日情报定时推送 + 调查故障看门狗 | http://localhost:5678 |
 
 > 想随时查看/重启：打开终端，进入项目目录后运行
 > `docker compose ps`（看状态）、`docker compose restart`（重启）。
@@ -83,27 +83,19 @@
 ```
 - **GET /api/v1/roi/summary** 看汇总：节省了多少分钟、ROI 倍数、采纳数。
 
-## 第 6 步：定时监测（自动盯市场）（1 分钟）
+## 第 6 步：从本地网页启动企业研究（1 分钟）
 
-系统已配好 2 个监测任务（泰国户储市场·月度、某储能企业产品·周度），
-跑一下就能触发到期任务：
+打开 **http://localhost:8000**，填写研究对象并点击「准备任务」，核对后点击
+「开始调查」。企业研究不会由定时器自动启动。
 
-```bash
-python scripts/run_monitor.py          # 跑所有到期任务
-python scripts/run_monitor.py --check  # 只看计划，不执行
-```
-
-> 想改监测对象：编辑 `config/watchlist.yaml`，把 company/country 换成你真正关心的，
-> 保存即生效（不用重启）。正式定时可以交给 n8n 的 Schedule 节点或系统计划任务。
-
-## 第 7 步：n8n 自动化（表单一键触发）（可选）
+## 第 7 步：n8n 每日情报（可选）
 
 1. 打开 **http://localhost:5678**（第一次会让你设管理员账号密码，自己设一个）。
-2. 工作流 **Enterprise Energy Research Automation** 已经导入好了，点开即可看到流程图。
-3. 点右上角 **Active** 开启。之后有人往飞书表单填内容（Webhook 触发），
-   系统就会自动：建任务 → 轮询 → 完成通知 / 评审等待 / 失败重试 → 收集 ROI 反馈。
-4. 本地测试 Webhook：POST 到 `http://localhost:5678/webhook/feishu-form-trigger`
-   （n8n 界面里点 Webhook 节点能看到完整地址；生产环境需 HTTPS 反代）。
+2. 保持 **每日情报（V2G & 储能日报）** 和 **研究故障看门狗（只终止悬挂任务）** 为 Active：前者每天 10:00 推送，后者每小时只终止超过 120 分钟无进展的任务并发飞书通知。
+3. `Enterprise Energy Research Automation` 与 `monitor-schedule-trigger-v1` 保持未发布，
+   企业研究统一从本地网页启动。
+4. 日报可在本地网页通过「停止推送 / 恢复推送」控制；暂停后定时调用会被 API 拦截。
+5. 故障看门狗不会创建或自动重试研究任务，不受日报暂停开关影响。
 
 ## 第 8 步（进阶）：真实联网研究
 

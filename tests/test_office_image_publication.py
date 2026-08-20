@@ -11,6 +11,7 @@ from PIL import Image
 
 from enterprise_energy_research.artifacts.ppt import PptMasterFrozenPublisher
 from enterprise_energy_research.artifacts.word import FrozenWordPublisher
+from enterprise_energy_research.artifacts.image_publication import prepare_publication_images
 from enterprise_energy_research.domain.enums import ArtifactType, RunStatus
 from enterprise_energy_research.domain.ids import new_sortable_id
 from enterprise_energy_research.domain.models import ExtractedEvidenceBatch, RunManifest
@@ -31,7 +32,7 @@ class OfficeImagePublicationTests(unittest.TestCase):
         store = EvidenceStore(Path(temp) / "evidence.sqlite3")
         store.create_run(RunManifest(
             run_id=run_id, request_id=request_id, status=RunStatus.RUNNING,
-            config_hash="fixture", code_version="0.8.1", model_gateway={"mode": "fixture"},
+            config_hash="fixture", code_version="0.9.0", model_gateway={"mode": "fixture"},
         ))
         state, manifest, _ = Phase3Runner(store, load_yaml(ROOT / "config" / "enterprise_rules.yaml")).process_batches(
             ResearchState(run_id=run_id, request_id=request_id, status=RunStatus.RUNNING),
@@ -84,14 +85,29 @@ class OfficeImagePublicationTests(unittest.TestCase):
             self.assertEqual(set(result.used_image_ids), set(binding.image_ids))
             with zipfile.ZipFile(target) as archive:
                 xml = archive.read("word/document.xml").decode("utf-8")
-            self.assertGreaterEqual(xml.count("<w:drawing>"), 22)  # 19 charts + 3 verified images
+            visual_manifest = json.loads((Path(temp) / "report_assets" / "visual_manifest.json").read_text(encoding="utf-8"))
+            self.assertGreaterEqual(xml.count("<w:drawing>"), len(visual_manifest["visuals"]) + 3)
             self.assertIn("图 4-P1", xml)
             self.assertIn("图 5-P1", xml)
             self.assertIn("图片来源：", xml)
             image_manifest = json.loads((Path(temp) / "report_assets" / "image_publication_manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(set(image_manifest["artifact_selections"]["word"]), set(binding.image_ids))
             self.assertEqual(len(image_manifest["prepared_images"]), 3)
+            self.assertTrue((Path(temp) / "report_assets" / "image_discovery_manifest.json").is_file())
+            self.assertTrue((Path(temp) / "report_assets" / "image_evidence_manifest.json").is_file())
             self.assertTrue((Path(temp) / "report_assets" / "visual_manifest.json").is_file())
+
+    def test_image_exact_and_perceptual_dedupe_are_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            bundle, binding, _ = self._bundle_and_bindings(temp)
+            original = bundle.images[1]
+            exact = original.model_copy(update={"image_id": "IMAGE-EXACT-DUPLICATE"})
+            near = original.model_copy(update={"image_id": "IMAGE-PHASH-DUPLICATE", "sha256": "f" * 64, "phash": original.phash})
+            bundle = bundle.model_copy(update={"images": [*bundle.images, exact, near]})
+            binding = binding.model_copy(update={"image_ids": [*binding.image_ids, exact.image_id, near.image_id]})
+            manifest = prepare_publication_images(bundle, binding, Path(temp) / "assets")
+            self.assertIn(exact.image_id, manifest.skipped_exact_duplicate_image_ids)
+            self.assertIn(near.image_id, manifest.skipped_perceptual_duplicate_image_ids)
 
     def test_ppt_contract_adds_images_beside_existing_product_and_factory_charts(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

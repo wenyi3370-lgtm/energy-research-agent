@@ -224,7 +224,10 @@ class ImageEvidence(StrictModel):
     source_id: str
     source_domain: str
     source_title: str | None = None
-    image_type: Literal["logo", "factory", "office", "production_line", "product", "location", "certificate", "other"]
+    image_type: Literal[
+        "logo", "headquarters", "factory", "workshop", "office", "production_line",
+        "product", "product_application", "equipment", "location", "certificate", "project", "other",
+    ]
     retrieved_at: datetime = Field(default_factory=utc_now)
     sha256: str
     phash: str
@@ -331,6 +334,10 @@ class ResearchQuery(StrictModel):
     round_goal: Literal["coverage", "depth", "triangulation"] = "coverage"
     high_priority: bool = True
     raw_capture_required: bool = True
+    trigger: Literal["baseline", "official_discovery", "catalog_enumeration", "gap", "conflict", "triangulation"] = "baseline"
+    target_gap_ids: list[str] = Field(default_factory=list)
+    target_conflict_ids: list[str] = Field(default_factory=list)
+    target_claim_ids: list[str] = Field(default_factory=list)
     status: QueryStatus = QueryStatus.PLANNED
 
 
@@ -341,6 +348,8 @@ class ResearchPlan(StrictModel):
     queries: list[ResearchQuery]
     budget: dict[str, int]
     completion_contract: list[str]
+    scoped_goal_families: list[str] = Field(default_factory=list)
+    requires_catalog_enumeration: bool = True
     created_at: datetime = Field(default_factory=utc_now)
 
     @model_validator(mode="after")

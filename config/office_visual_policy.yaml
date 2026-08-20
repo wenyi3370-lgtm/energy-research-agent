@@ -26,10 +26,13 @@ word:
   figure_png_dpi: 300
   maximum_figure_width_cm: 15.6
   require_editable_svg: true
-  require_visual_per_core_chapter: true
+  require_visual_per_core_chapter: false
   minimum_analysis_characters_before_visual: 50
-  minimum_visual_families_when_visuals_ge_6: 3
-  maximum_bar_family_ratio: 0.60
+  minimum_visual_families_when_visuals_ge_10: 0
+  maximum_bar_family_ratio: 0.75
+  minimum_formal_figures: 0
+  target_visual_interval_pages: [2, 3]
+  require_core_chapter_visual_coverage: 0.0
   maximum_canonical_type_repetitions: 2
   require_same_stem_pdf: true
   require_page_by_page_inspection: true

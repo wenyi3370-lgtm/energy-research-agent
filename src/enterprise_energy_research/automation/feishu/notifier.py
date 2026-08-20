@@ -57,6 +57,17 @@ class FeishuNotifier:
             )
         return deliveries[0]
 
+    def send_text(self, text: str) -> FeishuDelivery | None:
+        """Send an operational message without creating a research task.
+
+        Scheduler summaries and service alerts must use this path.  Routing
+        them through the Feishu form trigger would incorrectly interpret the
+        notification as a new company-research request.
+        """
+        if self.adapter is None or not self.adapter.available():
+            return None
+        return self.adapter.send(FeishuMessage(receiver="", text=text))
+
     @staticmethod
     def _status_text(result: ResearchResult) -> str:
         """Status-specific notification copy; BLOCKED tells the reviewer how to proceed."""

@@ -2,6 +2,7 @@
 
 import tempfile
 import unittest
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -55,6 +56,84 @@ class FeishuTests(unittest.TestCase):
         gated = ResearchResult(run_id="R2", task_id="T2", status=TaskStatus.REVIEW_REQUIRED)
         notifier.notify(gated)
         self.assertEqual(len(adapter.sent), 1)
+
+    def test_operational_text_does_not_create_research_result(self):
+        adapter = MockFeishuAdapter()
+        delivery = FeishuNotifier(adapter).send_text("[定时监测] 到期任务 1 个")
+        self.assertTrue(delivery.delivered)
+        self.assertEqual(len(adapter.sent), 1)
+        self.assertEqual(adapter.sent[0].text, "[定时监测] 到期任务 1 个")
+
+
+class MonitorWorkflowContractTests(unittest.TestCase):
+    def test_failure_watchdog_only_recovers_stale_runs(self):
+        workflow = json.loads(
+            (ROOT / "automation" / "n8n" / "failure-watchdog-workflow.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        schedule_nodes = [
+            node for node in workflow["nodes"]
+            if node.get("type") == "n8n-nodes-base.scheduleTrigger"
+        ]
+        self.assertEqual(len(schedule_nodes), 1)
+        self.assertEqual(
+            schedule_nodes[0]["parameters"]["rule"]["interval"],
+            [{"field": "hours", "hoursInterval": 1}],
+        )
+        urls = [
+            node.get("parameters", {}).get("url")
+            for node in workflow["nodes"]
+            if node.get("parameters", {}).get("url")
+        ]
+        self.assertEqual(
+            urls,
+            ["http://research-api:8000/api/v1/maintenance/recover-stale"],
+        )
+        serialized = json.dumps(workflow, ensure_ascii=False).lower()
+        for forbidden in (
+            "/api/v1/research",
+            "/api/v1/monitor/run",
+            "/retry",
+            "watchlist",
+            "/api/v1/triggers/feishu",
+        ):
+            self.assertNotIn(forbidden, serialized)
+
+    def test_monitor_workflow_is_inactive_and_never_submits_research(self):
+        workflow = json.loads(
+            (ROOT / "automation" / "n8n" / "monitor-schedule-workflow.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertFalse(workflow["active"])
+        schedule_nodes = [
+            node for node in workflow["nodes"]
+            if node.get("type") == "n8n-nodes-base.scheduleTrigger"
+        ]
+        self.assertEqual(len(schedule_nodes), 1)
+        self.assertTrue(schedule_nodes[0].get("disabled"))
+        urls = [
+            node.get("parameters", {}).get("url")
+            for node in workflow["nodes"]
+            if node.get("parameters", {}).get("url")
+        ]
+        self.assertEqual(urls, ["http://research-api:8000/api/v1/monitor/run"])
+        self.assertNotIn("/api/v1/triggers/feishu", json.dumps(workflow, ensure_ascii=False))
+
+    def test_feishu_research_workflow_is_inactive(self):
+        workflow = json.loads(
+            (ROOT / "automation" / "n8n" / "enterprise-research-workflow.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertFalse(workflow["active"])
+        webhook_nodes = [
+            node for node in workflow["nodes"]
+            if node.get("type") == "n8n-nodes-base.webhook"
+        ]
+        self.assertEqual(len(webhook_nodes), 1)
+        self.assertTrue(webhook_nodes[0].get("disabled"))
 
 
 class ScheduleTests(unittest.TestCase):

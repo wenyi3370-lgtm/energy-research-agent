@@ -44,6 +44,19 @@
       ],
       "source": "local Codex Skill snapshot"
     },
+    "lieflat-charts": {
+      "byte_count": 20554403,
+      "file_count": 124,
+      "required": [
+        "SKILL.md",
+        "catalog.md",
+        "LICENSE",
+        "THIRD_PARTY_NOTICES.md",
+        "templates/basics-gallery.html",
+        "templates/lupi-gallery.html"
+      ],
+      "source": "larashero3-dotcom/lieflat-charts snapshot"
+    },
     "ppt-master": {
       "byte_count": 60344205,
       "file_count": 12091,
@@ -199,6 +212,502 @@
     "kimi-webbridge/references/operations.md": {
       "bytes": 3347,
       "sha256": "a7626eccc1bb588fe634fd65f75965957725b351adae8f5b873d95e30ba432f4"
+    },
+    "lieflat-charts/.gitignore": {
+      "bytes": 61,
+      "sha256": "12019aa03e3f3ed9d3a62370a7357c032ff565ad52a0badb48f44940871e19b3"
+    },
+    "lieflat-charts/LICENSE": {
+      "bytes": 4563,
+      "sha256": "ffcca38841adb694b6f380647e15f17c446a4d1656fed51a1e2041d064c94cc8"
+    },
+    "lieflat-charts/README.en.md": {
+      "bytes": 19420,
+      "sha256": "e9f05e8dc2b018655b7ff0841f509bc4ef347fea8eaddbdaf87d9c3c59afdf3b"
+    },
+    "lieflat-charts/README.md": {
+      "bytes": 18916,
+      "sha256": "93eb640bd15ea577ec1660ce96109ca49fd71bfd3e8ec2479258025afcb6262c"
+    },
+    "lieflat-charts/SKILL.md": {
+      "bytes": 37421,
+      "sha256": "2e1b7bfea74c057f27ad7ace583e6e10ab9fe7d7eef3f11366860afd9eb701b1"
+    },
+    "lieflat-charts/THIRD_PARTY_NOTICES.md": {
+      "bytes": 746,
+      "sha256": "3545b3af3d3d3f34ecebd603ddb1867e5ea1d45ef86bf2c065002f5033ede7a3"
+    },
+    "lieflat-charts/agents/openai.yaml": {
+      "bytes": 466,
+      "sha256": "0e3f07f84e16250447048e9fe2379d3dd8d339e25f7b04094961542c58df3b2f"
+    },
+    "lieflat-charts/catalog.md": {
+      "bytes": 14410,
+      "sha256": "67dfb3e5156142b8dc9b05a5d8514a71127dca47e2a38f80dd8705b75a65658d"
+    },
+    "lieflat-charts/color-presets.js": {
+      "bytes": 9888,
+      "sha256": "6ea2503665c85d0e49b51a09aae69c2cd062653f9050c16e317b3447fe85726e"
+    },
+    "lieflat-charts/docs/assets/color-palm-support-motion.gif": {
+      "bytes": 412405,
+      "sha256": "39d596f9ebd694705065ed3d4dd8f7a2970427950019e41dfe683aec87d77146"
+    },
+    "lieflat-charts/docs/assets/color-palm-wave-motion.gif": {
+      "bytes": 466327,
+      "sha256": "56c625cebf310b5c5501026ec62b2b9edc167314dd103cd09f293888d7691231"
+    },
+    "lieflat-charts/docs/assets/color-porcelain-almanac-motion.gif": {
+      "bytes": 1783106,
+      "sha256": "37ef47a29a86d3321a59426ba42a48faafcc86c8390aed930a0ecfffe50cac98"
+    },
+    "lieflat-charts/docs/assets/color-porcelain-motion.gif": {
+      "bytes": 1037942,
+      "sha256": "79dd37a8e8ec56ba1a4df0d37238b948b551678e045d5f3d77b46b0db6234b50"
+    },
+    "lieflat-charts/docs/assets/color-wire-hourglass-motion.gif": {
+      "bytes": 622011,
+      "sha256": "0794c40c9d5459c633e32a457041a27ae81373ddfe725042b8c93596cb05b1ce"
+    },
+    "lieflat-charts/docs/assets/color-wire-patchwork-motion.gif": {
+      "bytes": 612693,
+      "sha256": "18952fcdb181c62a9005ee73c6d670db897213f7af1291419797abbaf70de126"
+    },
+    "lieflat-charts/docs/assets/examples/r04-financial-report.zh.png": {
+      "bytes": 221753,
+      "sha256": "1e972f2d3260cdb20cae745c84f7c5fcb8e26e85d60a146219ecea364100ffe7"
+    },
+    "lieflat-charts/docs/assets/glance-motion.gif": {
+      "bytes": 234967,
+      "sha256": "c3976e0546b55305307415e692633c6ec3aa3b49bf7ca21c44a775669ca5a5a8"
+    },
+    "lieflat-charts/docs/assets/glance-race-motion.gif": {
+      "bytes": 586056,
+      "sha256": "fc59f49ce81155557f8a47beab86f03203685dc430da2a82aad9db3a21153f14"
+    },
+    "lieflat-charts/docs/assets/glance-stroke-motion.gif": {
+      "bytes": 78713,
+      "sha256": "aee364c33bb0f5c673a0f3109d9d0e948ed4f9c153c12afab11203d0feca9b42"
+    },
+    "lieflat-charts/docs/assets/glance-wave-motion.gif": {
+      "bytes": 44721,
+      "sha256": "8486461ce898d280eefc373feaf5ae380c1661b973bbfcddad5c4d1e0653a858"
+    },
+    "lieflat-charts/docs/assets/interactive-motion.gif": {
+      "bytes": 2479001,
+      "sha256": "13c2df6fa2b64735efb57a8e8b907d8aa404b92adedfff44d83e9845d85ee0ef"
+    },
+    "lieflat-charts/docs/assets/moxt-quick-start-en.png": {
+      "bytes": 62009,
+      "sha256": "0562af8d97c1be57ba7d4aec2a98634f986ba1d2b76af36682e4ff125dcabc24"
+    },
+    "lieflat-charts/docs/assets/moxt-quick-start-zh.png": {
+      "bytes": 62629,
+      "sha256": "75833c4c0ccedd14b2fe6f99476f99d751c909300bfaaa6da47f4881d4f18ea1"
+    },
+    "lieflat-charts/docs/assets/preview-basics-01.png": {
+      "bytes": 226774,
+      "sha256": "28d267205d0631b0254e4dac9c24bc58fd92339a65bc2159c331c50ce6250a79"
+    },
+    "lieflat-charts/docs/assets/preview-basics-02.png": {
+      "bytes": 355269,
+      "sha256": "d188e869dc47151c95c6915c065b2292711e40a97d93adc6b79eb37a90c86823"
+    },
+    "lieflat-charts/docs/assets/preview-color-palm-basics.png": {
+      "bytes": 76144,
+      "sha256": "94ca6505eb933adaed387e815386615ea6a034bb88f08df9dc03b566aa43b0ba"
+    },
+    "lieflat-charts/docs/assets/preview-color-palm-glance.png": {
+      "bytes": 80460,
+      "sha256": "e58c6ee8df25fdd149e1917cabb987620684eda9151e78a6d64425199873c0fc"
+    },
+    "lieflat-charts/docs/assets/preview-color-palm.png": {
+      "bytes": 122280,
+      "sha256": "50a5e6a53c56fddac56d5114e2709fd1c21ce913c10cb7548d9a412531831bf3"
+    },
+    "lieflat-charts/docs/assets/preview-color-porcelain-basics.png": {
+      "bytes": 140997,
+      "sha256": "4fc54f6272c098e9748d41013fe008b95534b68fbda2f22dcaf7e86032893ae6"
+    },
+    "lieflat-charts/docs/assets/preview-color-porcelain-glance.png": {
+      "bytes": 80396,
+      "sha256": "a300d4e90c64757a87284d138305896b53165c358abe1894d0d58fb63d529173"
+    },
+    "lieflat-charts/docs/assets/preview-color-porcelain.png": {
+      "bytes": 124801,
+      "sha256": "932cd8e20319e58a6ba47202a266c501a51c8f332ae09e8cba05d38f1b4a3370"
+    },
+    "lieflat-charts/docs/assets/preview-color-wire-basics.png": {
+      "bytes": 73919,
+      "sha256": "e56841758e18b3e4d5723c9564ca7984700c0e580ebfff49da5d3937a187869d"
+    },
+    "lieflat-charts/docs/assets/preview-color-wire-glance.png": {
+      "bytes": 76930,
+      "sha256": "0066dd0a9e5e10ed93bd934586d768c54ee686879a1652ab3f583b97d99e21f9"
+    },
+    "lieflat-charts/docs/assets/preview-color-wire.png": {
+      "bytes": 119377,
+      "sha256": "2c2710d276dd7e0c20ac652afc6bc0928bdb2ff83c6ba417646ec7408b39bb96"
+    },
+    "lieflat-charts/docs/assets/preview-glance-01.png": {
+      "bytes": 247612,
+      "sha256": "b2c00ac2eb6ae351e188aec82730632403b103091dd5bfb4d3445b96b7564649"
+    },
+    "lieflat-charts/docs/assets/preview-glance-02.png": {
+      "bytes": 336511,
+      "sha256": "db2148014b1967f1dd5f9b2d3e417f15c42900c6aab563a73ae03f8cddad331b"
+    },
+    "lieflat-charts/docs/assets/preview-glance-03.png": {
+      "bytes": 230410,
+      "sha256": "4b3f10e73820c9c3fb32381c5da408a9ee3fb54151571661165fcf158b463e20"
+    },
+    "lieflat-charts/docs/assets/preview-lupi-01.png": {
+      "bytes": 265190,
+      "sha256": "c294789af8124a09ef505f8f6e0e3eb3a11c0ec4db12767669a707001f4a567e"
+    },
+    "lieflat-charts/docs/assets/preview-lupi-02.png": {
+      "bytes": 340168,
+      "sha256": "8e304cec7a1605d35f1b4e431cc15120d9b021db9716c825f5eb90386cbdb898"
+    },
+    "lieflat-charts/docs/assets/preview-lupi-03.png": {
+      "bytes": 358310,
+      "sha256": "08a2264024cbc04eeec3c69d0b9962f96a27605379a5bd65289c52ddd3b4af58"
+    },
+    "lieflat-charts/docs/assets/readme-hero-en.png": {
+      "bytes": 81327,
+      "sha256": "da4414d033bd2bf68eb93831ad4623ebb473bc1c9d7b614d9df0f7de5d4e787b"
+    },
+    "lieflat-charts/docs/assets/readme-hero-zh.png": {
+      "bytes": 80972,
+      "sha256": "8c6aead9d3dee985d9cc45376e9fc25fd56ff6be17111c5a39239b3b0ae3ff9c"
+    },
+    "lieflat-charts/docs/assets/reports/en/report-01.png": {
+      "bytes": 207226,
+      "sha256": "b094c0b306345c0826acb78c261e76e29c8fa35682f0f12db3b99645e0d878b7"
+    },
+    "lieflat-charts/docs/assets/reports/en/report-02.png": {
+      "bytes": 134914,
+      "sha256": "b528b73c46c325389bb2a9e4b119a812a4c0b1725ed7a1ebec061d035bae18f5"
+    },
+    "lieflat-charts/docs/assets/reports/en/report-03.png": {
+      "bytes": 156102,
+      "sha256": "2cacafb1a010c6a1090d814d9e8f497c073c5fd4e5521ee41689fdd56cee984a"
+    },
+    "lieflat-charts/docs/assets/reports/en/report-04.png": {
+      "bytes": 123716,
+      "sha256": "87d67215e8f88d8781996a1a762bb7d34d903eb7a41ef3c6dedd0e3561e6bb1a"
+    },
+    "lieflat-charts/docs/assets/reports/en/report-05.png": {
+      "bytes": 139930,
+      "sha256": "866e0860631b8a0c701850fe8584fe16050d820771bf89adfeadb10a6d6f5929"
+    },
+    "lieflat-charts/docs/assets/reports/en/report-06.png": {
+      "bytes": 211270,
+      "sha256": "f317125bd056b4cf1cb1244f702d473979d4db34f72be7dd9bc42359ac8ca667"
+    },
+    "lieflat-charts/docs/assets/reports/en/report-07.png": {
+      "bytes": 186174,
+      "sha256": "d8b3dbc96730256e9be0dfca9f4da33a3a80ea84cc4b3c5a7c06cb80822d70f2"
+    },
+    "lieflat-charts/docs/assets/reports/en/report-08.png": {
+      "bytes": 105932,
+      "sha256": "67b8ca31ce77bab1c24fe4aa193f4f6cf3e71bdf66e45ec70ac34a870da4ee95"
+    },
+    "lieflat-charts/docs/assets/reports/en/report-09.png": {
+      "bytes": 104352,
+      "sha256": "5540498bfc33234be591957a7969ae901be8235db6f6dd1f0057c23276d8b41c"
+    },
+    "lieflat-charts/docs/assets/reports/en/report-10.png": {
+      "bytes": 210713,
+      "sha256": "43bf36339aae550e5c0c3805b1d4b7fa3f44e06dd20a308b7c2d8c2cc2f9ae04"
+    },
+    "lieflat-charts/docs/assets/reports/en/report-11.png": {
+      "bytes": 200991,
+      "sha256": "e0b833ca8376e36baeca9fdc2eb8941dba102cb783413d6caed3cdb7a569a478"
+    },
+    "lieflat-charts/docs/assets/reports/en/report-12.png": {
+      "bytes": 156280,
+      "sha256": "ad38565d56e4faea0c70b503f7604c5fcd4bdd52a67829f9679bab82b565f57d"
+    },
+    "lieflat-charts/docs/assets/reports/report-01.png": {
+      "bytes": 516177,
+      "sha256": "571536e3e537b39c09ca0cdca5802a409dfd8f8f6efdedd5c34ab71d882c7bd5"
+    },
+    "lieflat-charts/docs/assets/reports/report-02.png": {
+      "bytes": 320920,
+      "sha256": "dc709cccc009456c9d0f760e1bd44b13c0bc798b685a35ee59258f3bc94770fd"
+    },
+    "lieflat-charts/docs/assets/reports/report-03.png": {
+      "bytes": 303966,
+      "sha256": "e24ba1e4b800112693023b9b2b3ca4ecdb523c8bf813d3b5464223d550b1cbcc"
+    },
+    "lieflat-charts/docs/assets/reports/report-04.png": {
+      "bytes": 417258,
+      "sha256": "fe595211d2960ff224a85929d6c8abf5b95afbed491f92e94072561865e1abaa"
+    },
+    "lieflat-charts/docs/assets/reports/report-05.png": {
+      "bytes": 349679,
+      "sha256": "563a0344bdba887c70e1e2bf16cc79731f76bc35f81feba6046508c3cfc72753"
+    },
+    "lieflat-charts/docs/assets/reports/report-06.png": {
+      "bytes": 744527,
+      "sha256": "27f5591e52ec8c8ce79b3957171c5ebbfa0d923778a93b87ad9a069afde88423"
+    },
+    "lieflat-charts/docs/assets/reports/report-07.png": {
+      "bytes": 472056,
+      "sha256": "33bbcc8c208dc7a3f6f9a58482351005a2d20bf8d8924da9bdc8d64d03b487f8"
+    },
+    "lieflat-charts/docs/assets/reports/report-08.png": {
+      "bytes": 243567,
+      "sha256": "589117df6f9f9f1092e03bda10b1c49708520ff4169515e5db5f50673ea9f0b7"
+    },
+    "lieflat-charts/docs/assets/reports/report-09.png": {
+      "bytes": 468253,
+      "sha256": "c56324ef0d1ba157712f2d5f1760ee98c582416d46cbf1ebbeac84a658208def"
+    },
+    "lieflat-charts/docs/assets/reports/report-10.png": {
+      "bytes": 519061,
+      "sha256": "1bee0a9815ab4ca7e440806114ccda0525ac387532b9c0620ebbd89864ac9e62"
+    },
+    "lieflat-charts/docs/assets/reports/report-11.png": {
+      "bytes": 269540,
+      "sha256": "c1f8180500afe6181a12b9f7fb0cfe5be35016963ea30a0e10cd3c3b48be045a"
+    },
+    "lieflat-charts/docs/assets/reports/report-12.png": {
+      "bytes": 474805,
+      "sha256": "73c819e87b49d51e713a0b9ab1a7d133776807296fd6fd6dead47029fad45e53"
+    },
+    "lieflat-charts/examples/README.md": {
+      "bytes": 2680,
+      "sha256": "c82df97ce736ddd04dbb9d40eaa990be5569912c03c572bab1dbd967a6e9b7ff"
+    },
+    "lieflat-charts/examples/lenny-2026-survey.html": {
+      "bytes": 23629,
+      "sha256": "1a0db34e70922b913575cefbb1c228c0f78d8e3b307b93b8616df8d385e44496"
+    },
+    "lieflat-charts/examples/reports/r04-financial-report.zh.html": {
+      "bytes": 19737,
+      "sha256": "33459359e3eda924e12fef784c7ec54e8ddcc7a195e0495a38dc64a6cc45de12"
+    },
+    "lieflat-charts/mono-tokens.js": {
+      "bytes": 10427,
+      "sha256": "fc44eb4c24c56bb42514c4572db8d8883cc26eddae1556b5629e74855205f837"
+    },
+    "lieflat-charts/report-catalog.md": {
+      "bytes": 4869,
+      "sha256": "a990028cff43a2c794efd03ecb7b56f2f8ee5400c22a8037eb5a33944ea914e8"
+    },
+    "lieflat-charts/scripts/smoke-new-charts.mjs": {
+      "bytes": 3356,
+      "sha256": "2d3c07c5538b9a4d019789bd0a14937a33ee03e59c10e6418a5a7f1290c4a9ab"
+    },
+    "lieflat-charts/scripts/validate.mjs": {
+      "bytes": 11344,
+      "sha256": "bd4e079d937a30a5c1cf347b97cd7318c91521c14e19f9dc95cfeb88d28ee2ad"
+    },
+    "lieflat-charts/templates/basics-gallery.html": {
+      "bytes": 49417,
+      "sha256": "1d01c8695b6b8e921de142cef0de66c10802a7a3ef38112b049c0c2f1eb35fd6"
+    },
+    "lieflat-charts/templates/big-circular.html": {
+      "bytes": 4035,
+      "sha256": "38af6e7022b58ddf28872c606d58ba99176fbc092acbb70e6bb53124cf776176"
+    },
+    "lieflat-charts/templates/big-force.html": {
+      "bytes": 4651,
+      "sha256": "e331808fbb83814c7557bfc9ca821c84e6f2dfb8a7425b2ae16a1842e669ac37"
+    },
+    "lieflat-charts/templates/big-threads.html": {
+      "bytes": 7711,
+      "sha256": "093d08d506722d61edcbb1f5b33fb5a35cb9edc904c7cdc3d92b3377cdcfd39b"
+    },
+    "lieflat-charts/templates/color/README.md": {
+      "bytes": 2836,
+      "sha256": "cb402b5f57a5746aee98ed10f48a23db7168fe613c80cf6342dc99a76f783659"
+    },
+    "lieflat-charts/templates/color/basics-palm.html": {
+      "bytes": 48341,
+      "sha256": "fddcd007a66b81f288be7bafc0d2dd81021f4d90414788992b75b3eccd592458"
+    },
+    "lieflat-charts/templates/color/basics-porcelain.html": {
+      "bytes": 47617,
+      "sha256": "335586ea95e87f3a6fdd8f023325ea72c91b3d5bc69cd0be36eb1e38b158f8ef"
+    },
+    "lieflat-charts/templates/color/basics-wire.html": {
+      "bytes": 47910,
+      "sha256": "15aa27fc3d9cd325031c689c1bf7eaf89c1368cb6337c33faee981c05245e911"
+    },
+    "lieflat-charts/templates/color/big-circular-palm.html": {
+      "bytes": 4161,
+      "sha256": "e198cae1a9d1c04c1290b6527572052ea17fea90bc420ac4ab7ab1d08d985265"
+    },
+    "lieflat-charts/templates/color/big-circular-porcelain.html": {
+      "bytes": 4169,
+      "sha256": "f652468e513df6f32aa038490063a1cd3033ea637f48e173760304b2709a76eb"
+    },
+    "lieflat-charts/templates/color/big-force-palm.html": {
+      "bytes": 4773,
+      "sha256": "371b427f601a714632b913349667a6841a554dbbed879fc257e0294d21482cf2"
+    },
+    "lieflat-charts/templates/color/big-force-porcelain.html": {
+      "bytes": 4781,
+      "sha256": "d8d483ff8b254d5bd4d4fa029c8f984119938e353520178bbb6032602ac7346b"
+    },
+    "lieflat-charts/templates/color/big-threads-palm.html": {
+      "bytes": 7724,
+      "sha256": "d57707118b1e8f498d3b908cde1bad0d75ec8a3ea503ec407a2b10bab6661920"
+    },
+    "lieflat-charts/templates/color/big-threads-porcelain.html": {
+      "bytes": 7729,
+      "sha256": "071e71236a0a04c24f1d72b5cda82343a98512214dc745d6db66943dc893257a"
+    },
+    "lieflat-charts/templates/color/glance-palm.html": {
+      "bytes": 52790,
+      "sha256": "78eddcfd55d0565f5e0ddc8ffbb531b35830aea091029a18b8cb4d97f017dd61"
+    },
+    "lieflat-charts/templates/color/glance-porcelain.html": {
+      "bytes": 52672,
+      "sha256": "dd5450ffe58c3d13a1b935041d4a82420a3b668aaf9163eab275e25d0e76bcd6"
+    },
+    "lieflat-charts/templates/color/glance-wire.html": {
+      "bytes": 52988,
+      "sha256": "a24b43b50b4f86a029f68f57c6506df829eec61478c49502e158f2bcbe38ddac"
+    },
+    "lieflat-charts/templates/color/lupi-palm.html": {
+      "bytes": 65693,
+      "sha256": "fd556242245886d69283ff28032f0df3483c1b0fec39c3390c291fe61d304766"
+    },
+    "lieflat-charts/templates/color/lupi-porcelain.html": {
+      "bytes": 65540,
+      "sha256": "2b01d35518e19078b068afdeaa9f6c7bdbe705e426f8da001449e6f4e129536a"
+    },
+    "lieflat-charts/templates/color/lupi-wire.html": {
+      "bytes": 65503,
+      "sha256": "9c189d2ff088ca98fd165631f297e2d42e85b5dc1c08f9cda6eaf0b2bcecc3e0"
+    },
+    "lieflat-charts/templates/color/maps-palm.html": {
+      "bytes": 9813,
+      "sha256": "a582e1de10001e183316d75ee2ba39275cf29542f6187dc6965462bc2b6f507b"
+    },
+    "lieflat-charts/templates/color/maps-porcelain.html": {
+      "bytes": 9825,
+      "sha256": "00668509410b25770f83353a1fefb980530f59f0c95cacda049a198d856e0987"
+    },
+    "lieflat-charts/templates/color/maps-wire.html": {
+      "bytes": 9840,
+      "sha256": "c53a8eeb86005d6afe23eada7498275d1b1324a24f8c5c43eb4b1ab52bda42f5"
+    },
+    "lieflat-charts/templates/glance-gallery.html": {
+      "bytes": 49086,
+      "sha256": "755e6257e81d32df638493f0fc68bfdbaa615cd27e7197fe7c94e74f533ca57c"
+    },
+    "lieflat-charts/templates/lupi-gallery.html": {
+      "bytes": 61263,
+      "sha256": "ab8ba1139382267f9f9531f917903e865cd11dfa049deb0157300fa778a6a625"
+    },
+    "lieflat-charts/templates/maps-gallery.html": {
+      "bytes": 9786,
+      "sha256": "984728e65def8c0e087ec4bede2e6bb6a73f3497a022eed3969be7efdf2c05d2"
+    },
+    "lieflat-charts/templates/reports/index.html": {
+      "bytes": 10836,
+      "sha256": "6b441d556eecef3068ea9939b193cc7d27e0b88579f0c68a1d5355e3ed8ae2c5"
+    },
+    "lieflat-charts/templates/reports/report-01.en.html": {
+      "bytes": 16347,
+      "sha256": "830a57b9bd4b5ad2b2e094e4690fe46be7b819ec73241cb1527ef01a851607f7"
+    },
+    "lieflat-charts/templates/reports/report-01.zh.html": {
+      "bytes": 16314,
+      "sha256": "5ded8952f905a1aad50269374603f521760eec9f4bc34aca51334d5a2783d9a2"
+    },
+    "lieflat-charts/templates/reports/report-02.en.html": {
+      "bytes": 18640,
+      "sha256": "a741c55f9c6e0eea164830a7a694a3cdd6be284b11c921debf6dba75c250fc05"
+    },
+    "lieflat-charts/templates/reports/report-02.zh.html": {
+      "bytes": 18794,
+      "sha256": "2adca5f97993560386955ed75412149e93ad30b68832d2c6746d6badbdfae0c1"
+    },
+    "lieflat-charts/templates/reports/report-03.en.html": {
+      "bytes": 19602,
+      "sha256": "a4e15b45d102abdc3e1093292d376975fbc3c2745a00ec0e499f37ac6b6cb3dd"
+    },
+    "lieflat-charts/templates/reports/report-03.zh.html": {
+      "bytes": 19647,
+      "sha256": "91e5b10a8d10e747b88682b3d0d82e9a09a4aacd20c68c68694377d49cde3289"
+    },
+    "lieflat-charts/templates/reports/report-04.en.html": {
+      "bytes": 19064,
+      "sha256": "888c7433f32eb1100162d26e58d59c47d8781495f35679772a93229d044745b3"
+    },
+    "lieflat-charts/templates/reports/report-04.zh.html": {
+      "bytes": 19546,
+      "sha256": "cf96246f4ec7407cc176f7f4b5b5929f63b70c560f5875c719cca68b4452ed4b"
+    },
+    "lieflat-charts/templates/reports/report-05.en.html": {
+      "bytes": 13594,
+      "sha256": "ef9f52990f3f5565e72f50a4e005ac088ebfec22d858366f7daee6a92e7e4659"
+    },
+    "lieflat-charts/templates/reports/report-05.zh.html": {
+      "bytes": 13694,
+      "sha256": "bdf03b3edaba2a0464e1ac578f0d1fa3988c0ada0f74429344f5005670e64689"
+    },
+    "lieflat-charts/templates/reports/report-06.en.html": {
+      "bytes": 23443,
+      "sha256": "de654f26e790b53ae06c531f27c09e4465311baefdf7aa34ca5c612de5ad54cb"
+    },
+    "lieflat-charts/templates/reports/report-06.zh.html": {
+      "bytes": 23202,
+      "sha256": "9bb41ad60db4e3d52db2a9013198ceb5fbbfbe69709144e7fff45ae75b982aa2"
+    },
+    "lieflat-charts/templates/reports/report-07.en.html": {
+      "bytes": 22358,
+      "sha256": "348bd5d868d725bf151b4418faa98016da819a0a616b4d0aabc1d86f02a88c1d"
+    },
+    "lieflat-charts/templates/reports/report-07.zh.html": {
+      "bytes": 22126,
+      "sha256": "736f81d6fadade9b0a61ec018103f62c2418ef0e149909f2ed0aa6096f7bebdb"
+    },
+    "lieflat-charts/templates/reports/report-08.en.html": {
+      "bytes": 12995,
+      "sha256": "6f0dd69c785641129e06a7096045182081809b914841018387292911d267cc38"
+    },
+    "lieflat-charts/templates/reports/report-08.zh.html": {
+      "bytes": 12820,
+      "sha256": "d0c23d871fe98bb2406a313b9eeb906ba2367e19051c7ca175dae31df8a239c7"
+    },
+    "lieflat-charts/templates/reports/report-09.en.html": {
+      "bytes": 23029,
+      "sha256": "b4c23fcb4ea57fa8a96e5a34c4de93366aa3655674200efc7802b48f0ca5822d"
+    },
+    "lieflat-charts/templates/reports/report-09.zh.html": {
+      "bytes": 23095,
+      "sha256": "49dde207c8c16231e261f25703c734b6580df47ff5f470035bf4a4ab3bda54b7"
+    },
+    "lieflat-charts/templates/reports/report-10.en.html": {
+      "bytes": 21360,
+      "sha256": "866380a3a2ce41c9fa0ad5c7dafa9e2d74f88074cdbfbdff5877585ac1aa4419"
+    },
+    "lieflat-charts/templates/reports/report-10.zh.html": {
+      "bytes": 20908,
+      "sha256": "5c1b28109e4027f77ae62ede733a8586c83cab8ea53cfba07358f4ed1af6c9d5"
+    },
+    "lieflat-charts/templates/reports/report-11.en.html": {
+      "bytes": 14358,
+      "sha256": "e400a13559db56c7861a64948caa58e182ece6212573b03f0e5430760bfb8d68"
+    },
+    "lieflat-charts/templates/reports/report-11.zh.html": {
+      "bytes": 14401,
+      "sha256": "05384f08d8efa3ca295bde63fa42892d7fbdb9fad016bfd13a865e1134c6270d"
+    },
+    "lieflat-charts/templates/reports/report-12.en.html": {
+      "bytes": 21043,
+      "sha256": "9532a275efb92b75170f799fc75a950d586358c02dcff26950c8a903a5dfcab3"
+    },
+    "lieflat-charts/templates/reports/report-12.zh.html": {
+      "bytes": 21011,
+      "sha256": "edb68588244e54c57b344a5fc847864ce00238b47e1ef552fcf397d77c2606e8"
     },
     "ppt-master/.env.example": {
       "bytes": 11161,
@@ -48568,6 +49077,7 @@
   "policy": {
     "embedded_first": true,
     "excluded": [
+      ".env",
       ".git",
       ".venv",
       ".venv312",

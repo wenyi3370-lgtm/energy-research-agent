@@ -1,14 +1,14 @@
-# Enterprise Energy Research Automation — full stack (Phase 15)
+# Enterprise Energy Research v0.9.0 — full stack
 #   research-api  : FastAPI application service
 #   postgres      : automation control-plane database
-#   n8n           : workflow orchestration (Feishu triggers, polling, review)
+#   n8n           : daily intelligence + failure watchdog; research starts only in local portal
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: research
-      POSTGRES_PASSWORD: research
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env or a Docker secret}
       POSTGRES_DB: research
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -22,7 +22,7 @@ services:
     build: .
     restart: unless-stopped
     environment:
-      EER_AUTOMATION_DATABASE_URL: postgresql+psycopg://research:research@postgres:5432/research
+      EER_AUTOMATION_DATABASE_URL: postgresql+psycopg://research:${POSTGRES_PASSWORD}@postgres:5432/research
       EER_AUTOMATION_WORKDIR: /data/automation_work
       # Run mode: synthetic (default, zero-config) | orchestrating (real research)
       EER_AUTOMATION_EXECUTOR: orchestrating
@@ -33,7 +33,7 @@ services:
       EER_KIMI_WEB_SESSION: default
       # 容器内经 host.docker.internal 访问宿主机 daemon（浏览器扩展已连接）
       EER_KIMI_WEB_DAEMON_URL: http://host.docker.internal:10086
-      # Optional Feishu notifications (Phase 7):
+      # Optional Feishu notifications:
       EER_FEISHU_APP_ID: ${EER_FEISHU_APP_ID:-}
       EER_FEISHU_APP_SECRET: ${EER_FEISHU_APP_SECRET:-}
       # 接收人：飞书邮箱 / open_id / chat_id（未配置则通知 fail-closed，可后续补）
@@ -52,7 +52,8 @@ services:
       retries: 5
 
   n8n:
-    image: n8nio/n8n:latest
+    # Must match the migration level of the persisted n8n-data volume.
+    image: n8nio/n8n:2.35.4
     restart: unless-stopped
     environment:
       N8N_HOST: "0.0.0.0"

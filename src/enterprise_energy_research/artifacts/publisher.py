@@ -10,7 +10,7 @@ from enterprise_energy_research.domain.models import ArtifactManifest, FrozenRes
 DEFAULT_FILENAMES = {
     ArtifactType.EXCEL: "enterprise_research.xlsx",
     ArtifactType.WORD: "enterprise_research.docx",
-    ArtifactType.ENTERPRISE_HTML: "enterprise_dashboard.html",
+    ArtifactType.ENTERPRISE_HTML: "enterprise_research_dashboard.html",
     ArtifactType.PRODUCT_HTML: "product_dashboard.html",
     ArtifactType.PPT: "enterprise_research.pptx",
 }
