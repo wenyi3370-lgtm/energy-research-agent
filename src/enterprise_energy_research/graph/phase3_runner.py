@@ -112,7 +112,7 @@ class Phase3Runner:
             evidence.images = archive_result.images
             # P0: pixel-level visual verification runs AFTER archiving — a
             # vision verifier needs the local bytes, never context alone.
-            evidence.images = image_validator.visual_verify(evidence.images)
+            evidence.images = image_validator.visual_verify(evidence.images, base_dir=output_dir)
         evidence.products, product_detection = ProductDetector().detect(
             evidence.products,
             evidence.images,

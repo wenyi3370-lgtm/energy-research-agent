@@ -156,22 +156,26 @@ class ImageValidator:
         return validated
 
     @staticmethod
-    def _resolve_bytes(image: ImageEvidence) -> bytes | None:
+    def _resolve_bytes(image: ImageEvidence, base_dir: Path | None = None) -> bytes | None:
         if not image.local_asset_ref:
             return None
         path = Path(image.local_asset_ref)
         if not path.is_absolute():
-            return None
+            # archiver stores refs relative to the run output directory
+            if base_dir is None:
+                return None
+            path = base_dir / path
         try:
             return path.read_bytes() if path.is_file() else None
         except OSError:
             return None
 
-    def visual_verify(self, images: list[ImageEvidence]) -> list[ImageEvidence]:
+    def visual_verify(self, images: list[ImageEvidence], *, base_dir: Path | None = None) -> list[ImageEvidence]:
         """Pixel-level verification AFTER archiving (local bytes exist).
 
         Called once ``ImageAssetArchiver`` has written local assets, because a
-        vision verifier needs the actual image bytes.  Images without bytes or
+        vision verifier needs the actual image bytes.  ``base_dir`` resolves
+        archiver-relative ``local_asset_ref`` values.  Images without bytes or
         without a configured vision gateway keep ``visual_verified=False`` and
         ``verification_method`` unchanged — never silently promoted.
         """
@@ -182,7 +186,7 @@ class ImageValidator:
             if image.visual_verified:
                 verified.append(image)
                 continue
-            image_bytes = self._resolve_bytes(image)
+            image_bytes = self._resolve_bytes(image, base_dir)
             verdict = None
             if image_bytes is not None:
                 try:
