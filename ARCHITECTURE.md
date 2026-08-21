@@ -109,7 +109,7 @@ Adapters return normalized result envelopes with status, diagnostics, timestamps
 
 ### Embedded Skill supply chain
 
-The six named external capability packs are vendored under `vendor/skills/` and resolved before mutable user-global installations. Excel Master, PPT Master, frontend-design, Lieflat Charts, Kimi WebBridge instructions, and AnySearch v3.0.1 therefore travel with this Skill. `vendor/manifest.json` hashes every trusted portable file, while `scripts/vendor_skills.py verify` blocks modified or incomplete snapshots. Network acquisition is exclusive to AnySearch and Kimi WebBridge; Lieflat publication is fully offline and unapproved search backends are not fallback options.
+The six named external capability packs are vendored under `vendor/skills/` and resolved before mutable user-global installations. Excel Master, PPT Master, frontend-design, diagram-design, Kimi WebBridge instructions, and AnySearch v3.0.1 therefore travel with this Skill. `vendor/manifest.json` hashes every trusted portable file, while `scripts/vendor_skills.py verify` blocks modified or incomplete snapshots. Network acquisition is exclusive to AnySearch and Kimi WebBridge; diagram publication is fully offline and unapproved search backends are not fallback options.
 
 Embedding does not collapse adapter boundaries: upper workflow nodes still depend only on normalized ports. Machine-bound services and private state remain external—Kimi's daemon/extension, browser runtimes, Office renderers, authenticated sessions, and secrets are health-checked at runtime and are never copied into the bundle.
 

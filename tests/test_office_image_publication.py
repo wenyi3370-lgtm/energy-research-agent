@@ -51,15 +51,22 @@ class OfficeImagePublicationTests(unittest.TestCase):
         factory_path, factory_hash = asset("factory.png", (1200, 800), (27, 54, 93))
         logo = next(image for image in bundle.images if image.image_type == "logo").model_copy(update={
             "local_asset_ref": str(logo_path), "sha256": logo_hash, "mime_type": "image/png", "width": 800, "height": 300,
+            # P0 publication gate: entity-bound AND pixel-verified (vision pipeline)
+            "visual_verified": True, "target_entity_id": bundle.entities[0].entity_id,
+            "verification_method": "vision", "target_entity_type": "logo",
         })
         product = next(image for image in bundle.images if image.image_type == "product").model_copy(update={
             "local_asset_ref": str(product_path), "sha256": product_hash, "mime_type": "image/png", "width": 1200, "height": 900,
+            "visual_verified": True, "target_entity_id": bundle.products[0].product_id,
+            "verification_method": "vision", "target_entity_type": "product",
         })
         factory = product.model_copy(update={
             "image_id": "IMAGE-FACTORY-TEST", "image_type": "factory", "product_id": None,
             "factory_id": bundle.factories[0].factory_id, "local_asset_ref": str(factory_path),
             "sha256": factory_hash, "phash": "factory-test-phash", "width": 1200, "height": 800,
             "alt_text": "示例能源装备有限公司生产基地实景",
+            "visual_verified": True, "target_entity_id": bundle.factories[0].factory_id,
+            "verification_method": "vision", "target_entity_type": "factory",
         })
         bundle = bundle.model_copy(update={"images": [logo, product, factory]})
         word_binding = next(item for item in manifest.artifacts if item.type == ArtifactType.WORD).model_copy(update={
@@ -87,8 +94,9 @@ class OfficeImagePublicationTests(unittest.TestCase):
                 xml = archive.read("word/document.xml").decode("utf-8")
             visual_manifest = json.loads((Path(temp) / "report_assets" / "visual_manifest.json").read_text(encoding="utf-8"))
             self.assertGreaterEqual(xml.count("<w:drawing>"), len(visual_manifest["visuals"]) + 3)
+            # dynamic chapters: factories = 3, products = 4 in this fixture
+            self.assertIn("图 3-P1", xml)
             self.assertIn("图 4-P1", xml)
-            self.assertIn("图 5-P1", xml)
             self.assertIn("图片来源：", xml)
             image_manifest = json.loads((Path(temp) / "report_assets" / "image_publication_manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(set(image_manifest["artifact_selections"]["word"]), set(binding.image_ids))
@@ -108,6 +116,21 @@ class OfficeImagePublicationTests(unittest.TestCase):
             manifest = prepare_publication_images(bundle, binding, Path(temp) / "assets")
             self.assertIn(exact.image_id, manifest.skipped_exact_duplicate_image_ids)
             self.assertIn(near.image_id, manifest.skipped_perceptual_duplicate_image_ids)
+
+    def test_context_only_images_are_withheld_not_published(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            bundle, binding, _ = self._bundle_and_bindings(temp)
+            # strip pixel verification: context signals alone must never publish
+            unverified = [
+                image.model_copy(update={"visual_verified": False, "verification_method": "context"})
+                for image in bundle.images
+            ]
+            bundle = bundle.model_copy(update={"images": unverified})
+            manifest = prepare_publication_images(bundle, binding, Path(temp) / "assets")
+            self.assertEqual(manifest.prepared_images, [])
+            self.assertEqual(set(manifest.withheld_image_ids), set(binding.image_ids))
+            for image_id, reason in manifest.withheld_reasons.items():
+                self.assertIn("视觉核验", reason)
 
     def test_ppt_contract_adds_images_beside_existing_product_and_factory_charts(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

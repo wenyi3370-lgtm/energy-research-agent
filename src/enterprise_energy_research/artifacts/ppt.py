@@ -12,8 +12,9 @@ from enterprise_energy_research.artifacts.image_publication import (
     prepare_publication_images,
     write_image_publication_manifest,
 )
+from enterprise_energy_research.artifacts.narrative import NarrativeBuilder
 from enterprise_energy_research.artifacts.presentation_contract import build_presentation_contract
-from enterprise_energy_research.artifacts.visuals import build_visual_manifest, write_visual_manifest
+from enterprise_energy_research.artifacts.visuals import write_visual_manifest
 from enterprise_energy_research.domain.enums import ArtifactType
 from enterprise_energy_research.domain.models import ArtifactBinding, FrozenResearchBundle
 from enterprise_energy_research.vendor import embedded_skill_root
@@ -75,7 +76,8 @@ class PptMasterFrozenPublisher:
         image_manifest = image_manifest.model_copy(update={"artifact_selections": {"ppt": selected_ppt_image_ids}})
         write_image_publication_manifest(image_manifest, project_dir)
         brief_path.write_text(json.dumps(brief, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        write_visual_manifest(build_visual_manifest(bundle, binding), project_dir / "visual_manifest.json")
+        narrative = NarrativeBuilder().build(bundle)
+        write_visual_manifest(narrative.visual_manifest(), project_dir / "visual_manifest.json")
         (project_dir / "storyline.json").write_text(
             json.dumps({"freeze_id": bundle.freeze.freeze_id, "slides": brief["slides"]}, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",

@@ -6,7 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.artifacts.visuals import VisualPlanner, build_visual_manifest, render_visual_bundle, render_visual_svg
+from enterprise_energy_research.artifacts.diagram_design_adapter import DiagramDesignAdapter
+from enterprise_energy_research.artifacts.narrative import NarrativeBuilder
 from enterprise_energy_research.domain.enums import ArtifactType, RunStatus
 from enterprise_energy_research.domain.ids import new_sortable_id
 from enterprise_energy_research.domain.models import ExtractedEvidenceBatch, RunManifest
@@ -21,64 +22,85 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class OfficeVisualContractTests(unittest.TestCase):
-    def test_manifest_uses_only_qualified_lieflat_charts_and_one_canonical_svg(self) -> None:
+    def _bundle(self, temp: str):
         raw = json.loads((ROOT / "tests" / "fixtures" / "normal_manufacturer.json").read_text(encoding="utf-8"))
-        with tempfile.TemporaryDirectory() as temp:
-            run_id, request_id = new_sortable_id("RUN"), new_sortable_id("REQ")
-            store = EvidenceStore(Path(temp) / "evidence.sqlite3")
-            store.create_run(RunManifest(
-                run_id=run_id, request_id=request_id, status=RunStatus.RUNNING,
-                config_hash="fixture", code_version="0.8.0", model_gateway={"mode": "fixture"},
-            ))
-            state, artifact_manifest, _ = Phase3Runner(store, load_yaml(ROOT / "config" / "enterprise_rules.yaml")).process_batches(
-                ResearchState(run_id=run_id, request_id=request_id, status=RunStatus.RUNNING),
-                raw[0]["entities"][0]["canonical_name"],
-                [ExtractedEvidenceBatch.model_validate(item) for item in raw], output_dir=Path(temp) / "freeze",
-            )
-            bundle = FreezeService(store).load_bundle(state.freeze_id)
-            binding = next(item for item in artifact_manifest.artifacts if item.type == ArtifactType.WORD)
-            manifest = build_visual_manifest(bundle, binding)
-            self.assertTrue(manifest.visuals)
-            self.assertTrue({visual.family for visual in manifest.visuals}.issubset({"horizontal_bar", "donut", "funnel"}))
-            self.assertTrue(all(visual.renderer == "lieflat-charts-gallery-port-svg-v2" for visual in manifest.visuals))
-            self.assertTrue(all(visual.template_source and visual.template_card_title for visual in manifest.visuals))
-            self.assertTrue(all(visual.color_system == "mono" for visual in manifest.visuals))
-            self.assertTrue(all(visual.template_id in {"F4", "F5", "L13"} for visual in manifest.visuals))
-            self.assertFalse({"process", "timeline", "network", "decision_tree", "matrix", "risk_matrix"} & {visual.family for visual in manifest.visuals})
-            self.assertTrue(all("html" in visual.artifact_targets for visual in manifest.visuals))
-            self.assertTrue(all(visual.source_ids or not visual.source_claim_ids for visual in manifest.visuals))
-            for visual in manifest.visuals:
-                values = [float(item.value) for item in visual.items if isinstance(item.value, (int, float)) and not isinstance(item.value, bool)]
-                if visual.template_id == "F5":
-                    self.assertTrue(2 <= len(values) <= 8 and min(values) >= 0 and max(values) > 0 and len(set(values)) >= 2)
-                elif visual.template_id == "F4":
-                    self.assertTrue(2 <= len(values) <= 6 and min(values) >= 0 and sum(values) > 0)
-                else:
-                    self.assertTrue(3 <= len(values) <= 6 and min(values) >= 0)
-                    self.assertTrue(all(left >= right for left, right in zip(values, values[1:])))
-                    self.assertTrue(any(left > right for left, right in zip(values, values[1:])))
-            png, svg = render_visual_bundle(manifest.visuals[0], Path(temp) / "figures")
-            self.assertTrue(png.is_file() and png.stat().st_size > 10_000)
-            canonical_svg = render_visual_svg(manifest.visuals[0])
-            self.assertEqual(canonical_svg, svg.read_text(encoding="utf-8"))
-            self.assertIn('data-template-source="templates/', canonical_svg)
-            html = svg.with_suffix(".html")
-            self.assertTrue(html.is_file())
-            self.assertIn(canonical_svg, html.read_text(encoding="utf-8"))
-            from PIL import Image
-            with Image.open(png) as image:
-                self.assertEqual(image.size, (1280, 720))
-                self.assertGreaterEqual(image.info.get("dpi", (0, 0))[0], 299)
-            first_hash = hashlib.sha256(svg.read_bytes()).hexdigest()
-            render_visual_bundle(manifest.visuals[0], Path(temp) / "figures")
-            self.assertEqual(first_hash, hashlib.sha256(svg.read_bytes()).hexdigest())
+        run_id, request_id = new_sortable_id("RUN"), new_sortable_id("REQ")
+        store = EvidenceStore(Path(temp) / "evidence.sqlite3")
+        store.create_run(RunManifest(
+            run_id=run_id, request_id=request_id, status=RunStatus.RUNNING,
+            config_hash="fixture", code_version="0.9.1", model_gateway={"mode": "fixture"},
+        ))
+        state, artifact_manifest, _ = Phase3Runner(store, load_yaml(ROOT / "config" / "enterprise_rules.yaml")).process_batches(
+            ResearchState(run_id=run_id, request_id=request_id, status=RunStatus.RUNNING),
+            raw[0]["entities"][0]["canonical_name"],
+            [ExtractedEvidenceBatch.model_validate(item) for item in raw], output_dir=Path(temp) / "freeze",
+        )
+        return FreezeService(store).load_bundle(state.freeze_id), artifact_manifest
 
-    def test_visual_planner_maps_semantics_to_chart_family(self) -> None:
-        planner = VisualPlanner()
-        self.assertEqual(planner.recommend("time_series"), "F2")
-        self.assertEqual(planner.recommend("two_dimension_opportunity"), "F8")
-        with self.assertRaises(ValueError):
-            planner.recommend("organization")
+    def test_visual_manifest_is_diagram_design_and_evidence_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            bundle, artifact_manifest = self._bundle(temp)
+            narrative = NarrativeBuilder().build(bundle)
+            manifest = narrative.visual_manifest()
+            self.assertEqual(manifest.visual_system, "diagram-design")
+            self.assertTrue(manifest.visuals)
+            adapter = DiagramDesignAdapter()
+            for visual in manifest.visuals:
+                self.assertIn(visual.visual_type, adapter.supported_types())
+                self.assertTrue(visual.title)
+                self.assertTrue(visual.decision_question)
+                self.assertTrue(visual.business_thesis)
+                self.assertIn(visual.destination, {"html", "word", "both"})
+                self.assertTrue(visual.source_ids or visual.source_claim_ids or visual.semantic_pattern in {"quantitative_facts", "verified_relationship", "none"})
+
+    def test_one_canonical_svg_and_same_source_png(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            bundle, _ = self._bundle(temp)
+            narrative = NarrativeBuilder().build(bundle)
+            self.assertTrue(narrative.visuals, "fixture must produce at least one visual")
+            adapter = DiagramDesignAdapter()
+            figures = Path(temp) / "figures"
+            for spec in narrative.visuals:
+                result = adapter.build_visual(spec, figures, destination="both", png_scale=2)
+                self.assertIn(result.status, {"rendered", "fallback_table"})
+                self.assertNotEqual(result.status, "failed")
+                self.assertTrue(result.svg_path.is_file())
+                self.assertTrue(result.html_path.is_file())
+                # canonical SVG block is embedded verbatim in the standalone file
+                # (standalone export adds only the XML declaration, per export.md)
+                self.assertIn(result.svg_markup, result.svg_path.read_text(encoding="utf-8"))
+                self.assertTrue(result.svg_path.read_text(encoding="utf-8").startswith('<?xml version="1.0"'))
+                # HTML embeds the SAME svg block (single source of truth)
+                self.assertIn(result.svg_markup, result.html_path.read_text(encoding="utf-8"))
+                # deterministic: re-render produces identical SVG
+                again = adapter.build_visual_svg(spec)
+                self.assertEqual(again, result.svg_markup)
+                # accessibility contract from diagram-design export spec
+                self.assertIn(f'id="{spec.visual_id}-title"', result.svg_markup)
+                self.assertIn(f'id="{spec.visual_id}-desc"', result.svg_markup)
+                self.assertIn(f'aria-labelledby="{spec.visual_id}-title {spec.visual_id}-desc"', result.svg_markup)
+                self.assertIn('role="img"', result.svg_markup)
+                # PNG is rasterized from the same HTML when a browser exists
+                if result.png_path is not None:
+                    self.assertTrue(result.png_path.stat().st_size > 1000)
+                    from PIL import Image
+                    with Image.open(result.png_path) as image:
+                        self.assertGreaterEqual(image.size[0], result.width)
+
+    def test_failed_renderer_never_silently_drops_visual(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            bundle, _ = self._bundle(temp)
+            narrative = NarrativeBuilder().build(bundle)
+            spec = narrative.visuals[0]
+            adapter = DiagramDesignAdapter()
+            figures = Path(temp) / "figures"
+            broken = spec.model_copy(deep=True, update={"visual_type": "line"})
+            broken.items = []  # no real time series: renderer must degrade, never emit an empty line
+            result = adapter.build_visual(broken, figures, destination="both")
+            self.assertEqual(result.status, "fallback_table")
+            self.assertIn("renderer error", result.fallback_reason or "")
+            self.assertNotIn("<polyline", result.svg_markup or "")
+            self.assertTrue(result.svg_path.is_file())  # fallback table was emitted, not dropped
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ from enterprise_energy_research.domain.models import (
     Source,
 )
 
+from .canonicalizers import FactoryCanonicalizer, ProductCanonicalizer, UnitNormalizer
 from .field_registry import CanonicalFieldRegistry
 from .source_grader import SourceGrader
 
@@ -225,7 +226,22 @@ class EvidenceNormalizer:
                     child_id = entity_ids[extracted.entity_key]
                     parent_id = entity_ids[extracted.parent_entity_key]
                     self._edge(output, edge_keys, parent_id, "Subsidiary", child_id, [])
+        self._canonicalize(output)
         return output
+
+    @staticmethod
+    def _canonicalize(output: NormalizedEvidence) -> None:
+        """P0: normalization must complete BEFORE Freeze (units, products, factories)."""
+        output.claims = UnitNormalizer().normalize_claims(output.claims)
+        output.products = ProductCanonicalizer().canonicalize(output.products, output.images)
+        output.factories = FactoryCanonicalizer().canonicalize(output.factories)
+        # Merged-away product ids must not leave dangling ProducesProduct edges;
+        # the surviving canonical record keeps the union of source ids.
+        canonical_product_ids = {product.product_id for product in output.products}
+        output.edges = [
+            edge for edge in output.edges
+            if edge.relation != "ProducesProduct" or edge.to_id in canonical_product_ids
+        ]
 
     @staticmethod
     def _edge(

@@ -1,3 +1,15 @@
+"""Image publication (P0 refactor): verified-only image publication.
+
+P0 rule: a photograph publishes as an entity illustration ONLY when it is
+bound to a concrete entity (``target_entity_id``) AND pixel-verified
+(``visual_verified``), unless it is an editorial image (cover/map) that
+carries no entity claim.  Context-only matches are recorded in the
+withheld ledger (QA-visible) and never silently promoted.
+
+Selection is ordered by ``publication_priority``; per-chapter caps are
+applied by the narrative layer (IMAGE_BUDGETS).
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -64,13 +76,19 @@ class PublicationImage(BaseModel):
     width: int = Field(gt=0)
     height: int = Field(gt=0)
     normalized_mime_type: str = "image/png"
+    target_entity_type: str | None = None
+    visual_verified: bool = False
+    verification_method: str = "none"
+    publication_priority: int = Field(default=3, ge=1, le=5)
 
 
 class ImagePublicationManifest(BaseModel):
-    schema_version: str = "1.0"
+    schema_version: str = "1.1"
     freeze_id: str
     required_image_ids: list[str] = Field(default_factory=list)
     prepared_images: list[PublicationImage] = Field(default_factory=list)
+    withheld_image_ids: list[str] = Field(default_factory=list)
+    withheld_reasons: dict[str, str] = Field(default_factory=dict)
     skipped_duplicate_image_ids: list[str] = Field(default_factory=list)
     skipped_exact_duplicate_image_ids: list[str] = Field(default_factory=list)
     skipped_perceptual_duplicate_image_ids: list[str] = Field(default_factory=list)
@@ -86,6 +104,17 @@ class ImagePublicationManifest(BaseModel):
         for image in self.prepared_images:
             grouped[image.chapter_key].append(image)
         return dict(grouped)
+
+
+def publication_eligible(image: ImageEvidence) -> tuple[bool, str]:
+    """P0 publication gate: entity-bound AND visually verified, or editorial."""
+    if image.target_entity_type == "editorial":
+        return True, "editorial"
+    if image.target_entity_id is None:
+        return False, "未绑定目标实体（target_entity_id 为空）"
+    if not image.visual_verified:
+        return False, f"未通过像素级视觉核验（verification_method={image.verification_method}）"
+    return True, "entity-bound and visually verified"
 
 
 def _candidate_roots(output_root: Path, extra_roots: Iterable[Path] = ()) -> list[Path]:
@@ -126,6 +155,8 @@ def _decoded_metadata(path: Path) -> tuple[int, int, str]:
 
 
 def _caption(image: ImageEvidence, bundle: FrozenResearchBundle) -> str:
+    if image.visual_description:
+        return image.visual_description.strip()
     if image.alt_text:
         return image.alt_text.strip()
     if image.product_id:
@@ -155,12 +186,24 @@ def prepare_publication_images(
     ]
     diagnostics: list[str] = []
     prepared: list[PublicationImage] = []
+    withheld_ids: list[str] = []
+    withheld_reasons: dict[str, str] = {}
     duplicate_ids: list[str] = []
     exact_duplicate_ids: list[str] = []
     perceptual_duplicate_ids: list[str] = []
     seen_sha256: set[str] = set()
     seen_phashes: list[str] = []
-    for image in bound:
+    # stable order: higher editorial priority first; ties keep bundle insertion
+    # order so the original record wins dedupe against later copies
+    ordered = [image for _, image in sorted(
+        enumerate(bound), key=lambda pair: (-pair[1].publication_priority, pair[0]),
+    )]
+    for image in ordered:
+        eligible, reason = publication_eligible(image)
+        if not eligible:
+            withheld_ids.append(image.image_id)
+            withheld_reasons[image.image_id] = reason
+            continue
         if image.sha256.lower() in seen_sha256:
             duplicate_ids.append(image.image_id)
             exact_duplicate_ids.append(image.image_id)
@@ -197,7 +240,7 @@ def prepare_publication_images(
                 chapter_key=chapter_key,
                 publication_path=target.relative_to(output_root).as_posix(),
                 caption=_caption(image, bundle),
-                source_note=f"图片来源：{image.source_title or image.source_domain}；原始页面：{image.source_page_url}；图片证据：{image.image_id}。",
+                source_note=f"图片来源：{image.source_title or image.source_domain}；原始页面：{image.source_page_url}。",
                 source_page_url=str(image.source_page_url),
                 source_id=image.source_id,
                 entity_id=image.entity_id,
@@ -207,6 +250,10 @@ def prepare_publication_images(
                 phash=image.phash,
                 width=image.width,
                 height=image.height,
+                target_entity_type=image.target_entity_type,
+                visual_verified=image.visual_verified,
+                verification_method=image.verification_method,
+                publication_priority=image.publication_priority,
             ))
             seen_sha256.add(image.sha256.lower())
             seen_phashes.append(image.phash)
@@ -216,6 +263,8 @@ def prepare_publication_images(
         freeze_id=bundle.freeze.freeze_id,
         required_image_ids=[image.image_id for image in bound],
         prepared_images=prepared,
+        withheld_image_ids=withheld_ids,
+        withheld_reasons=withheld_reasons,
         skipped_duplicate_image_ids=duplicate_ids,
         skipped_exact_duplicate_image_ids=exact_duplicate_ids,
         skipped_perceptual_duplicate_image_ids=perceptual_duplicate_ids,
@@ -242,10 +291,14 @@ def write_image_evidence_manifests(images: list[ImageEvidence], output_root: Pat
         "image_id", "entity_id", "factory_id", "product_id", "image_type", "source_url",
         "source_page_url", "source_title", "retrieved_at", "mime_type", "width", "height",
         "sha256", "phash", "local_asset_ref", "verification_status",
+        "target_entity_type", "target_entity_id", "visual_verified", "semantic_score",
+        "visual_description", "publication_priority", "verification_method",
     )
+
     def item(image: ImageEvidence) -> dict:
         payload = image.model_dump(mode="json")
         return {field: payload.get(field) for field in fields}
+
     discovery = output_root / "image_discovery_manifest.json"
     evidence = output_root / "image_evidence_manifest.json"
     discovery.write_text(json.dumps({"schema_version": "1.0", "images": [item(image) for image in images]}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

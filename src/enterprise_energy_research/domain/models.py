@@ -121,6 +121,10 @@ class EnterpriseEdge(StrictModel):
     relation: Literal[
         "ParentCompany", "Owns", "Subsidiary", "OperatesFactory", "ProducesProduct",
         "UsesProcess", "ConsumesEnergy", "HasOpportunity", "SuitableForSolution",
+        # Relationship taxonomy (P0 group boundary): UNKNOWN must never enter
+        # an organization/ownership diagram — only VERIFIED structured edges do.
+        "SUBSIDIARY", "CONTROLLED_BY", "JOINT_VENTURE", "OWNED_BY",
+        "PARTNER", "SUPPLIER", "CUSTOMER", "LICENSEE", "UNKNOWN",
     ]
     to_id: str
     valid_from: date | None = None
@@ -257,6 +261,20 @@ class ImageEvidence(StrictModel):
     verification_status: VerificationStatus = VerificationStatus.UNVERIFIED
     confidence: float = Field(ge=0.0, le=1.0)
     local_asset_ref: str | None = None
+    # P0 image-pipeline fields: candidate discovery → technical validation →
+    # semantic verification → exact entity binding → editorial ranking → publish.
+    # ``visual_verified`` is ONLY set by a vision-capable verifier looking at
+    # the actual pixels; context signals alone never promote an image.
+    target_entity_type: Literal[
+        "factory", "product", "headquarters", "logo", "production_line",
+        "workshop", "office", "equipment", "certificate", "project", "editorial", "other",
+    ] | None = None
+    target_entity_id: str | None = None
+    visual_verified: bool = False
+    semantic_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    visual_description: str | None = None
+    publication_priority: int = Field(default=3, ge=1, le=5)
+    verification_method: Literal["vision", "context", "none"] = "none"
 
 
 class ProductParameter(StrictModel):

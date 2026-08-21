@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     deepseek_api_key: str | None = None
     openai_api_base: str | None = None
     openai_api_key: str | None = None
+    # Vision-capable model used by the image pixel-verification pipeline; the
+    # gateway credentials are shared with the research gateway (deepseek/openai).
+    # DeepSeek-V4-Flash-Vision-Exp converts each image to at most 384 tokens.
+    vision_provider: str = "auto"  # auto | deepseek | openai
+    deepseek_vision_model: str = "deepseek-v4-flash-vision-exp"
+    openai_vision_model: str = "gpt-4o-mini"
     database_url: str | None = None
     fail_closed: bool = True
     output_root: Path = Field(default=Path("outputs"))
@@ -33,6 +39,9 @@ class Settings(BaseSettings):
             "fallback_model": self.fallback_model,
             "deepseek_api_base": self.deepseek_api_base,
             "openai_api_base": self.openai_api_base,
+            "vision_provider": self.vision_provider,
+            "deepseek_vision_model": self.deepseek_vision_model,
+            "openai_vision_model": self.openai_vision_model,
             "database_url": "configured" if self.database_url else None,
             "fail_closed": self.fail_closed,
             "output_root": str(self.output_root),

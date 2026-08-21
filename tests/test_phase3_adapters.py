@@ -65,8 +65,19 @@ class Phase3AdapterTests(unittest.TestCase):
             def _binary():
                 return None
 
-        # daemon_url 指向不可达地址：本地二进制缺失 + HTTP 探测失败 → fail-closed
-        result = DisconnectedKimi("fixture-session", daemon_url="http://127.0.0.1:9").search(self._request())
+        # daemon 不可达：本地二进制缺失 + HTTP 探测失败 → fail-closed。
+        # 探测走模拟 OSError，不做真实网络 I/O（保证离线/代理环境下确定性）。
+        import urllib.request
+        original = urllib.request.urlopen
+
+        def _unreachable(*_args, **_kwargs):
+            raise OSError("daemon unreachable (simulated)")
+
+        urllib.request.urlopen = _unreachable
+        try:
+            result = DisconnectedKimi("fixture-session", daemon_url="http://127.0.0.1:9").search(self._request())
+        finally:
+            urllib.request.urlopen = original
         self.assertEqual(result.status, "blocked")
         self.assertEqual(result.hits, [])
 

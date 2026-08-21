@@ -16,6 +16,20 @@
       ],
       "source": "Claude Skill snapshot v3.0.1"
     },
+    "diagram-design": {
+      "byte_count": 2631030,
+      "file_count": 202,
+      "required": [
+        "SKILL.md",
+        "LICENSE",
+        "THIRD_PARTY_LICENSES.md",
+        "references/style-guide.md",
+        "references/export.md",
+        "references/output-spec.md",
+        "references/semantic-patterns.md"
+      ],
+      "source": "https://github.com/cathrynlavery/diagram-design (MIT)"
+    },
     "excel-master": {
       "byte_count": 212084,
       "file_count": 12,
@@ -43,19 +57,6 @@
         "references/operations.md"
       ],
       "source": "local Codex Skill snapshot"
-    },
-    "lieflat-charts": {
-      "byte_count": 20554403,
-      "file_count": 124,
-      "required": [
-        "SKILL.md",
-        "catalog.md",
-        "LICENSE",
-        "THIRD_PARTY_NOTICES.md",
-        "templates/basics-gallery.html",
-        "templates/lupi-gallery.html"
-      ],
-      "source": "larashero3-dotcom/lieflat-charts snapshot"
     },
     "ppt-master": {
       "byte_count": 60344205,
@@ -149,6 +150,814 @@
       "bytes": 9202,
       "sha256": "df8ffd0434c91db2cbcff1989da4275ccc5c75215b6def72408ecdf3b4c6203c"
     },
+    "diagram-design/LICENSE": {
+      "bytes": 1071,
+      "sha256": "bb7e12e91fecef43024111123ff784cec6c485585561d8b552557c0173b3ed29"
+    },
+    "diagram-design/SKILL.md": {
+      "bytes": 39453,
+      "sha256": "5c2ce1559e6106d228d8083496580015bce8f754d7db22d5a4dbb507cc058df3"
+    },
+    "diagram-design/THIRD_PARTY_LICENSES.md": {
+      "bytes": 2706,
+      "sha256": "22f5afcea56373e84d7f7eff93d8d4d6e4b81c5375bb1c996e78b91e53fa0b37"
+    },
+    "diagram-design/assets/example-architecture-dark.html": {
+      "bytes": 12036,
+      "sha256": "3767f518519dc7b6fc98066cc76c70937446ea9e71e380cf7c6064dc6ed6f5ba"
+    },
+    "diagram-design/assets/example-architecture-full.html": {
+      "bytes": 14987,
+      "sha256": "84425acb29b181a165e8c07fad268304f77223a92797a7f58679f51c3dd47502"
+    },
+    "diagram-design/assets/example-architecture.html": {
+      "bytes": 12089,
+      "sha256": "03716fdb0a4ad641c30a5267b14a4c573d699f0f31ab3d8a0ba4e2b74ad56177"
+    },
+    "diagram-design/assets/example-bar-dark.html": {
+      "bytes": 8993,
+      "sha256": "17175ed34c9588f3d5902ed97f5718a47d8c17fbad4326056f47d2131d060304"
+    },
+    "diagram-design/assets/example-bar-full.html": {
+      "bytes": 11254,
+      "sha256": "0095ec6576fff513fee6a731d6eba7fbd9e4726a3e8f6ac183407c0b69a36f58"
+    },
+    "diagram-design/assets/example-bar.html": {
+      "bytes": 8919,
+      "sha256": "1bbd708cdca419c137160056ed9862532a3402ba65d9335bae1be0aef90c7abb"
+    },
+    "diagram-design/assets/example-data-flow-dark.html": {
+      "bytes": 12966,
+      "sha256": "68144451031cc5c6d56dbb15b6532f24efc2bac4e3dfc9c5e9b8177d539777d8"
+    },
+    "diagram-design/assets/example-data-flow-full.html": {
+      "bytes": 15835,
+      "sha256": "bf4db055606bd5f15e64e0da67c8f2023b8cbea6a27a4bca2be24dbe12f6245a"
+    },
+    "diagram-design/assets/example-data-flow.html": {
+      "bytes": 12803,
+      "sha256": "511788f809b9d674e2f92568955e5fc0c5f5f7a3960eaa0049e136ec93957add"
+    },
+    "diagram-design/assets/example-datalake-dark.html": {
+      "bytes": 24894,
+      "sha256": "8aec26f6369720015fb6c9666ecc5798b2b72cdc4bd294d362942acd53d89d70"
+    },
+    "diagram-design/assets/example-datalake-full.html": {
+      "bytes": 28401,
+      "sha256": "4bbfc528f7484e078c860060bc2c25f3ea39e9b09f64fb88c2ad36364852c12f"
+    },
+    "diagram-design/assets/example-datalake.html": {
+      "bytes": 26411,
+      "sha256": "2a974e2991b6a516f73128f307106e21842f3e0db7cfcc08765a365da53688dd"
+    },
+    "diagram-design/assets/example-db-schema-dark.html": {
+      "bytes": 24716,
+      "sha256": "40d12080e78a1ce39f5d6858f9e02562b8f4ec0bffe303ab8d4fc473db561024"
+    },
+    "diagram-design/assets/example-db-schema-full.html": {
+      "bytes": 27605,
+      "sha256": "a69144b54b23e7e6046234ed31fcc26625147af8a9e0dfeff05f4553c3eba8f6"
+    },
+    "diagram-design/assets/example-db-schema.html": {
+      "bytes": 24501,
+      "sha256": "58d473906c57670fecee29bc55377df5b433549445962204412ebd2c081b76db"
+    },
+    "diagram-design/assets/example-dependency-dark.html": {
+      "bytes": 17822,
+      "sha256": "7eb7c3d1e90d9dbb49a97f9490184ff1768930847fe86a112f0262513691c035"
+    },
+    "diagram-design/assets/example-dependency-full.html": {
+      "bytes": 21122,
+      "sha256": "5844a5bfa0eb30e5c7c8d5d23d4a3230ed5fe051e6ca84daf34a5ecb7185ef5b"
+    },
+    "diagram-design/assets/example-dependency.html": {
+      "bytes": 17607,
+      "sha256": "973f7b5f5ac1746bb018e9ea8de9f6853b5f14ff41173e64abcf9855ea5f353b"
+    },
+    "diagram-design/assets/example-deployment-dark.html": {
+      "bytes": 13554,
+      "sha256": "7688eec54dde8950375d2bb724438bce6dce18714ed2f99a0a60ffaacb17190a"
+    },
+    "diagram-design/assets/example-deployment-full.html": {
+      "bytes": 16831,
+      "sha256": "6f6ae188e2c2874a7b6f28943575eff72773950a9ac15dac8b7b3209cfd88cc5"
+    },
+    "diagram-design/assets/example-deployment.html": {
+      "bytes": 13451,
+      "sha256": "6e28f0eee98dd728bfa6b5210b1885caf2b39992fdd06a680e37bbc8863e89b2"
+    },
+    "diagram-design/assets/example-dp-integration-dark.html": {
+      "bytes": 14746,
+      "sha256": "8cb30572815bfe86e449bb22266768f6dd52d91725faebd276c7e9de24113749"
+    },
+    "diagram-design/assets/example-dp-integration-full.html": {
+      "bytes": 17263,
+      "sha256": "9fc9f12a662ed1bf3e837c11be1b05df03db7a845ea203846a47b247ab6edf99"
+    },
+    "diagram-design/assets/example-dp-integration.html": {
+      "bytes": 14715,
+      "sha256": "929b6aaefa9a362d4cd18fb1801a57f28d32aa8dd78ba577375a11926ee2cc94"
+    },
+    "diagram-design/assets/example-dp-security-matrix-dark.html": {
+      "bytes": 10279,
+      "sha256": "ac5515d7fb1e850249aedf6d39deb848cd9edc02068c6944d37a04ca0fcc995e"
+    },
+    "diagram-design/assets/example-dp-security-matrix-full.html": {
+      "bytes": 12602,
+      "sha256": "9cd7d120e069a9be73a0f98b94282e8e9906f802c49fb1c57e5553479d8033ee"
+    },
+    "diagram-design/assets/example-dp-security-matrix.html": {
+      "bytes": 10906,
+      "sha256": "88d7a3fb9788300082274924f1f95dfd0a5a8b3bfca3fcd91b424cc8caa50044"
+    },
+    "diagram-design/assets/example-er-dark.html": {
+      "bytes": 14198,
+      "sha256": "c007c14d88a48a8ea30b1144dd4ac392ee7891a2278262e2a6f6836b43aa7fdf"
+    },
+    "diagram-design/assets/example-er-full.html": {
+      "bytes": 17128,
+      "sha256": "9f43422370cbd751196fd5b8ab802a177d015f739b39064c58f5e7273f56e1c3"
+    },
+    "diagram-design/assets/example-er.html": {
+      "bytes": 14139,
+      "sha256": "aee470dcf37af317f14d21cd9420f6bcb1b65f0fb0047483a42b8afc0cab2774"
+    },
+    "diagram-design/assets/example-fishbone-dark.html": {
+      "bytes": 8675,
+      "sha256": "f884b81b83f7ce40cf85b8aa6c3a55db99b7fb2d38502deff222aaff36d7db47"
+    },
+    "diagram-design/assets/example-fishbone-full.html": {
+      "bytes": 11411,
+      "sha256": "75bfad970d61909fedbf2ede67c3e88057ab46909d7ea7f2c16d3ad2a029aa2e"
+    },
+    "diagram-design/assets/example-fishbone.html": {
+      "bytes": 8652,
+      "sha256": "cd7079857240a9f6228804d3492af0add2eb36343798c9e0ef90657f2a246d04"
+    },
+    "diagram-design/assets/example-flowchart-dark.html": {
+      "bytes": 9221,
+      "sha256": "d61779e1d57f2d5b3b9c01d09f0677251f99acb449ee40e8cb5e3297adaf9de1"
+    },
+    "diagram-design/assets/example-flowchart-full.html": {
+      "bytes": 12199,
+      "sha256": "0386adeb8ef6327a5ae42f6f1f89f59aa1455fa500ef18b3c656a59f010b8192"
+    },
+    "diagram-design/assets/example-flowchart.html": {
+      "bytes": 9171,
+      "sha256": "ba0a39df57d5fd4beccebeb51d62028b420371b30793b2658d308df04d571ff3"
+    },
+    "diagram-design/assets/example-gantt-dark.html": {
+      "bytes": 10194,
+      "sha256": "c68a8e6554233cbbe48f330055e555d9a85d45daf214b88044fc27ef51b29070"
+    },
+    "diagram-design/assets/example-gantt-full.html": {
+      "bytes": 11897,
+      "sha256": "aab29f4296a7500417c899a445bb7df5f6b785135960e66c5fdfbead27ca475f"
+    },
+    "diagram-design/assets/example-gantt.html": {
+      "bytes": 10074,
+      "sha256": "607745921006b312ab710c3166036aebeb31a2b7cd40df36713a850a28cb73f3"
+    },
+    "diagram-design/assets/example-high-level-dark.html": {
+      "bytes": 24210,
+      "sha256": "49a52a62a30781de7d6ee051cddf9837884a84bb1ce1891eb4dadb4bb82348ae"
+    },
+    "diagram-design/assets/example-high-level-full.html": {
+      "bytes": 28494,
+      "sha256": "d25bde14ab1ac1d9bf47b1613f864517ce3d88553043192abbc856f69bd0f7b6"
+    },
+    "diagram-design/assets/example-high-level-vertical-dark.html": {
+      "bytes": 24980,
+      "sha256": "492b0b9aebb037bfd10f65b16f2212592407a1731682d7469214225451a58fc6"
+    },
+    "diagram-design/assets/example-high-level-vertical-full.html": {
+      "bytes": 28749,
+      "sha256": "3f72c30a5be5a5bd9cde92e366ae1a97cae8473f1d8da2981ffc6d187b5c3dc3"
+    },
+    "diagram-design/assets/example-high-level-vertical.html": {
+      "bytes": 30457,
+      "sha256": "fac0ef026d59a5086880087db4162a3ee2e064a8685c0a093b218df737884c02"
+    },
+    "diagram-design/assets/example-high-level.html": {
+      "bytes": 26976,
+      "sha256": "33789942cb06be5228ffa6e450602d1f7c9344b7d263fa2674b7ba5e6dd7e788"
+    },
+    "diagram-design/assets/example-import-drawio.html": {
+      "bytes": 12130,
+      "sha256": "03ce9820197c9838dd4e02b274d9a4741b8b958da1ea1051f2285d44cf2530a4"
+    },
+    "diagram-design/assets/example-import-mermaid.html": {
+      "bytes": 8107,
+      "sha256": "10c5623a9f6daf9dccb85f15225a155b721e0ec3304d7769c4bb87290da2664a"
+    },
+    "diagram-design/assets/example-it-state-dark.html": {
+      "bytes": 11992,
+      "sha256": "21363f1e08eadbf4c88940f845dd36f462a60e191064d4d9781dd68c9daad4b5"
+    },
+    "diagram-design/assets/example-it-state-full.html": {
+      "bytes": 14225,
+      "sha256": "ed7b2271c358c6046a49c03498384a86fdceda98a1632b235047ee9da9a7b1a0"
+    },
+    "diagram-design/assets/example-it-state.html": {
+      "bytes": 12500,
+      "sha256": "59103bffa775b744828643e361b71f4b80e5ef8a0042abe9ce65c81e3d5dd21e"
+    },
+    "diagram-design/assets/example-journey-dark.html": {
+      "bytes": 9153,
+      "sha256": "c1866ca355d8859d27f6e99d9e2415daf204c313ed4463ae9663ba9e930a9949"
+    },
+    "diagram-design/assets/example-journey-full.html": {
+      "bytes": 11727,
+      "sha256": "8a8263ed88d245376cc7dd0ec8068f02701b346a5d3127e9bb999406046af7cc"
+    },
+    "diagram-design/assets/example-journey.html": {
+      "bytes": 9115,
+      "sha256": "b01e32ff87d63fddf6d1db47155906dd624acc13327856269114f760afc754f0"
+    },
+    "diagram-design/assets/example-kanban-dark.html": {
+      "bytes": 11036,
+      "sha256": "30809cae8600a1852131362df275d9ab1c6aeedc65d3855caed264d48e19f5dc"
+    },
+    "diagram-design/assets/example-kanban-full.html": {
+      "bytes": 13901,
+      "sha256": "a297c9d5da1ea46c6c3c69ffa49525965208cf2ffebb8031a577075d85a390d1"
+    },
+    "diagram-design/assets/example-kanban.html": {
+      "bytes": 10947,
+      "sha256": "3b19fb185019e0e341496de095bb1d92bd1fe4705c1502562ef47cb88329b2bb"
+    },
+    "diagram-design/assets/example-layers-dark.html": {
+      "bytes": 6913,
+      "sha256": "412df7b0710cf14cd95c1e806e708241bda6b3bc8e1f142107adf857ed6aa7d1"
+    },
+    "diagram-design/assets/example-layers-full.html": {
+      "bytes": 10024,
+      "sha256": "0719489be758a08ad66f2de27d120103c41a51982408e78faffac6b9409c9fbc"
+    },
+    "diagram-design/assets/example-layers.html": {
+      "bytes": 6876,
+      "sha256": "196f3cd9866d64da9e04323f258534b1a51d1116140c0db2c8e330adb516a809"
+    },
+    "diagram-design/assets/example-line-dark.html": {
+      "bytes": 7499,
+      "sha256": "b8fe9a0a0fea2bb472a61627da0f79cb351981f6726633cf09ff0a2b91d34621"
+    },
+    "diagram-design/assets/example-line-full.html": {
+      "bytes": 10052,
+      "sha256": "f3757327ce4d465a58b8aaf7428a1c4b3472f7422e782b32164f765b82dcdf96"
+    },
+    "diagram-design/assets/example-line.html": {
+      "bytes": 7441,
+      "sha256": "83f5e305d6ce509b25371db6f6e73fa6f3982b7a8dbe09451091c0a15f3b1d90"
+    },
+    "diagram-design/assets/example-loop-dark.html": {
+      "bytes": 6821,
+      "sha256": "cab1f56390bd59c6b13317854c0fe32497967ab4e822c004d30eedc3324d27c0"
+    },
+    "diagram-design/assets/example-loop-full.html": {
+      "bytes": 9965,
+      "sha256": "c2effa4d65d8713420c2a9261e7eea4f5273f3f87e7e09398bcc6310655bdb4e"
+    },
+    "diagram-design/assets/example-loop-terminal.html": {
+      "bytes": 9993,
+      "sha256": "93a2f86cca043537bf472973c6c1d51de54d85208ec54cd448c40e3f09aa73e8"
+    },
+    "diagram-design/assets/example-loop.html": {
+      "bytes": 6790,
+      "sha256": "b5d0e37b14614ba95d95cdbc5ecdfb84c6c03d7cf664124e029cecb97af340bc"
+    },
+    "diagram-design/assets/example-medallion-dark.html": {
+      "bytes": 13052,
+      "sha256": "65740eb4e2b1286636fc749bdb528dbab7e03948d104c368667ab1ccf85a46f2"
+    },
+    "diagram-design/assets/example-medallion-full.html": {
+      "bytes": 15897,
+      "sha256": "f6ceacd25be82850f65689b07d52b4c9b0e633604e909b13e77ad6468895a688"
+    },
+    "diagram-design/assets/example-medallion.html": {
+      "bytes": 12864,
+      "sha256": "e88a5b1f1f67a7bf6ad83c5144a7f79973a732f68972ba648ec81968579032eb"
+    },
+    "diagram-design/assets/example-nested-dark.html": {
+      "bytes": 6720,
+      "sha256": "1ff6c0e0dc7f9b321607a4de691a0ac1f5a99cef5b9d2dc0c6e9a75a13473f37"
+    },
+    "diagram-design/assets/example-nested-full.html": {
+      "bytes": 9824,
+      "sha256": "0efbb94f914d4edde8107df357f0869de0047011562dfc96856c3537c4e1648b"
+    },
+    "diagram-design/assets/example-nested.html": {
+      "bytes": 6840,
+      "sha256": "17648e5a26604bf678d7cd256ec0d84a54f7f2c6920fb56c030226e6ffc6557a"
+    },
+    "diagram-design/assets/example-org-chart-dark.html": {
+      "bytes": 11599,
+      "sha256": "fd0233be926462fd539b3a953a8abc012fb1f6248b71b658a0a3d194fd4f45e6"
+    },
+    "diagram-design/assets/example-org-chart-full.html": {
+      "bytes": 12052,
+      "sha256": "a1b5d313f47e6cb26240edd5d696e4dc944b6996bbe92f0be7c0b90836d2631f"
+    },
+    "diagram-design/assets/example-org-chart.html": {
+      "bytes": 11530,
+      "sha256": "8c4e95ee52d597f28743673ea11f01ecfcf1a230d6f3dfb6d5ad641b770af46c"
+    },
+    "diagram-design/assets/example-paved-road-animated.html": {
+      "bytes": 28277,
+      "sha256": "edc92180b5dc86cdec954ba50a81e50ccea4a994b58619819bfdf26ff5651689"
+    },
+    "diagram-design/assets/example-polar-dark.html": {
+      "bytes": 10447,
+      "sha256": "7c284696cfed61e832dd4dde814840901967cca64bd54a4cddfff7cbeaddb04e"
+    },
+    "diagram-design/assets/example-polar-full.html": {
+      "bytes": 12653,
+      "sha256": "bfd2ec50116c00a9312efe7bfa5dadfe2512de7c27873e15bdecaa044c932bf3"
+    },
+    "diagram-design/assets/example-polar.html": {
+      "bytes": 10385,
+      "sha256": "596e2042f18044ef1fa2c2eb849f39fa5c7767b2a17e272617ebd27e10bc86b1"
+    },
+    "diagram-design/assets/example-policy-trace-animated.html": {
+      "bytes": 25468,
+      "sha256": "a754efcb4d5d780798d3f386c0a5d68f36b0b12e142bc44603c2d39065daa1e3"
+    },
+    "diagram-design/assets/example-process-dark.html": {
+      "bytes": 15034,
+      "sha256": "5e6ac1365d2e473568ba736975495b9c3509004fb6fca571dedefa8e6cdc5c8e"
+    },
+    "diagram-design/assets/example-process-full.html": {
+      "bytes": 17471,
+      "sha256": "d0c0e6df7ae42fa92a1015421fa1cef211847c4037026de2c70d77a5e164a4cc"
+    },
+    "diagram-design/assets/example-process.html": {
+      "bytes": 15001,
+      "sha256": "50ca0b9e6a3e9f5ba8102ff3c6fb87b6a66b1d59f272777b72a97639d4fe2375"
+    },
+    "diagram-design/assets/example-pyramid-dark.html": {
+      "bytes": 6682,
+      "sha256": "831bc6531d0b3b0eba1b348722a0b3e4d5548f287f5380ddb7e26d3f5edcb80c"
+    },
+    "diagram-design/assets/example-pyramid-full.html": {
+      "bytes": 9733,
+      "sha256": "15306216ab2647d81038cafbb32139fd8e33cff6c1f2407fabbfb9dceb2c2c6e"
+    },
+    "diagram-design/assets/example-pyramid.html": {
+      "bytes": 6578,
+      "sha256": "d12cf7c4c921f3bbd66026af9ed947ff23acdcf414a4309b59c173377d9bdd80"
+    },
+    "diagram-design/assets/example-quadrant-consultant.html": {
+      "bytes": 11884,
+      "sha256": "421142d6be52e56315a4b7d02f94a940fe2d7e4d8b506795392b8086c900926c"
+    },
+    "diagram-design/assets/example-quadrant-dark.html": {
+      "bytes": 6606,
+      "sha256": "ac1edf5d9c1251a51a93eb82db17fc1820811f1934ec59c1272ea7f89c501465"
+    },
+    "diagram-design/assets/example-quadrant-full.html": {
+      "bytes": 9621,
+      "sha256": "11208b7d6353a4feed795e2c1539153843dcf2c057da414c73958b68e08b439e"
+    },
+    "diagram-design/assets/example-quadrant.html": {
+      "bytes": 6574,
+      "sha256": "a147cc85f78958da824d53d226067bff687f3e35a64601394c3075f55c675648"
+    },
+    "diagram-design/assets/example-queue-animated.html": {
+      "bytes": 29875,
+      "sha256": "f42628ce17ae487d0b1ebf2cf29a216a70775f8f305a243e38cb0c44d2efbe0a"
+    },
+    "diagram-design/assets/example-radar-dark.html": {
+      "bytes": 7687,
+      "sha256": "e24eabbc722e67b83ac498407247e1c09d162ff19e047944a323d44594a68258"
+    },
+    "diagram-design/assets/example-radar-full.html": {
+      "bytes": 10431,
+      "sha256": "18203b78130ef1200e78afd8e5a574029f560f4064730e2f2661b6d33ff9e1e6"
+    },
+    "diagram-design/assets/example-radar.html": {
+      "bytes": 7865,
+      "sha256": "767b6a52116665a75b5895c1bde6d96a6a3277449229ff7e21b33afff9b9fcdf"
+    },
+    "diagram-design/assets/example-sankey-dark.html": {
+      "bytes": 8969,
+      "sha256": "4c2a4ff17cfba1412aee8b6569e76c1d314d9ce64d6038c99e89505225b9baf1"
+    },
+    "diagram-design/assets/example-sankey-full.html": {
+      "bytes": 11817,
+      "sha256": "52949b4f1bcfba7bf89c49542ddf6937fda80be6c10c806366cd056d94732eeb"
+    },
+    "diagram-design/assets/example-sankey.html": {
+      "bytes": 8924,
+      "sha256": "f9196488b04763405fe56a56ed201630ce63aa86c96dcf8ba652d3927093707c"
+    },
+    "diagram-design/assets/example-scatter-dark.html": {
+      "bytes": 9525,
+      "sha256": "0ef801a4db53d7f1704a54fb4b1d3b70df9d269b3c462a32f158457bf1c2b511"
+    },
+    "diagram-design/assets/example-scatter-full.html": {
+      "bytes": 11579,
+      "sha256": "83e8cb8e6d2e788071b3a843c5746ed980675507e41d99b9a3b11beb07b8e6a6"
+    },
+    "diagram-design/assets/example-scatter.html": {
+      "bytes": 9425,
+      "sha256": "576e0061f65b1885cf5fccb794c2827b19fbea66cc14e8284f3fa075ef755d06"
+    },
+    "diagram-design/assets/example-sequence-dark.html": {
+      "bytes": 13794,
+      "sha256": "667d448a51a817fb334d3fae0c6f2ed2ab8a2219e42bb29d97c9e012c2d96a8a"
+    },
+    "diagram-design/assets/example-sequence-full.html": {
+      "bytes": 18217,
+      "sha256": "e165d6e2fe2fa56538820ab6efa56a7ea79f29d75775bac47ee865483d512c1c"
+    },
+    "diagram-design/assets/example-sequence-oauth-dark.html": {
+      "bytes": 12113,
+      "sha256": "8237be551f450082823ba237958d62cf54c9ca1f98ea5e4f1c1eeed68e6613d0"
+    },
+    "diagram-design/assets/example-sequence-oauth-full.html": {
+      "bytes": 16586,
+      "sha256": "c5e5f5d947c7f99474e4390a4ca2536285ca03e57aa7eae7bcb580c4c955fc2f"
+    },
+    "diagram-design/assets/example-sequence-oauth.html": {
+      "bytes": 14366,
+      "sha256": "700ff6d8a06aa0b04b67520e4def6388f1a334c1a63d9df9edc5f697eeee4a40"
+    },
+    "diagram-design/assets/example-sequence.html": {
+      "bytes": 13727,
+      "sha256": "12dcedc98c28d15f7a455f1266c8d8bd93bebe1ed8f352d89bc20703eaa00fad"
+    },
+    "diagram-design/assets/example-slopegraph-dark.html": {
+      "bytes": 10421,
+      "sha256": "fb1fcd70a4d7e63cb57d39ddedfb54f4840118ec6e9905111a4d263ccc7c62b4"
+    },
+    "diagram-design/assets/example-slopegraph-full.html": {
+      "bytes": 13961,
+      "sha256": "262b5db6e1c27327e9ff204ec359821fa92700e5883926ac0217d67a6c13c237"
+    },
+    "diagram-design/assets/example-slopegraph.html": {
+      "bytes": 10339,
+      "sha256": "1d0d0d6835e38c1e84e6a8b7cf2a3f0f3c59f70025941b994b844a6048f53af5"
+    },
+    "diagram-design/assets/example-state-dark.html": {
+      "bytes": 8698,
+      "sha256": "d5a29f22ee80fef6fe6f857e767fb0bf4afca8bc8f8cbb478f33286d76f88706"
+    },
+    "diagram-design/assets/example-state-full.html": {
+      "bytes": 11625,
+      "sha256": "bdcd07a2f12fb3ae0afe34b8f3d9fc455a7fbe02f671b97a7163d35726894017"
+    },
+    "diagram-design/assets/example-state.html": {
+      "bytes": 8664,
+      "sha256": "75521144ce5aaf477096f355e86ae2d3301eb136391a6bd0702a844a8fe7ce30"
+    },
+    "diagram-design/assets/example-story-map-dark.html": {
+      "bytes": 12247,
+      "sha256": "0c288216307ff36b43b513445e0e63fa83ed5902695ead17fdd507a470acc6b7"
+    },
+    "diagram-design/assets/example-story-map-full.html": {
+      "bytes": 15485,
+      "sha256": "ba97bf483442959c35e8d64cd36d177d94fff76215ca3e3b44901b5e4f586443"
+    },
+    "diagram-design/assets/example-story-map.html": {
+      "bytes": 12188,
+      "sha256": "40f737ca1c2a9f46cd8a3ad1a377faabc1adc546a410ff8395e6622b4e773da1"
+    },
+    "diagram-design/assets/example-swimlane-dark.html": {
+      "bytes": 10520,
+      "sha256": "1b45aa776b6e9b71249cb244b0ae0ca9ccc341d316d324364a0fad3d51e60d00"
+    },
+    "diagram-design/assets/example-swimlane-full.html": {
+      "bytes": 13466,
+      "sha256": "5c26540db8c18a1b33e32b90b1cf640d6482804b01d45fa87547c2a73a625852"
+    },
+    "diagram-design/assets/example-swimlane.html": {
+      "bytes": 10476,
+      "sha256": "75fc463ad3282dd0faaa4328c6b07f7e853184eeb1edcff2add8f7ed1876ab3b"
+    },
+    "diagram-design/assets/example-timeline-dark.html": {
+      "bytes": 7390,
+      "sha256": "64bcbb52a88e989b642dee6ef9ca2c47000407430b240760911a062a8e6735a7"
+    },
+    "diagram-design/assets/example-timeline-full.html": {
+      "bytes": 10391,
+      "sha256": "4e9195b6c3eb9d9ff4ee0bb9a19ac166c7098465d80ccf7148af73df4cdcd7f1"
+    },
+    "diagram-design/assets/example-timeline.html": {
+      "bytes": 7338,
+      "sha256": "1a58e3824eb2bb89ff6e57439b61c38d6e4c08b187143436f50108d8e60bfc45"
+    },
+    "diagram-design/assets/example-tree-dark.html": {
+      "bytes": 11029,
+      "sha256": "43aa056d0761d323cad0bd6205de3083fe7413af4e10639cad5e92c8ed41beac"
+    },
+    "diagram-design/assets/example-tree-full.html": {
+      "bytes": 13993,
+      "sha256": "988fda69a8fc3f043b263c254389adc282394d2a468163dde70fa8b56fc6392b"
+    },
+    "diagram-design/assets/example-tree.html": {
+      "bytes": 10916,
+      "sha256": "5de9151661ad9e1b21809d58494390472cdd82ca1ef1ddcde88b6f14e667afcd"
+    },
+    "diagram-design/assets/example-treemap-dark.html": {
+      "bytes": 7640,
+      "sha256": "42dc46a9294aca7cd8405f696d2aa2c144d803bda7af1435f3b7bbd4bf12fde4"
+    },
+    "diagram-design/assets/example-treemap-full.html": {
+      "bytes": 10717,
+      "sha256": "a2ba3313258e36f6a0936c92405d941226ec3642703866484d0a09b1fe37308e"
+    },
+    "diagram-design/assets/example-treemap.html": {
+      "bytes": 7570,
+      "sha256": "e7014bd22d5bc1a5b173747caca0dc6d2916cec5a3038d2b953187e45245e1b4"
+    },
+    "diagram-design/assets/example-uml-class-dark.html": {
+      "bytes": 12400,
+      "sha256": "eca2e26603714d4df494532a2a712101321a484cc2d1263f7629b8f0e214357d"
+    },
+    "diagram-design/assets/example-uml-class-full.html": {
+      "bytes": 15683,
+      "sha256": "9c9efff3c44878a9f7cf459ed7a1c7fcdd927cfbfb73ef35ac6b0c0c8d7a7671"
+    },
+    "diagram-design/assets/example-uml-class.html": {
+      "bytes": 12359,
+      "sha256": "c6c353f4d53c476fc3530f20d09cdb9d4b47a2bd22d0f3c56c807732534a685d"
+    },
+    "diagram-design/assets/example-venn-dark.html": {
+      "bytes": 6699,
+      "sha256": "85c6fd7c48e0c4989aebad24862e49d8783386f4cfa3efb27d1e86a724558077"
+    },
+    "diagram-design/assets/example-venn-full.html": {
+      "bytes": 9903,
+      "sha256": "1dd7525e58092b6a4bf1463fdf0df2914d717e3abcfdbaf04ed0ba3dd814f310"
+    },
+    "diagram-design/assets/example-venn.html": {
+      "bytes": 5080,
+      "sha256": "86d763a94bc20fb3038cb00b9ef0fedd1e00cd8009df50852eac77d92e3965da"
+    },
+    "diagram-design/assets/example-wardley-dark.html": {
+      "bytes": 8924,
+      "sha256": "80aff4e268d3775541eca4cf1c1cac918f0895637cd79568d4895e84b9f2046b"
+    },
+    "diagram-design/assets/example-wardley-full.html": {
+      "bytes": 11346,
+      "sha256": "8a9d56c9e50b57bb990a172822b01361cd4cb57322675fdde40be364e890210b"
+    },
+    "diagram-design/assets/example-wardley.html": {
+      "bytes": 8883,
+      "sha256": "b0ffc8f5bde65a8d77d863f22cd6c0d0211490c059dbcb503798851d1413860a"
+    },
+    "diagram-design/assets/icons.html": {
+      "bytes": 108545,
+      "sha256": "a0399f3c6d7e14f601d5a9b60a69e292d9e92ccd858ab9c20b5ef3e40764882b"
+    },
+    "diagram-design/assets/index.html": {
+      "bytes": 15351,
+      "sha256": "53a33b2cc53d96a5e6d273cd7e30e08aed1881022d5b590a2404c1c2d5dabcb2"
+    },
+    "diagram-design/assets/template-dark.html": {
+      "bytes": 3130,
+      "sha256": "49e81f271efb699d26c7bcc57962d758841065fa2842587aa003be90f9226436"
+    },
+    "diagram-design/assets/template-full.html": {
+      "bytes": 22518,
+      "sha256": "7c475a49eb4c6a7ec0af899e093ae10ded706e1720913ef66dc756f7c6639041"
+    },
+    "diagram-design/assets/template-motion.html": {
+      "bytes": 19863,
+      "sha256": "d6953d2fbe903ce9f5697ad245587bf426bc851e553f8b1fbf037c633daa445b"
+    },
+    "diagram-design/assets/template-terminal.html": {
+      "bytes": 4934,
+      "sha256": "6d000bd0308a737afeb1a11f453945d315abeea9d2a9f357fba534590ea391f9"
+    },
+    "diagram-design/assets/template.html": {
+      "bytes": 3253,
+      "sha256": "b0da611ef61bfecb0a3d775071dc7b237b14c7386cbc7b2d0241d1da36bd7510"
+    },
+    "diagram-design/references/animation.md": {
+      "bytes": 11815,
+      "sha256": "24ce83341aee976680cb69d43b2afab40efcfa97edcd394e5b17183eb58fc94a"
+    },
+    "diagram-design/references/doctor.md": {
+      "bytes": 5193,
+      "sha256": "bd2331eb5eaf751f254f94332abf8c78b32f22849effb180883fbc7c1e9ab471"
+    },
+    "diagram-design/references/export.md": {
+      "bytes": 7894,
+      "sha256": "ca672e5c74bc1540df108541efed0cea080db7df3bfc69991f297ab604fec97e"
+    },
+    "diagram-design/references/import-drawio.md": {
+      "bytes": 13066,
+      "sha256": "2615ba8efb300ecc498df72223a91c6c712411efb38892fc779b583ad8b7b4ce"
+    },
+    "diagram-design/references/import-mermaid.md": {
+      "bytes": 8913,
+      "sha256": "952de5fb9e0f24178cbbbfd784e9838ad6770d00e5e5550842f4f38f44f75474"
+    },
+    "diagram-design/references/onboarding.md": {
+      "bytes": 13804,
+      "sha256": "320e09ccf1073f19e759592c3bb8e770c90abfc7f7cea71e5d543ad552efb019"
+    },
+    "diagram-design/references/output-spec.md": {
+      "bytes": 11194,
+      "sha256": "35ffeca80b5760cdc20614fcb95f82dae64a501ea75db885cb8d62819b883de9"
+    },
+    "diagram-design/references/primitive-annotation.md": {
+      "bytes": 1708,
+      "sha256": "f78cac0af423ead9b74926fa669e9227efc21f15d0f51ea46bc93e79c55a121a"
+    },
+    "diagram-design/references/primitive-icons.md": {
+      "bytes": 105941,
+      "sha256": "ea768a2b2f169ff3cd98ed41da9ad3a30ed92374bc2da44a8ba83f1f3d453c43"
+    },
+    "diagram-design/references/primitive-sketchy.md": {
+      "bytes": 1700,
+      "sha256": "8859f0d70c10f46f59817cb348346e7fb9e1609b70a4a513d297b8c850c866a4"
+    },
+    "diagram-design/references/primitive-terminal.md": {
+      "bytes": 3915,
+      "sha256": "7b52c2fb229c822a60b0061caa64ae6a68aacd4f1c22a1a98d1d0eaaa2333b55"
+    },
+    "diagram-design/references/profiles.md": {
+      "bytes": 14221,
+      "sha256": "51f6d24e40eca1a13dc562b4b33aa76b56172c5c30fc94897e5bb369a34f9886"
+    },
+    "diagram-design/references/semantic-patterns.md": {
+      "bytes": 10296,
+      "sha256": "c56d7b9dc95066dcea2ecb0810d92fd7b56afd62aaf48ca0971129de0e28bdfa"
+    },
+    "diagram-design/references/style-guide.md": {
+      "bytes": 8677,
+      "sha256": "a122617d3528795c3be8918c50c53bfb758beec735b9d57abecce47e52f1ecbb"
+    },
+    "diagram-design/references/type-architecture.md": {
+      "bytes": 5001,
+      "sha256": "cb5672b5c69cbe24a0b18d144f8b2e4507a124ebb0dbc0bc898ceafb27612caa"
+    },
+    "diagram-design/references/type-bar.md": {
+      "bytes": 13576,
+      "sha256": "a6ab12ffe6fed07652f47924deefa14e9010f161db26daa90d918db16e353d9d"
+    },
+    "diagram-design/references/type-data-flow.md": {
+      "bytes": 21284,
+      "sha256": "9453c838d2ea7fc199659a369475b3141234e51921d4d4282fac8af9765effc7"
+    },
+    "diagram-design/references/type-db-schema.md": {
+      "bytes": 4865,
+      "sha256": "433f2ede171453ccbc1e6e8d0be4846fa5fb88bb499e8ba7e6db02d066a06c46"
+    },
+    "diagram-design/references/type-dependency.md": {
+      "bytes": 4187,
+      "sha256": "b6262d5337b3184aeb83f503627a665a9108b62a42e5ef2d6549c4167220fa6c"
+    },
+    "diagram-design/references/type-deployment.md": {
+      "bytes": 4184,
+      "sha256": "d3d33ff53bb8bdb7b15bcc3b23d1009ee68b40638588dd054d0ab993fb480fd5"
+    },
+    "diagram-design/references/type-dp-integration.md": {
+      "bytes": 22247,
+      "sha256": "d808c354591ec9b751c662efd187ba4920b1861d4a484d8548f4efcb9d897987"
+    },
+    "diagram-design/references/type-dp-security-matrix.md": {
+      "bytes": 19086,
+      "sha256": "209f4870ec19d90eff1ab80ecfe0062f3a5075c3b666b1a3a900a27260ba8832"
+    },
+    "diagram-design/references/type-er.md": {
+      "bytes": 1495,
+      "sha256": "0f4a718b202edec593e4555e0353a4080d4be6d98328209db083898f2f01302c"
+    },
+    "diagram-design/references/type-fishbone.md": {
+      "bytes": 5710,
+      "sha256": "d2f1c043fd40f5a20305bcc8b835b852b77a26b77516c3bbd813abf70dfa4f20"
+    },
+    "diagram-design/references/type-flowchart.md": {
+      "bytes": 1079,
+      "sha256": "c2af5e2b849255ae4859125db7b101b74bfb9b201204725c1e83fac51a98ebab"
+    },
+    "diagram-design/references/type-gantt.md": {
+      "bytes": 2468,
+      "sha256": "83a84cdd4b2880debd9e602f1d27ffc54197a6c783eb46228711641956f858ee"
+    },
+    "diagram-design/references/type-high-level.md": {
+      "bytes": 26685,
+      "sha256": "86e9e681189b013752edc512a8efb651e67aba52e9ddfbfe46d1fc117f1d5248"
+    },
+    "diagram-design/references/type-it-state.md": {
+      "bytes": 29984,
+      "sha256": "ac3ceb94c4e8083130d5373654e150f1c9b3f0a5e3857a00c8e251f1086bf7b1"
+    },
+    "diagram-design/references/type-journey.md": {
+      "bytes": 5075,
+      "sha256": "135501cef58abd6c716746248a5bfd163e56b68d9f314516bb8f60d26a895256"
+    },
+    "diagram-design/references/type-kanban.md": {
+      "bytes": 4302,
+      "sha256": "e64138a2629db2bf1de6aa4f4979088777a08c1426ef122c57f200aae20fc7eb"
+    },
+    "diagram-design/references/type-layers.md": {
+      "bytes": 1535,
+      "sha256": "393a65464f1189a2244c989a7448a8be5446d5932c907bbdba57d10997729534"
+    },
+    "diagram-design/references/type-line.md": {
+      "bytes": 17407,
+      "sha256": "5fc0ee91031b43c98f80519d14a65bee3e0f5fa768c18d83ccc728f5be908e2b"
+    },
+    "diagram-design/references/type-loop.md": {
+      "bytes": 12609,
+      "sha256": "c7e98b8eda1e6d6904920f4d96310745deb0651920e9d531c8f40e54304ab60d"
+    },
+    "diagram-design/references/type-medallion.md": {
+      "bytes": 22226,
+      "sha256": "a1af03521adb53431766a559e05c984ee07871fd3cf495cf63146999f56f6f42"
+    },
+    "diagram-design/references/type-nested.md": {
+      "bytes": 1392,
+      "sha256": "e8c61323d96cd085e52750e90a989f9ad321600da6814b8926502b4484aced31"
+    },
+    "diagram-design/references/type-org-chart.md": {
+      "bytes": 3082,
+      "sha256": "9905c67d6cf884f4537b9f86f893e6a90b4dc4134ff8bf8ce6187d151efbd6ab"
+    },
+    "diagram-design/references/type-polar.md": {
+      "bytes": 7767,
+      "sha256": "51fd08897a65f4ae2fe0c28b5e3afdd4867633fb960e3107551e49f4f9d1e97c"
+    },
+    "diagram-design/references/type-process.md": {
+      "bytes": 28588,
+      "sha256": "46fe29384b5004a7e79c21f093ed2724e58f258e543f45ed64f871bed6d31eda"
+    },
+    "diagram-design/references/type-pyramid.md": {
+      "bytes": 1783,
+      "sha256": "a07536682478832fbf552aaa066dc827eaa1a072c538766387c8b900ae7add38"
+    },
+    "diagram-design/references/type-quadrant.md": {
+      "bytes": 6254,
+      "sha256": "2346caba0370beaf8b33efd5d9a3e24f3d555b7160a3d523d9d07a37ce6c353a"
+    },
+    "diagram-design/references/type-radar.md": {
+      "bytes": 5592,
+      "sha256": "8379b0313afbfdbb5a641c98f8ac6668419b4add6cea0749a646365fad02c1d3"
+    },
+    "diagram-design/references/type-sankey.md": {
+      "bytes": 8952,
+      "sha256": "bcc39b963fa4f340c7654204fa0c6c0a248a0b42b1669ebeb2375381d8013a2c"
+    },
+    "diagram-design/references/type-scatter.md": {
+      "bytes": 2299,
+      "sha256": "8c09a935f990ae2455d40962793aade3b9a14f7ec5c12e4f15ad0770cdaf8b38"
+    },
+    "diagram-design/references/type-sequence.md": {
+      "bytes": 6686,
+      "sha256": "21c3ef9a491068e871aae99f035883d3c982255df97db1effaf0c3301f562865"
+    },
+    "diagram-design/references/type-state.md": {
+      "bytes": 1112,
+      "sha256": "7fed5690161e6f75d510cf89d1e989885b2d900fdadca5116e7f5b49ad8529a5"
+    },
+    "diagram-design/references/type-story-map.md": {
+      "bytes": 4827,
+      "sha256": "ee49c426397c3e5234fb544ea1394f7c8879610fea897da3b636891e3affb4c4"
+    },
+    "diagram-design/references/type-swimlane.md": {
+      "bytes": 991,
+      "sha256": "4b689b9dd72078dc76fd2fbb1eb6c0bf0304fee667ae7cd56fab5f19b535f250"
+    },
+    "diagram-design/references/type-timeline.md": {
+      "bytes": 1065,
+      "sha256": "9102e61347b17b303eafad52d4f8941d507faf889d9316ed0325e5e0f0ba01ca"
+    },
+    "diagram-design/references/type-tree.md": {
+      "bytes": 1248,
+      "sha256": "cde49c571463bfbb3b91a5ba6abf91a4eb00f1deadc717947a9584fca189e57b"
+    },
+    "diagram-design/references/type-treemap.md": {
+      "bytes": 7798,
+      "sha256": "6fc76ebac9b7895c03da82fb12964776c987c05db1798e9a744730f2f87d7737"
+    },
+    "diagram-design/references/type-uml-class.md": {
+      "bytes": 4857,
+      "sha256": "8cc0bc8f77a38da58110287c1b112043be9751389ef45772fe607eae9aa77ecd"
+    },
+    "diagram-design/references/type-venn.md": {
+      "bytes": 1654,
+      "sha256": "f8d5d4f0506160e0502f932140306b12d25adea1d1f6f319fb38c2345b0c6b42"
+    },
+    "diagram-design/references/type-wardley.md": {
+      "bytes": 5748,
+      "sha256": "aa93eb728a022b85f38de69c1d287752f91c487b05c50396ee21e769162900a9"
+    },
+    "diagram-design/scripts/drawio_extract.py": {
+      "bytes": 31364,
+      "sha256": "302b357688de234e5a46818a25120fd8fe5a58e5c3338f1f027ec269f24424d9"
+    },
+    "diagram-design/scripts/mermaid_extract.py": {
+      "bytes": 47650,
+      "sha256": "90424fcc478da0283345b9729a90409d2e89d7f7531a66c0b1fe6234df6ba8ef"
+    },
+    "diagram-design/scripts/self_check.py": {
+      "bytes": 16772,
+      "sha256": "5bb48bdd41378a5bde2cfae64363316e8435ba63a72f9a1e062ff0018d6ba0c7"
+    },
     "excel-master/README.md": {
       "bytes": 4617,
       "sha256": "5213170f114b0da6bacf5410ecd4d04999b76a3c430871f4dc32bf3082048abf"
@@ -212,502 +1021,6 @@
     "kimi-webbridge/references/operations.md": {
       "bytes": 3347,
       "sha256": "a7626eccc1bb588fe634fd65f75965957725b351adae8f5b873d95e30ba432f4"
-    },
-    "lieflat-charts/.gitignore": {
-      "bytes": 61,
-      "sha256": "12019aa03e3f3ed9d3a62370a7357c032ff565ad52a0badb48f44940871e19b3"
-    },
-    "lieflat-charts/LICENSE": {
-      "bytes": 4563,
-      "sha256": "ffcca38841adb694b6f380647e15f17c446a4d1656fed51a1e2041d064c94cc8"
-    },
-    "lieflat-charts/README.en.md": {
-      "bytes": 19420,
-      "sha256": "e9f05e8dc2b018655b7ff0841f509bc4ef347fea8eaddbdaf87d9c3c59afdf3b"
-    },
-    "lieflat-charts/README.md": {
-      "bytes": 18916,
-      "sha256": "93eb640bd15ea577ec1660ce96109ca49fd71bfd3e8ec2479258025afcb6262c"
-    },
-    "lieflat-charts/SKILL.md": {
-      "bytes": 37421,
-      "sha256": "2e1b7bfea74c057f27ad7ace583e6e10ab9fe7d7eef3f11366860afd9eb701b1"
-    },
-    "lieflat-charts/THIRD_PARTY_NOTICES.md": {
-      "bytes": 746,
-      "sha256": "3545b3af3d3d3f34ecebd603ddb1867e5ea1d45ef86bf2c065002f5033ede7a3"
-    },
-    "lieflat-charts/agents/openai.yaml": {
-      "bytes": 466,
-      "sha256": "0e3f07f84e16250447048e9fe2379d3dd8d339e25f7b04094961542c58df3b2f"
-    },
-    "lieflat-charts/catalog.md": {
-      "bytes": 14410,
-      "sha256": "67dfb3e5156142b8dc9b05a5d8514a71127dca47e2a38f80dd8705b75a65658d"
-    },
-    "lieflat-charts/color-presets.js": {
-      "bytes": 9888,
-      "sha256": "6ea2503665c85d0e49b51a09aae69c2cd062653f9050c16e317b3447fe85726e"
-    },
-    "lieflat-charts/docs/assets/color-palm-support-motion.gif": {
-      "bytes": 412405,
-      "sha256": "39d596f9ebd694705065ed3d4dd8f7a2970427950019e41dfe683aec87d77146"
-    },
-    "lieflat-charts/docs/assets/color-palm-wave-motion.gif": {
-      "bytes": 466327,
-      "sha256": "56c625cebf310b5c5501026ec62b2b9edc167314dd103cd09f293888d7691231"
-    },
-    "lieflat-charts/docs/assets/color-porcelain-almanac-motion.gif": {
-      "bytes": 1783106,
-      "sha256": "37ef47a29a86d3321a59426ba42a48faafcc86c8390aed930a0ecfffe50cac98"
-    },
-    "lieflat-charts/docs/assets/color-porcelain-motion.gif": {
-      "bytes": 1037942,
-      "sha256": "79dd37a8e8ec56ba1a4df0d37238b948b551678e045d5f3d77b46b0db6234b50"
-    },
-    "lieflat-charts/docs/assets/color-wire-hourglass-motion.gif": {
-      "bytes": 622011,
-      "sha256": "0794c40c9d5459c633e32a457041a27ae81373ddfe725042b8c93596cb05b1ce"
-    },
-    "lieflat-charts/docs/assets/color-wire-patchwork-motion.gif": {
-      "bytes": 612693,
-      "sha256": "18952fcdb181c62a9005ee73c6d670db897213f7af1291419797abbaf70de126"
-    },
-    "lieflat-charts/docs/assets/examples/r04-financial-report.zh.png": {
-      "bytes": 221753,
-      "sha256": "1e972f2d3260cdb20cae745c84f7c5fcb8e26e85d60a146219ecea364100ffe7"
-    },
-    "lieflat-charts/docs/assets/glance-motion.gif": {
-      "bytes": 234967,
-      "sha256": "c3976e0546b55305307415e692633c6ec3aa3b49bf7ca21c44a775669ca5a5a8"
-    },
-    "lieflat-charts/docs/assets/glance-race-motion.gif": {
-      "bytes": 586056,
-      "sha256": "fc59f49ce81155557f8a47beab86f03203685dc430da2a82aad9db3a21153f14"
-    },
-    "lieflat-charts/docs/assets/glance-stroke-motion.gif": {
-      "bytes": 78713,
-      "sha256": "aee364c33bb0f5c673a0f3109d9d0e948ed4f9c153c12afab11203d0feca9b42"
-    },
-    "lieflat-charts/docs/assets/glance-wave-motion.gif": {
-      "bytes": 44721,
-      "sha256": "8486461ce898d280eefc373feaf5ae380c1661b973bbfcddad5c4d1e0653a858"
-    },
-    "lieflat-charts/docs/assets/interactive-motion.gif": {
-      "bytes": 2479001,
-      "sha256": "13c2df6fa2b64735efb57a8e8b907d8aa404b92adedfff44d83e9845d85ee0ef"
-    },
-    "lieflat-charts/docs/assets/moxt-quick-start-en.png": {
-      "bytes": 62009,
-      "sha256": "0562af8d97c1be57ba7d4aec2a98634f986ba1d2b76af36682e4ff125dcabc24"
-    },
-    "lieflat-charts/docs/assets/moxt-quick-start-zh.png": {
-      "bytes": 62629,
-      "sha256": "75833c4c0ccedd14b2fe6f99476f99d751c909300bfaaa6da47f4881d4f18ea1"
-    },
-    "lieflat-charts/docs/assets/preview-basics-01.png": {
-      "bytes": 226774,
-      "sha256": "28d267205d0631b0254e4dac9c24bc58fd92339a65bc2159c331c50ce6250a79"
-    },
-    "lieflat-charts/docs/assets/preview-basics-02.png": {
-      "bytes": 355269,
-      "sha256": "d188e869dc47151c95c6915c065b2292711e40a97d93adc6b79eb37a90c86823"
-    },
-    "lieflat-charts/docs/assets/preview-color-palm-basics.png": {
-      "bytes": 76144,
-      "sha256": "94ca6505eb933adaed387e815386615ea6a034bb88f08df9dc03b566aa43b0ba"
-    },
-    "lieflat-charts/docs/assets/preview-color-palm-glance.png": {
-      "bytes": 80460,
-      "sha256": "e58c6ee8df25fdd149e1917cabb987620684eda9151e78a6d64425199873c0fc"
-    },
-    "lieflat-charts/docs/assets/preview-color-palm.png": {
-      "bytes": 122280,
-      "sha256": "50a5e6a53c56fddac56d5114e2709fd1c21ce913c10cb7548d9a412531831bf3"
-    },
-    "lieflat-charts/docs/assets/preview-color-porcelain-basics.png": {
-      "bytes": 140997,
-      "sha256": "4fc54f6272c098e9748d41013fe008b95534b68fbda2f22dcaf7e86032893ae6"
-    },
-    "lieflat-charts/docs/assets/preview-color-porcelain-glance.png": {
-      "bytes": 80396,
-      "sha256": "a300d4e90c64757a87284d138305896b53165c358abe1894d0d58fb63d529173"
-    },
-    "lieflat-charts/docs/assets/preview-color-porcelain.png": {
-      "bytes": 124801,
-      "sha256": "932cd8e20319e58a6ba47202a266c501a51c8f332ae09e8cba05d38f1b4a3370"
-    },
-    "lieflat-charts/docs/assets/preview-color-wire-basics.png": {
-      "bytes": 73919,
-      "sha256": "e56841758e18b3e4d5723c9564ca7984700c0e580ebfff49da5d3937a187869d"
-    },
-    "lieflat-charts/docs/assets/preview-color-wire-glance.png": {
-      "bytes": 76930,
-      "sha256": "0066dd0a9e5e10ed93bd934586d768c54ee686879a1652ab3f583b97d99e21f9"
-    },
-    "lieflat-charts/docs/assets/preview-color-wire.png": {
-      "bytes": 119377,
-      "sha256": "2c2710d276dd7e0c20ac652afc6bc0928bdb2ff83c6ba417646ec7408b39bb96"
-    },
-    "lieflat-charts/docs/assets/preview-glance-01.png": {
-      "bytes": 247612,
-      "sha256": "b2c00ac2eb6ae351e188aec82730632403b103091dd5bfb4d3445b96b7564649"
-    },
-    "lieflat-charts/docs/assets/preview-glance-02.png": {
-      "bytes": 336511,
-      "sha256": "db2148014b1967f1dd5f9b2d3e417f15c42900c6aab563a73ae03f8cddad331b"
-    },
-    "lieflat-charts/docs/assets/preview-glance-03.png": {
-      "bytes": 230410,
-      "sha256": "4b3f10e73820c9c3fb32381c5da408a9ee3fb54151571661165fcf158b463e20"
-    },
-    "lieflat-charts/docs/assets/preview-lupi-01.png": {
-      "bytes": 265190,
-      "sha256": "c294789af8124a09ef505f8f6e0e3eb3a11c0ec4db12767669a707001f4a567e"
-    },
-    "lieflat-charts/docs/assets/preview-lupi-02.png": {
-      "bytes": 340168,
-      "sha256": "8e304cec7a1605d35f1b4e431cc15120d9b021db9716c825f5eb90386cbdb898"
-    },
-    "lieflat-charts/docs/assets/preview-lupi-03.png": {
-      "bytes": 358310,
-      "sha256": "08a2264024cbc04eeec3c69d0b9962f96a27605379a5bd65289c52ddd3b4af58"
-    },
-    "lieflat-charts/docs/assets/readme-hero-en.png": {
-      "bytes": 81327,
-      "sha256": "da4414d033bd2bf68eb93831ad4623ebb473bc1c9d7b614d9df0f7de5d4e787b"
-    },
-    "lieflat-charts/docs/assets/readme-hero-zh.png": {
-      "bytes": 80972,
-      "sha256": "8c6aead9d3dee985d9cc45376e9fc25fd56ff6be17111c5a39239b3b0ae3ff9c"
-    },
-    "lieflat-charts/docs/assets/reports/en/report-01.png": {
-      "bytes": 207226,
-      "sha256": "b094c0b306345c0826acb78c261e76e29c8fa35682f0f12db3b99645e0d878b7"
-    },
-    "lieflat-charts/docs/assets/reports/en/report-02.png": {
-      "bytes": 134914,
-      "sha256": "b528b73c46c325389bb2a9e4b119a812a4c0b1725ed7a1ebec061d035bae18f5"
-    },
-    "lieflat-charts/docs/assets/reports/en/report-03.png": {
-      "bytes": 156102,
-      "sha256": "2cacafb1a010c6a1090d814d9e8f497c073c5fd4e5521ee41689fdd56cee984a"
-    },
-    "lieflat-charts/docs/assets/reports/en/report-04.png": {
-      "bytes": 123716,
-      "sha256": "87d67215e8f88d8781996a1a762bb7d34d903eb7a41ef3c6dedd0e3561e6bb1a"
-    },
-    "lieflat-charts/docs/assets/reports/en/report-05.png": {
-      "bytes": 139930,
-      "sha256": "866e0860631b8a0c701850fe8584fe16050d820771bf89adfeadb10a6d6f5929"
-    },
-    "lieflat-charts/docs/assets/reports/en/report-06.png": {
-      "bytes": 211270,
-      "sha256": "f317125bd056b4cf1cb1244f702d473979d4db34f72be7dd9bc42359ac8ca667"
-    },
-    "lieflat-charts/docs/assets/reports/en/report-07.png": {
-      "bytes": 186174,
-      "sha256": "d8b3dbc96730256e9be0dfca9f4da33a3a80ea84cc4b3c5a7c06cb80822d70f2"
-    },
-    "lieflat-charts/docs/assets/reports/en/report-08.png": {
-      "bytes": 105932,
-      "sha256": "67b8ca31ce77bab1c24fe4aa193f4f6cf3e71bdf66e45ec70ac34a870da4ee95"
-    },
-    "lieflat-charts/docs/assets/reports/en/report-09.png": {
-      "bytes": 104352,
-      "sha256": "5540498bfc33234be591957a7969ae901be8235db6f6dd1f0057c23276d8b41c"
-    },
-    "lieflat-charts/docs/assets/reports/en/report-10.png": {
-      "bytes": 210713,
-      "sha256": "43bf36339aae550e5c0c3805b1d4b7fa3f44e06dd20a308b7c2d8c2cc2f9ae04"
-    },
-    "lieflat-charts/docs/assets/reports/en/report-11.png": {
-      "bytes": 200991,
-      "sha256": "e0b833ca8376e36baeca9fdc2eb8941dba102cb783413d6caed3cdb7a569a478"
-    },
-    "lieflat-charts/docs/assets/reports/en/report-12.png": {
-      "bytes": 156280,
-      "sha256": "ad38565d56e4faea0c70b503f7604c5fcd4bdd52a67829f9679bab82b565f57d"
-    },
-    "lieflat-charts/docs/assets/reports/report-01.png": {
-      "bytes": 516177,
-      "sha256": "571536e3e537b39c09ca0cdca5802a409dfd8f8f6efdedd5c34ab71d882c7bd5"
-    },
-    "lieflat-charts/docs/assets/reports/report-02.png": {
-      "bytes": 320920,
-      "sha256": "dc709cccc009456c9d0f760e1bd44b13c0bc798b685a35ee59258f3bc94770fd"
-    },
-    "lieflat-charts/docs/assets/reports/report-03.png": {
-      "bytes": 303966,
-      "sha256": "e24ba1e4b800112693023b9b2b3ca4ecdb523c8bf813d3b5464223d550b1cbcc"
-    },
-    "lieflat-charts/docs/assets/reports/report-04.png": {
-      "bytes": 417258,
-      "sha256": "fe595211d2960ff224a85929d6c8abf5b95afbed491f92e94072561865e1abaa"
-    },
-    "lieflat-charts/docs/assets/reports/report-05.png": {
-      "bytes": 349679,
-      "sha256": "563a0344bdba887c70e1e2bf16cc79731f76bc35f81feba6046508c3cfc72753"
-    },
-    "lieflat-charts/docs/assets/reports/report-06.png": {
-      "bytes": 744527,
-      "sha256": "27f5591e52ec8c8ce79b3957171c5ebbfa0d923778a93b87ad9a069afde88423"
-    },
-    "lieflat-charts/docs/assets/reports/report-07.png": {
-      "bytes": 472056,
-      "sha256": "33bbcc8c208dc7a3f6f9a58482351005a2d20bf8d8924da9bdc8d64d03b487f8"
-    },
-    "lieflat-charts/docs/assets/reports/report-08.png": {
-      "bytes": 243567,
-      "sha256": "589117df6f9f9f1092e03bda10b1c49708520ff4169515e5db5f50673ea9f0b7"
-    },
-    "lieflat-charts/docs/assets/reports/report-09.png": {
-      "bytes": 468253,
-      "sha256": "c56324ef0d1ba157712f2d5f1760ee98c582416d46cbf1ebbeac84a658208def"
-    },
-    "lieflat-charts/docs/assets/reports/report-10.png": {
-      "bytes": 519061,
-      "sha256": "1bee0a9815ab4ca7e440806114ccda0525ac387532b9c0620ebbd89864ac9e62"
-    },
-    "lieflat-charts/docs/assets/reports/report-11.png": {
-      "bytes": 269540,
-      "sha256": "c1f8180500afe6181a12b9f7fb0cfe5be35016963ea30a0e10cd3c3b48be045a"
-    },
-    "lieflat-charts/docs/assets/reports/report-12.png": {
-      "bytes": 474805,
-      "sha256": "73c819e87b49d51e713a0b9ab1a7d133776807296fd6fd6dead47029fad45e53"
-    },
-    "lieflat-charts/examples/README.md": {
-      "bytes": 2680,
-      "sha256": "c82df97ce736ddd04dbb9d40eaa990be5569912c03c572bab1dbd967a6e9b7ff"
-    },
-    "lieflat-charts/examples/lenny-2026-survey.html": {
-      "bytes": 23629,
-      "sha256": "1a0db34e70922b913575cefbb1c228c0f78d8e3b307b93b8616df8d385e44496"
-    },
-    "lieflat-charts/examples/reports/r04-financial-report.zh.html": {
-      "bytes": 19737,
-      "sha256": "33459359e3eda924e12fef784c7ec54e8ddcc7a195e0495a38dc64a6cc45de12"
-    },
-    "lieflat-charts/mono-tokens.js": {
-      "bytes": 10427,
-      "sha256": "fc44eb4c24c56bb42514c4572db8d8883cc26eddae1556b5629e74855205f837"
-    },
-    "lieflat-charts/report-catalog.md": {
-      "bytes": 4869,
-      "sha256": "a990028cff43a2c794efd03ecb7b56f2f8ee5400c22a8037eb5a33944ea914e8"
-    },
-    "lieflat-charts/scripts/smoke-new-charts.mjs": {
-      "bytes": 3356,
-      "sha256": "2d3c07c5538b9a4d019789bd0a14937a33ee03e59c10e6418a5a7f1290c4a9ab"
-    },
-    "lieflat-charts/scripts/validate.mjs": {
-      "bytes": 11344,
-      "sha256": "bd4e079d937a30a5c1cf347b97cd7318c91521c14e19f9dc95cfeb88d28ee2ad"
-    },
-    "lieflat-charts/templates/basics-gallery.html": {
-      "bytes": 49417,
-      "sha256": "1d01c8695b6b8e921de142cef0de66c10802a7a3ef38112b049c0c2f1eb35fd6"
-    },
-    "lieflat-charts/templates/big-circular.html": {
-      "bytes": 4035,
-      "sha256": "38af6e7022b58ddf28872c606d58ba99176fbc092acbb70e6bb53124cf776176"
-    },
-    "lieflat-charts/templates/big-force.html": {
-      "bytes": 4651,
-      "sha256": "e331808fbb83814c7557bfc9ca821c84e6f2dfb8a7425b2ae16a1842e669ac37"
-    },
-    "lieflat-charts/templates/big-threads.html": {
-      "bytes": 7711,
-      "sha256": "093d08d506722d61edcbb1f5b33fb5a35cb9edc904c7cdc3d92b3377cdcfd39b"
-    },
-    "lieflat-charts/templates/color/README.md": {
-      "bytes": 2836,
-      "sha256": "cb402b5f57a5746aee98ed10f48a23db7168fe613c80cf6342dc99a76f783659"
-    },
-    "lieflat-charts/templates/color/basics-palm.html": {
-      "bytes": 48341,
-      "sha256": "fddcd007a66b81f288be7bafc0d2dd81021f4d90414788992b75b3eccd592458"
-    },
-    "lieflat-charts/templates/color/basics-porcelain.html": {
-      "bytes": 47617,
-      "sha256": "335586ea95e87f3a6fdd8f023325ea72c91b3d5bc69cd0be36eb1e38b158f8ef"
-    },
-    "lieflat-charts/templates/color/basics-wire.html": {
-      "bytes": 47910,
-      "sha256": "15aa27fc3d9cd325031c689c1bf7eaf89c1368cb6337c33faee981c05245e911"
-    },
-    "lieflat-charts/templates/color/big-circular-palm.html": {
-      "bytes": 4161,
-      "sha256": "e198cae1a9d1c04c1290b6527572052ea17fea90bc420ac4ab7ab1d08d985265"
-    },
-    "lieflat-charts/templates/color/big-circular-porcelain.html": {
-      "bytes": 4169,
-      "sha256": "f652468e513df6f32aa038490063a1cd3033ea637f48e173760304b2709a76eb"
-    },
-    "lieflat-charts/templates/color/big-force-palm.html": {
-      "bytes": 4773,
-      "sha256": "371b427f601a714632b913349667a6841a554dbbed879fc257e0294d21482cf2"
-    },
-    "lieflat-charts/templates/color/big-force-porcelain.html": {
-      "bytes": 4781,
-      "sha256": "d8d483ff8b254d5bd4d4fa029c8f984119938e353520178bbb6032602ac7346b"
-    },
-    "lieflat-charts/templates/color/big-threads-palm.html": {
-      "bytes": 7724,
-      "sha256": "d57707118b1e8f498d3b908cde1bad0d75ec8a3ea503ec407a2b10bab6661920"
-    },
-    "lieflat-charts/templates/color/big-threads-porcelain.html": {
-      "bytes": 7729,
-      "sha256": "071e71236a0a04c24f1d72b5cda82343a98512214dc745d6db66943dc893257a"
-    },
-    "lieflat-charts/templates/color/glance-palm.html": {
-      "bytes": 52790,
-      "sha256": "78eddcfd55d0565f5e0ddc8ffbb531b35830aea091029a18b8cb4d97f017dd61"
-    },
-    "lieflat-charts/templates/color/glance-porcelain.html": {
-      "bytes": 52672,
-      "sha256": "dd5450ffe58c3d13a1b935041d4a82420a3b668aaf9163eab275e25d0e76bcd6"
-    },
-    "lieflat-charts/templates/color/glance-wire.html": {
-      "bytes": 52988,
-      "sha256": "a24b43b50b4f86a029f68f57c6506df829eec61478c49502e158f2bcbe38ddac"
-    },
-    "lieflat-charts/templates/color/lupi-palm.html": {
-      "bytes": 65693,
-      "sha256": "fd556242245886d69283ff28032f0df3483c1b0fec39c3390c291fe61d304766"
-    },
-    "lieflat-charts/templates/color/lupi-porcelain.html": {
-      "bytes": 65540,
-      "sha256": "2b01d35518e19078b068afdeaa9f6c7bdbe705e426f8da001449e6f4e129536a"
-    },
-    "lieflat-charts/templates/color/lupi-wire.html": {
-      "bytes": 65503,
-      "sha256": "9c189d2ff088ca98fd165631f297e2d42e85b5dc1c08f9cda6eaf0b2bcecc3e0"
-    },
-    "lieflat-charts/templates/color/maps-palm.html": {
-      "bytes": 9813,
-      "sha256": "a582e1de10001e183316d75ee2ba39275cf29542f6187dc6965462bc2b6f507b"
-    },
-    "lieflat-charts/templates/color/maps-porcelain.html": {
-      "bytes": 9825,
-      "sha256": "00668509410b25770f83353a1fefb980530f59f0c95cacda049a198d856e0987"
-    },
-    "lieflat-charts/templates/color/maps-wire.html": {
-      "bytes": 9840,
-      "sha256": "c53a8eeb86005d6afe23eada7498275d1b1324a24f8c5c43eb4b1ab52bda42f5"
-    },
-    "lieflat-charts/templates/glance-gallery.html": {
-      "bytes": 49086,
-      "sha256": "755e6257e81d32df638493f0fc68bfdbaa615cd27e7197fe7c94e74f533ca57c"
-    },
-    "lieflat-charts/templates/lupi-gallery.html": {
-      "bytes": 61263,
-      "sha256": "ab8ba1139382267f9f9531f917903e865cd11dfa049deb0157300fa778a6a625"
-    },
-    "lieflat-charts/templates/maps-gallery.html": {
-      "bytes": 9786,
-      "sha256": "984728e65def8c0e087ec4bede2e6bb6a73f3497a022eed3969be7efdf2c05d2"
-    },
-    "lieflat-charts/templates/reports/index.html": {
-      "bytes": 10836,
-      "sha256": "6b441d556eecef3068ea9939b193cc7d27e0b88579f0c68a1d5355e3ed8ae2c5"
-    },
-    "lieflat-charts/templates/reports/report-01.en.html": {
-      "bytes": 16347,
-      "sha256": "830a57b9bd4b5ad2b2e094e4690fe46be7b819ec73241cb1527ef01a851607f7"
-    },
-    "lieflat-charts/templates/reports/report-01.zh.html": {
-      "bytes": 16314,
-      "sha256": "5ded8952f905a1aad50269374603f521760eec9f4bc34aca51334d5a2783d9a2"
-    },
-    "lieflat-charts/templates/reports/report-02.en.html": {
-      "bytes": 18640,
-      "sha256": "a741c55f9c6e0eea164830a7a694a3cdd6be284b11c921debf6dba75c250fc05"
-    },
-    "lieflat-charts/templates/reports/report-02.zh.html": {
-      "bytes": 18794,
-      "sha256": "2adca5f97993560386955ed75412149e93ad30b68832d2c6746d6badbdfae0c1"
-    },
-    "lieflat-charts/templates/reports/report-03.en.html": {
-      "bytes": 19602,
-      "sha256": "a4e15b45d102abdc3e1093292d376975fbc3c2745a00ec0e499f37ac6b6cb3dd"
-    },
-    "lieflat-charts/templates/reports/report-03.zh.html": {
-      "bytes": 19647,
-      "sha256": "91e5b10a8d10e747b88682b3d0d82e9a09a4aacd20c68c68694377d49cde3289"
-    },
-    "lieflat-charts/templates/reports/report-04.en.html": {
-      "bytes": 19064,
-      "sha256": "888c7433f32eb1100162d26e58d59c47d8781495f35679772a93229d044745b3"
-    },
-    "lieflat-charts/templates/reports/report-04.zh.html": {
-      "bytes": 19546,
-      "sha256": "cf96246f4ec7407cc176f7f4b5b5929f63b70c560f5875c719cca68b4452ed4b"
-    },
-    "lieflat-charts/templates/reports/report-05.en.html": {
-      "bytes": 13594,
-      "sha256": "ef9f52990f3f5565e72f50a4e005ac088ebfec22d858366f7daee6a92e7e4659"
-    },
-    "lieflat-charts/templates/reports/report-05.zh.html": {
-      "bytes": 13694,
-      "sha256": "bdf03b3edaba2a0464e1ac578f0d1fa3988c0ada0f74429344f5005670e64689"
-    },
-    "lieflat-charts/templates/reports/report-06.en.html": {
-      "bytes": 23443,
-      "sha256": "de654f26e790b53ae06c531f27c09e4465311baefdf7aa34ca5c612de5ad54cb"
-    },
-    "lieflat-charts/templates/reports/report-06.zh.html": {
-      "bytes": 23202,
-      "sha256": "9bb41ad60db4e3d52db2a9013198ceb5fbbfbe69709144e7fff45ae75b982aa2"
-    },
-    "lieflat-charts/templates/reports/report-07.en.html": {
-      "bytes": 22358,
-      "sha256": "348bd5d868d725bf151b4418faa98016da819a0a616b4d0aabc1d86f02a88c1d"
-    },
-    "lieflat-charts/templates/reports/report-07.zh.html": {
-      "bytes": 22126,
-      "sha256": "736f81d6fadade9b0a61ec018103f62c2418ef0e149909f2ed0aa6096f7bebdb"
-    },
-    "lieflat-charts/templates/reports/report-08.en.html": {
-      "bytes": 12995,
-      "sha256": "6f0dd69c785641129e06a7096045182081809b914841018387292911d267cc38"
-    },
-    "lieflat-charts/templates/reports/report-08.zh.html": {
-      "bytes": 12820,
-      "sha256": "d0c23d871fe98bb2406a313b9eeb906ba2367e19051c7ca175dae31df8a239c7"
-    },
-    "lieflat-charts/templates/reports/report-09.en.html": {
-      "bytes": 23029,
-      "sha256": "b4c23fcb4ea57fa8a96e5a34c4de93366aa3655674200efc7802b48f0ca5822d"
-    },
-    "lieflat-charts/templates/reports/report-09.zh.html": {
-      "bytes": 23095,
-      "sha256": "49dde207c8c16231e261f25703c734b6580df47ff5f470035bf4a4ab3bda54b7"
-    },
-    "lieflat-charts/templates/reports/report-10.en.html": {
-      "bytes": 21360,
-      "sha256": "866380a3a2ce41c9fa0ad5c7dafa9e2d74f88074cdbfbdff5877585ac1aa4419"
-    },
-    "lieflat-charts/templates/reports/report-10.zh.html": {
-      "bytes": 20908,
-      "sha256": "5c1b28109e4027f77ae62ede733a8586c83cab8ea53cfba07358f4ed1af6c9d5"
-    },
-    "lieflat-charts/templates/reports/report-11.en.html": {
-      "bytes": 14358,
-      "sha256": "e400a13559db56c7861a64948caa58e182ece6212573b03f0e5430760bfb8d68"
-    },
-    "lieflat-charts/templates/reports/report-11.zh.html": {
-      "bytes": 14401,
-      "sha256": "05384f08d8efa3ca295bde63fa42892d7fbdb9fad016bfd13a865e1134c6270d"
-    },
-    "lieflat-charts/templates/reports/report-12.en.html": {
-      "bytes": 21043,
-      "sha256": "9532a275efb92b75170f799fc75a950d586358c02dcff26950c8a903a5dfcab3"
-    },
-    "lieflat-charts/templates/reports/report-12.zh.html": {
-      "bytes": 21011,
-      "sha256": "edb68588244e54c57b344a5fc847864ce00238b47e1ef552fcf397d77c2606e8"
     },
     "ppt-master/.env.example": {
       "bytes": 11161,

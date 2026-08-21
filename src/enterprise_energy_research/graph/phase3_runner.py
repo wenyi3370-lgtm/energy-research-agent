@@ -104,11 +104,15 @@ class Phase3Runner:
         state.transition("EVIDENCE_VALIDATOR")
         evidence.claims, evidence.conflicts = ClaimValidator().validate(evidence.claims, evidence.sources)
         evidence.entities, evidence.edges = EntityMapper().apply_evidence(evidence.entities, evidence.edges, evidence.claims)
-        evidence.images = ImageValidator().validate(evidence.images, evidence.entities, evidence.sources)
+        image_validator = ImageValidator()
+        evidence.images = image_validator.validate(evidence.images, evidence.entities, evidence.sources)
         archive_result = ImageArchiveResult(images=evidence.images)
         if any(batch.extraction_method != "recorded_fixture" for batch in batches):
             archive_result = self.image_archiver.archive(evidence.images, output_dir)
             evidence.images = archive_result.images
+            # P0: pixel-level visual verification runs AFTER archiving — a
+            # vision verifier needs the local bytes, never context alone.
+            evidence.images = image_validator.visual_verify(evidence.images)
         evidence.products, product_detection = ProductDetector().detect(
             evidence.products,
             evidence.images,

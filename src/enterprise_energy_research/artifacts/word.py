@@ -1,37 +1,48 @@
+"""Word renderer (P0 refactor): narrative-driven, diagram-design PNG figures.
+
+The Word document is built from the SAME ResearchNarrative as the HTML
+dashboard.  Figures are high-resolution PNGs captured from the same
+diagram-design HTML files that feed the HTML inline SVG — there is no
+second charting implementation.  Chapters appear only when their evidence
+gate passed (dynamic structure, driven by conclusions and decision
+questions).
+
+Internal diagnostics (renderer fallbacks, QA entries) are written to
+``publication_qa_report.json`` in the assets folder and never appear in the
+user-facing document.
+"""
+
 from __future__ import annotations
 
 import hashlib
+from datetime import date
 from pathlib import Path
 
 from enterprise_energy_research.adapters.base import AdapterHealth, ArtifactResult
+from enterprise_energy_research.artifacts.diagram_design_adapter import DiagramDesignAdapter, VisualRenderResult
 from enterprise_energy_research.artifacts.image_publication import (
     PublicationImage,
     prepare_publication_images,
     write_image_publication_manifest,
 )
+from enterprise_energy_research.artifacts.narrative import NarrativeBuilder, ResearchNarrative, write_narrative
+from enterprise_energy_research.artifacts.qa_report import (
+    QAFinding,
+    QAVisualEntry,
+    new_qa_report,
+    write_qa_report,
+)
 from enterprise_energy_research.artifacts.visual_policy import colors as theme_colors
 from enterprise_energy_research.artifacts.visual_policy import word_policy
-from enterprise_energy_research.artifacts.visuals import (
-    VisualSpec,
-    build_visual_manifest,
-    render_visual_bundle,
-    write_visual_manifest,
-)
-from enterprise_energy_research.domain.enums import ArtifactType, VerificationStatus
+from enterprise_energy_research.artifacts.visuals import VisualSpec, write_visual_manifest
+from enterprise_energy_research.domain.enums import ArtifactType
 from enterprise_energy_research.domain.models import ArtifactBinding, FrozenResearchBundle
-
-
-FIELD_LABELS = {
-    "canonical_company_name": "公司名称", "stock_code": "股票代码", "core_business": "核心业务",
-    "revenue": "营业收入", "profit": "归母净利润", "rd_expense": "研发费用", "process": "主要工艺",
-    "product_portfolio": "产品组合", "export": "销售区域",
-    "electricity_consumption": "年度用电量",
-    "load_curve": "负荷曲线", "operating_schedule": "生产班次", "transformer_capacity": "变压器容量", "roof_area": "可用屋面面积",
-}
+from enterprise_energy_research.research.synthesis import ResearchSynthesizer
 
 
 class FrozenWordPublisher:
-    """Formal Word report using the standard_business_brief preset and editorial cover."""
+    """Formal Word report: consulting style, narrative-driven chapters,
+    same-source diagram-design figures, QA strictly outside the document."""
 
     name = "word_document"
     artifact_type = ArtifactType.WORD
@@ -49,20 +60,10 @@ class FrozenWordPublisher:
             return ArtifactResult(adapter=self.name, artifact_id=binding.artifact_id, artifact_type=binding.type, status="failed", diagnostics=health.diagnostics)
         if binding.type != self.artifact_type:
             return ArtifactResult(adapter=self.name, artifact_id=binding.artifact_id, artifact_type=binding.type, status="failed", diagnostics=["Word publisher received a non-Word binding"])
-        from docx import Document
-        from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
-        from docx.oxml import OxmlElement
-        from docx.oxml.ns import qn
-        from docx.shared import Cm, Mm, Pt, RGBColor
 
-        entity = next((x for x in bundle.entities if x.entity_id == bundle.run_manifest.canonical_entity_id), bundle.entities[0])
-        # P0-6/P0-18: the body consumes a claim-bound Research Synthesis built
-        # from verified evidence — never raw internal metadata.
-        from enterprise_energy_research.research.parameter_registry import ParameterInterpretationRegistry
-        from enterprise_energy_research.research.profiles import (
-            CompanyProfileBuilder, GroupProfileBuilder, PublishableEntityEvaluator,
-        )
-        from enterprise_energy_research.research.synthesis import ResearchSynthesizer
+        entity = self._canonical_entity(bundle)
+        if entity is None:
+            return ArtifactResult(adapter=self.name, artifact_id=binding.artifact_id, artifact_type=binding.type, status="failed", diagnostics=["Frozen bundle contains no enterprise entity"])
         synthesis = ResearchSynthesizer().synthesize(
             run_id=bundle.run_manifest.run_id,
             entity=entity,
@@ -76,81 +77,125 @@ class FrozenWordPublisher:
             gaps=bundle.gaps,
             solutions=bundle.solutions,
         )
-        industry = next(
-            (str(claim.value) for claim in bundle.claims if claim.field_name == "industry" and claim.verification_status == VerificationStatus.VERIFIED),
-            None,
-        )
-        interpretation_registry = ParameterInterpretationRegistry()
-        profile_builder = CompanyProfileBuilder()
-        group_builder = GroupProfileBuilder()
-        evaluator = PublishableEntityEvaluator()
-        publishable_profiles = []
-        for item in bundle.entities:
-            publishable, _ = evaluator.evaluate(item, bundle.claims, bundle.edges, bundle.factories, bundle.products)
-            if not publishable:
-                continue
-            profile = profile_builder.build(
-                item, bundle.claims, bundle.edges, bundle.factories, bundle.products,
-                entities=bundle.entities,
-            )
-            publishable_profiles.append((item, profile))
+        narrative = NarrativeBuilder().build(bundle, synthesis)
+
         asset_root = output_path.parent / f"{output_path.stem}_assets"
+        figures = asset_root / "figures"
+        adapter = DiagramDesignAdapter()
+        qa = new_qa_report(bundle.run_manifest.run_id, bundle.freeze.freeze_id, binding.artifact_id)
+
+        render_results: dict[str, VisualRenderResult] = {}
+        for spec in narrative.visuals:
+            result = adapter.build_visual(spec, figures, destination="both", png_scale=3)
+            render_results[spec.visual_id] = result
+            outcome = "rendered" if result.status == "rendered" else result.status
+            qa.record_visual(QAVisualEntry(
+                visual_id=spec.visual_id, chapter_id=spec.chapter_id,
+                outcome=outcome,  # type: ignore[arg-type]
+                visual_type=result.visual_type,
+                reason=result.fallback_reason or result.error,
+                png_status=result.png_status,
+            ))
+            if result.status == "failed":
+                qa.record_finding(QAFinding(
+                    code="visual_render_failed", severity="error",
+                    message=f"{spec.visual_id} could not be rendered; insight kept as prose",
+                    record_ids=[spec.visual_id],
+                ))
+            elif result.status == "fallback_table":
+                qa.record_finding(QAFinding(
+                    code="visual_fallback_table", severity="warn",
+                    message=f"{spec.visual_id} degraded to structured table: {result.fallback_reason}",
+                    record_ids=[spec.visual_id],
+                ))
+
+        write_visual_manifest(narrative.visual_manifest(), asset_root / "visual_manifest.json")
+        write_narrative(narrative, asset_root / "narrative.json")
+
         image_manifest = prepare_publication_images(
-            bundle, binding, asset_root, extra_search_roots=[output_path.parent]
+            bundle, binding, asset_root, extra_search_roots=[output_path.parent],
         )
-        prepared_ids = set(image_manifest.prepared_image_ids)
-        duplicate_ids = set(image_manifest.skipped_duplicate_image_ids)
-        missing_image_ids = sorted(set(image_manifest.required_image_ids) - prepared_ids - duplicate_ids)
-        fixture_mode = bundle.run_manifest.model_gateway.get("mode") in {"fixture", "recorded-fixture"}
-        if missing_image_ids and not fixture_mode:
-            return ArtifactResult(
-                adapter=self.name, artifact_id=binding.artifact_id, artifact_type=binding.type,
-                status="failed", diagnostics=[
-                    "Verified evidence images are not publication-ready: " + ", ".join(missing_image_ids),
-                    *image_manifest.diagnostics,
-                ],
-            )
-        publication_images = image_manifest.by_chapter()
-        selected_word_images = list(publication_images.get("cover", [])[:1])
-        for chapter_key in ("entity_overview", "products", "factories", "core_evidence"):
-            selected_word_images.extend(publication_images.get(chapter_key, [])[:6])
-        selected_word_image_ids = list(dict.fromkeys(image.image_id for image in selected_word_images))
+        publication_images = {item.image_id: item for item in image_manifest.prepared_images}
+        for image_id, reason in image_manifest.withheld_reasons.items():
+            qa.record_finding(QAFinding(
+                code="image_withheld", severity="info",
+                message=f"{image_id} withheld from publication: {reason}",
+                record_ids=[image_id],
+            ))
+        selected_word_image_ids = [item.image_id for item in image_manifest.prepared_images]
         image_manifest = image_manifest.model_copy(update={"artifact_selections": {"word": selected_word_image_ids}})
         write_image_publication_manifest(image_manifest, asset_root)
-        visual_manifest = build_visual_manifest(bundle, binding)
-        visual_assets = asset_root / "figures"
-        rendered_visuals: dict[str, tuple[VisualSpec, Path, Path]] = {}
-        for visual in visual_manifest.visuals:
-            png_path, svg_path = render_visual_bundle(visual, visual_assets)
-            rendered_visuals[visual.chapter_key] = (visual, png_path, svg_path)
-        write_visual_manifest(visual_manifest, asset_root / "visual_manifest.json")
-        wp = word_policy()
-        quality_issues = self._visual_quality_issues(visual_manifest, wp)
-        if quality_issues and not fixture_mode:
-            return ArtifactResult(
-                adapter=self.name, artifact_id=binding.artifact_id, artifact_type=binding.type,
-                status="failed", diagnostics=["Word visual quality gate rejected the report:", *quality_issues],
-            )
 
-        document = Document()
-        section = document.sections[0]
-        section.page_width, section.page_height = Mm(210), Mm(297)
-        section.top_margin = section.bottom_margin = section.left_margin = section.right_margin = Mm(25.4)
-        section.header_distance = section.footer_distance = Mm(12.5)
+        self._build_document(
+            bundle, binding, output_path, entity, synthesis, narrative,
+            render_results, publication_images, asset_root,
+        )
+        write_qa_report(qa, asset_root / "publication_qa_report.json")
+
+        digest = hashlib.sha256(output_path.read_bytes()).hexdigest()
+        used_claims = sorted({claim.claim_id for claim in self._claims_used(narrative, bundle)})
+        return ArtifactResult(
+            adapter=self.name, artifact_id=binding.artifact_id, artifact_type=binding.type,
+            path=output_path, content_sha256=digest, used_claim_ids=used_claims,
+            used_image_ids=selected_word_image_ids, status="published",
+            diagnostics=image_manifest.diagnostics,
+        )
+
+    @staticmethod
+    def _canonical_entity(bundle: FrozenResearchBundle):
+        return next(
+            (item for item in bundle.entities if item.entity_id == bundle.run_manifest.canonical_entity_id),
+            bundle.entities[0] if bundle.entities else None,
+        )
+
+    @staticmethod
+    def _claims_used(narrative: ResearchNarrative, bundle: FrozenResearchBundle) -> list:
+        ids: set[str] = set()
+        for chapter in narrative.chapters:
+            ids.update(chapter.claim_ids)
+        for visual in narrative.visuals:
+            ids.update(visual.source_claim_ids)
+        return [claim for claim in bundle.claims if claim.claim_id in ids]
+
+    # ── document assembly ──
+    def _build_document(
+        self,
+        bundle: FrozenResearchBundle,
+        binding: ArtifactBinding,
+        output_path: Path,
+        entity,
+        synthesis,
+        narrative: ResearchNarrative,
+        render_results: dict[str, VisualRenderResult],
+        publication_images: dict[str, PublicationImage],
+        asset_root: Path,
+    ) -> None:
+        from docx import Document
+        from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        from docx.shared import Cm, Mm, Pt, RGBColor
+
         wp = word_policy()
         tc = theme_colors()
         figure_width = Cm(wp["maximum_figure_width_cm"])
         body_cjk = wp["body_cjk_font"]
         body_latin = wp["body_latin_font"]
         navy_hex = tc["navy"].lstrip("#")
-        purple_hex = tc["sevc_purple"].lstrip("#")
         cool_gray_hex = tc["cool_gray"].lstrip("#")
+
+        document = Document()
+        section = document.sections[0]
+        section.page_width, section.page_height = Mm(210), Mm(297)
+        section.top_margin = section.bottom_margin = section.left_margin = section.right_margin = Mm(25.4)
+        section.header_distance = section.footer_distance = Mm(12.5)
+
         styles = document.styles
         for name, size, color, before, after, cjk_font in [
-            ("Normal", wp["body_size_pt"], "111111", 0, 6, body_cjk),
+            ("Normal", wp["body_size_pt"], "1B1F26", 0, 6, body_cjk),
             ("Heading 1", wp["heading_1_size_pt"], navy_hex, 18, 10, "Microsoft YaHei"),
             ("Heading 2", wp["heading_2_size_pt"], navy_hex, 14, 7, body_cjk),
-            ("Heading 3", wp["heading_3_size_pt"], purple_hex, 10, 5, body_cjk),
+            ("Heading 3", wp["heading_3_size_pt"], navy_hex, 10, 5, body_cjk),
         ]:
             style = styles[name]
             style.font.name = body_latin
@@ -170,52 +215,57 @@ class FrozenWordPublisher:
                 style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             elif name == "Heading 1":
                 style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
         header = section.header.paragraphs[0]
-        header.text = "SEVC｜企业产业与能源合作智能调研"
+        header.text = "企业产业与能源合作智能调研"
         header.runs[0].font.size = Pt(9)
-        header.runs[0].font.color.rgb = RGBColor(112, 103, 118)
+        header.runs[0].font.color.rgb = RGBColor.from_string(cool_gray_hex)
+        today = date.today()
         footer = section.footer.paragraphs[0]
         footer.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        footer.add_run("证据冻结：" + bundle.freeze.freeze_id + "  ·  ")
+        footer.add_run(f"数据来源：公开渠道已核验证据（详见附录来源清单） · {today:%Y-%m-%d} · ")
+        footer.add_run("偏差说明：本报告基于公开信息编制，不构成投资建议。 · ")
         self._field(footer, "PAGE")
-
-        # ---- 封面（标准商务文字封面，规范：公司名+主题+冻结版本+编号+日期）----
-        from datetime import date
-
+        # ── cover (consulting: navy accents, no decoration) ──
         cover_spacer = document.add_paragraph()
-        cover_spacer.paragraph_format.space_after = Pt(60)
-        kicker = document.add_paragraph("SEVC · EVIDENCE-FIRST RESEARCH")
+        cover_spacer.paragraph_format.space_after = Pt(72)
+        kicker = document.add_paragraph("企业研究 · 产业与能源合作")
         kicker.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        kr = kicker.runs[0]; kr.font.name = "Arial"; kr.bold = True; kr.font.size = Pt(10); kr.font.color.rgb = RGBColor(111, 43, 134)
-        if publication_images.get("cover"):
-            self._add_cover_image(document, publication_images["cover"][0], asset_root, Cm(4.2))
+        kr = kicker.runs[0]
+        kr.font.name = "Arial"
+        kr.bold = True
+        kr.font.size = Pt(11)
+        kr.font.color.rgb = RGBColor.from_string(navy_hex)
         title = document.add_paragraph()
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
         title.paragraph_format.space_before = Pt(18)
         tr = title.add_run(entity.canonical_name)
-        tr.bold = True; tr.font.name = "Microsoft YaHei"; tr.font.size = Pt(26); tr.font.color.rgb = RGBColor(33, 18, 43)
+        tr.bold = True
+        tr.font.name = "Microsoft YaHei"
+        tr.font.size = Pt(26)
+        tr.font.color.rgb = RGBColor.from_string("1B1F26")
         subtitle = document.add_paragraph("企业产业与能源合作智能调研报告")
         subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
         subtitle.paragraph_format.space_after = Pt(26)
-        subtitle.runs[0].font.size = Pt(16); subtitle.runs[0].bold = True
+        subtitle.runs[0].font.size = Pt(16)
+        subtitle.runs[0].bold = True
         subtitle.runs[0].font.color.rgb = RGBColor.from_string(navy_hex)
-        # 分隔线（深海军蓝）
         rule = document.add_paragraph()
         rule.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p_pr = rule._p.get_or_add_pPr()
         p_bdr = OxmlElement("w:pBdr")
         bottom = OxmlElement("w:bottom")
-        bottom.set(qn("w:val"), "single"); bottom.set(qn("w:sz"), "12"); bottom.set(qn("w:color"), navy_hex)
+        bottom.set(qn("w:val"), "single")
+        bottom.set(qn("w:sz"), "12")
+        bottom.set(qn("w:color"), navy_hex)
         p_bdr.append(bottom)
         p_pr.append(p_bdr)
         rule.paragraph_format.space_after = Pt(30)
-        # 元信息块：独立行、清晰字号
-        today = date.today()
         report_no = f"EER-{today:%Y%m%d}-{bundle.freeze.freeze_id[-6:]}"
         for label, value in (
             ("报告编号", report_no),
-            ("冻结版本", bundle.freeze.freeze_id),
-            ("企业复杂度", bundle.run_manifest.complexity.value if bundle.run_manifest.complexity else "UNKNOWN"),
+            ("数据版本", bundle.freeze.freeze_id),
+            ("数据截止", bundle.freeze.created_at.date().isoformat()),
             ("生成日期", f"{today:%Y}年{today.month}月{today.day}日"),
         ):
             meta = document.add_paragraph(f"{label}：{value}")
@@ -231,343 +281,166 @@ class FrozenWordPublisher:
         toc = document.add_paragraph()
         self._field(toc, 'TOC \\o "1-3" \\h \\z \\u')
         document.add_page_break()
-        document.add_heading("1. 执行摘要", level=1)
-        if synthesis.executive_summary:
-            for line in synthesis.executive_summary:
-                document.add_paragraph(line)
-        else:
-            document.add_paragraph(
-                f"本报告基于冻结证据快照，对 {entity.canonical_name} 的企业实体、生产足迹、能源场景与合作机会进行结构化呈现。"
-                "报告不把数据缺口写成事实，不在发布阶段新增研究结论。"
-            )
-        self._add_visual(document, rendered_visuals.get("executive_summary"), "1-1", figure_width)
-        document.add_heading("2. 调研概述", level=1)
-        document.add_paragraph("调研以企业身份、集团边界、生产基地、产品目录、经营活动、工艺用能及合作机会为主线。所有判断均绑定冻结证据；公开资料不足的字段保留为待尽调事项，不使用行业均值替代企业事实。")
-        self._add_visual(document, rendered_visuals.get("research_scope"), "2-1", figure_width)
-        document.add_heading("3. 集团与企业概况", level=1)
-        if publishable_profiles:
-            for item, profile in publishable_profiles:
-                document.add_heading(item.canonical_name, level=2)
-                if item.entity_type == "group":
-                    group = group_builder.build(
-                        item, bundle.entities, bundle.claims, bundle.edges,
-                        bundle.factories, bundle.products,
-                    )
-                    if group.registered_name:
-                        document.add_paragraph(f"注册名称：{group.registered_name}。")
-                    if group.tier1_subsidiaries:
-                        document.add_paragraph(
-                            "一级核心子公司：" + "、".join(
-                                f"{child['name']}（{child['business']}）" if child.get("business") else child["name"]
-                                for child in group.tier1_subsidiaries
-                            ) + "。"
-                        )
-                    if group.business_segments:
-                        document.add_paragraph("业务领域：" + "、".join(group.business_segments) + "。")
-                    if group.production_entities:
-                        document.add_paragraph(
-                            "生产主体：" + "、".join(item2["name"] for item2 in group.production_entities) + "。"
-                        )
-                    if group.factories:
-                        document.add_paragraph(
-                            "主要工厂：" + "、".join(factory["name"] for factory in group.factories[:10]) + "。"
-                        )
-                    if group.product_families:
-                        document.add_paragraph("核心产品：" + "、".join(group.product_families) + "。")
-                    continue
-                facts: list[str] = []
-                if profile.registered_name:
-                    facts.append(f"注册名称：{profile.registered_name}")
-                if profile.founded_date:
-                    facts.append(f"成立时间：{profile.founded_date}")
-                if profile.headquarters:
-                    facts.append(f"总部：{profile.headquarters}")
-                if profile.registration_region:
-                    facts.append(f"注册地：{profile.registration_region}")
-                if profile.official_website:
-                    facts.append(f"官方网站：{profile.official_website}")
-                if profile.parent_company:
-                    facts.append(f"母公司：{profile.parent_company}")
-                if profile.actual_controller:
-                    facts.append(f"实际控制人：{profile.actual_controller}")
-                if profile.ownership_summary:
-                    facts.append(f"股权关系：{profile.ownership_summary}")
-                if profile.core_business:
-                    facts.append(f"主营业务：{profile.core_business}")
-                if profile.business_segments:
-                    facts.append(f"业务板块：{'、'.join(profile.business_segments)}")
-                if profile.employee_count is not None:
-                    facts.append(f"员工人数：{profile.employee_count}")
-                if profile.revenue is not None:
-                    facts.append(f"营业收入：{profile.revenue}")
-                if profile.profit is not None:
-                    facts.append(f"净利润：{profile.profit}")
-                if profile.subsidiaries:
-                    facts.append(f"重要子公司：{'、'.join(profile.subsidiaries[:10])}")
-                if profile.factories:
-                    facts.append(f"生产基地：{'、'.join(profile.factories[:10])}")
-                if profile.product_families:
-                    facts.append(f"核心产品：{'、'.join(profile.product_families[:10])}")
-                for fact in facts:
-                    document.add_paragraph(fact)
-        else:
-            document.add_paragraph("当前冻结证据不足以形成可发布的企业概况，正式正文不输出内部核验状态与实体类型等研究元数据；相关记录保留在证据台账与附录中。")
-        self._add_visual(document, rendered_visuals.get("entity_overview"), "3-1", figure_width)
-        self._add_evidence_gallery(document, publication_images.get("entity_overview", []), asset_root, "3")
-        document.add_heading("4. 重点产业与优势产品", level=1)
-        if bundle.products:
-            for product in bundle.products:
-                if product.verification_status != VerificationStatus.VERIFIED:
-                    continue
-                detail = [
-                    product.category, product.series, product.model,
-                    product.description, product.customer_segment, product.commercial_status,
-                ]
-                if not any(detail):
-                    # 族级证据：只保留产品族身份，不生成空卡片。
-                    document.add_paragraph(f"产品族：{product.name}。公开资料未披露可核验的系列、型号与参数，报告保留产品族身份，不推断定制型号或商业化状态。")
-                    continue
-                document.add_heading(product.name, level=2)
-                parts: list[str] = []
-                if product.category:
-                    parts.append(f"类别：{product.category}")
-                if product.series:
-                    parts.append(f"系列：{product.series}")
-                if product.model:
-                    parts.append(f"型号：{product.model}")
-                if product.customer_segment:
-                    parts.append(f"客户群体：{product.customer_segment}")
-                if product.commercial_status:
-                    parts.append(f"商业状态：{product.commercial_status}")
-                if product.applications:
-                    parts.append(f"应用领域：{'、'.join(product.applications)}")
-                if product.description:
-                    parts.append(f"产品说明：{product.description}")
-                parameter_text = "、".join(
-                    f"{parameter.name}={parameter.value}{parameter.unit or ''}" for parameter in product.parameters
-                )
-                parts.append(f"参数：{parameter_text}" if parameter_text else "参数：公开资料未披露可核验参数")
-                document.add_paragraph("；".join(parts) + "。")
-                if product.parameters:
-                    interpretation = []
-                    for parameter in product.parameters:
-                        text = interpretation_registry.interpretation(industry, product.category, parameter.name)
-                        if text:
-                            interpretation.append(f"{parameter.name}：{text}")
-                    if interpretation:
-                        document.add_paragraph(
-                            "参数解读：" + "；".join(interpretation) + "。"
-                            "上述解释为指标含义，不构成对客户产品性能的承诺；正式导入仍需样品、测试方法、批次一致性和认证资料。"
-                        )
-        else:
-            document.add_paragraph("本次冻结证据未形成可核验的实体产品记录，因此不将业务描述推断为具体产品目录；相关信息应在后续尽调中补充。")
-        self._add_visual(document, rendered_visuals.get("products"), "4-1", figure_width)
-        self._add_evidence_gallery(document, publication_images.get("products", []), asset_root, "4")
-        document.add_heading("5. 子公司与工厂逐一分析", level=1)
-        factory_rows: list[tuple] = []
-        for factory in bundle.factories:
-            operator = next(
-                (item.canonical_name for item in bundle.entities if item.entity_id == factory.operator_entity_id),
-                None,
-            )
-            details = [
-                item for item in (
-                    factory.address,
-                    "、".join(factory.processes) if factory.processes else "",
-                    operator,
-                ) if item
-            ]
-            if len(details) >= 2:
-                factory_rows.append((factory, details))
-        if factory_rows:
-            for factory, _details in factory_rows:
-                document.add_heading(factory.name or "未命名生产基地", level=2)
-                operator = next(
-                    (item.canonical_name for item in bundle.entities if item.entity_id == factory.operator_entity_id),
-                    None,
-                )
-                address_text = factory.address or "公开资料未披露"
-                process_text = "、".join(factory.processes) if factory.processes else "公开资料未披露"
-                document.add_paragraph(
-                    f"地址：{address_text}；主要工艺：{process_text}；运营主体：{operator or '公开资料未披露'}。"
-                )
-        else:
-            document.add_paragraph("本次冻结证据未形成满足内容门槛的已核验工厂记录，本章不生成占位卡片。")
-        self._add_visual(document, rendered_visuals.get("factories"), "5-1", figure_width)
-        self._add_evidence_gallery(document, publication_images.get("factories", []), asset_root, "5")
-        document.add_heading("6. 核心经营与生产证据", level=1)
-        verified = [x for x in bundle.claims if x.verification_status == VerificationStatus.VERIFIED and x.claim_id in binding.claim_ids]
-        table_caption = document.add_paragraph("表 6-1 核心经营与生产证据")
-        self._format_caption(table_caption)
-        table = document.add_table(rows=1, cols=4)
-        table.autofit = False
-        for cell, text in zip(table.rows[0].cells, ["字段", "取值", "时间/范围", "来源"]): cell.text = text
-        sources = {x.source_id: x for x in bundle.sources}
-        for claim in verified:
-            row = table.add_row().cells
-            row[0].text = FIELD_LABELS.get(claim.field_name, claim.field_name)
-            row[1].text = f"{claim.value} {claim.unit or ''}".strip()
-            row[2].text = " / ".join(filter(None, [str(claim.as_of_date or ""), claim.scope or ""])) or "未注明"
-            row[3].text = sources[claim.source_id].source_title or sources[claim.source_id].source_domain
-        self._table_geometry(table, [1800, 3000, 1800, 2760])
-        self._style_three_line_table(table)
-        source_note = document.add_paragraph("数据来源：证据主表及来源台账；原文摘录和 URL 保存在同一冻结包中。")
-        source_note.paragraph_format.space_before = source_note.paragraph_format.space_after = Pt(4)
-        source_note.runs[0].font.size = Pt(9); source_note.runs[0].font.color.rgb = RGBColor(112, 103, 118)
-        self._add_visual(document, rendered_visuals.get("operating_metrics"), "6-1", figure_width)
-        self._add_visual(document, rendered_visuals.get("core_evidence"), "6-2", figure_width)
-        self._add_evidence_gallery(document, publication_images.get("core_evidence", []), asset_root, "6")
-        document.add_heading("7. 能源消费与节能潜力", level=1)
-        if bundle.energy_profiles:
-            for profile in bundle.energy_profiles:
-                document.add_heading(profile.factory_id or profile.entity_id, level=2)
-                document.add_paragraph(
-                    f"主要工艺：{'、'.join(profile.processes) or '待核验'}；用电设备：{'、'.join(profile.electricity_equipment) or '待核验'}；"
-                    f"燃气设备：{'、'.join(profile.gas_equipment) or '待核验'}。负荷、变压器、屋顶及运行班次按字段状态保留现场尽调要求。"
-                )
-        else:
-            document.add_paragraph("冻结证据未形成完整能源画像，报告仅保留工艺到能源设备的可核验映射，并把负荷曲线、变压器容量、运行班次和屋顶面积列为现场尽调输入。")
-        self._add_visual(document, rendered_visuals.get("energy"), "7-1", figure_width)
 
+        document.add_heading("决策问题", level=1)
+        for index, question in enumerate(narrative.decision_questions, start=1):
+            document.add_paragraph(f"问题 {index}：{question}")
         document.add_page_break()
-        document.add_heading("8. 合作机会矩阵", level=1)
-        evidence_solutions = [solution for solution in bundle.solutions if solution.statement_type.value == "EVIDENCE_SUPPORTED"]
-        if evidence_solutions:
-            for solution in sorted(evidence_solutions, key=lambda item: item.priority):
-                document.add_heading(f"优先级 {solution.priority}｜{solution.opportunity}", level=2)
-                document.add_paragraph(solution.proposed_solution)
-                document.add_paragraph(f"结论类型：证据支持；收益逻辑：{solution.benefit_logic}；下一步：{solution.next_step}。")
-        else:
-            document.add_paragraph("当前冻结证据未形成具备证据支持的合作机会，本章不生成推测性方案；潜在方向与所需数据列入风险与边界章节。")
-        self._add_visual(document, rendered_visuals.get("cooperation"), "8-1", figure_width)
+
+        # ── narrative-driven chapters ──
+        for index, chapter in enumerate(narrative.chapters, start=1):
+            document.add_heading(f"{index}. {chapter.title}", level=1)
+            if chapter.thesis and chapter.thesis.strip():
+                thesis = document.add_paragraph(chapter.thesis)
+                thesis.paragraph_format.first_line_indent = Pt(0)
+                for run in thesis.runs:
+                    run.bold = True
+                    run.font.color.rgb = RGBColor.from_string(navy_hex)
+            for paragraph in chapter.content:
+                document.add_paragraph(paragraph)
+            if chapter.table_rows:
+                self._add_structured_table(document, chapter.table_rows, f"表 {index}-1 {chapter.title}")
+            for figure_no, visual_id in enumerate(chapter.visual_ids, start=1):
+                result = render_results.get(visual_id)
+                spec = next((item for item in narrative.visuals if item.visual_id == visual_id), None)
+                if result is None or spec is None:
+                    continue
+                self._add_visual(document, spec, result, f"{index}-{figure_no}", figure_width, asset_root)
+            image_counter = 0
+            for image_id in chapter.image_ids:
+                publication = publication_images.get(image_id)
+                if publication is None:
+                    continue
+                image_counter += 1
+                self._add_evidence_image(document, publication, asset_root, f"{index}-P{image_counter}", figure_width)
+
+        # ── appendices ──
         document.add_page_break()
-        document.add_heading("9. 商务模式与推进路径", level=1)
-        for solution in bundle.solutions:
-            document.add_heading(f"{solution.engine}｜{solution.opportunity}", level=2)
-            document.add_paragraph(f"建议合作模式：{solution.business_model or '需双方确认'}；需补充数据：{'、'.join(solution.data_requirements) or '无新增要求'}。")
-        document.add_page_break()
-        document.add_heading("10. 项目优先级与 90 天计划", level=1)
-        for priority in ("A", "B", "C", "HOLD"):
-            items = [solution for solution in bundle.solutions if solution.priority == priority]
-            if items:
-                document.add_heading(f"优先级 {priority}", level=2)
-                document.add_paragraph("；".join(f"{item.opportunity}：{item.next_step}" for item in items) + "。")
-        self._add_visual(document, rendered_visuals.get("roadmap"), "10-1", figure_width)
-        document.add_heading("11. 风险与边界", level=1)
-        risks = [risk for solution in bundle.solutions for risk in solution.risks]
-        document.add_paragraph("；".join(dict.fromkeys(risks)) + "。" if risks else "尚无足够证据量化项目风险，应在技术、商务、合规和现场数据四条线上完成尽调后再作投资决策。")
-        self._add_visual(document, rendered_visuals.get("risks"), "11-1", figure_width)
-        document.add_heading("12. 调研结论", level=1)
-        document.add_paragraph("本报告给出的合作方向用于形成可验证的下一步，不替代现场测量、技术方案、商务报价、法律审查或投资决策。任何新增事实或数据修订均需进入新证据版本、重新验证并生成新的冻结快照。")
-        self._add_visual(document, rendered_visuals.get("conclusion"), "12-1", figure_width)
         document.add_heading("附录 A：术语与口径", level=1)
-        document.add_paragraph("事实、分析推断、待确认事项分别对应不同证据状态；产能、收入、能耗等数值均以原始披露的时间、范围、单位和限定条件为准。")
+        document.add_paragraph(
+            "本报告中的事实均来自公开渠道并经过核验；分析推断、待确认事项分别标注。"
+            "产能、收入、能耗等数值以原始披露的时间、范围、单位和限定条件为准，"
+            "不进行行业均值替代。"
+        )
         document.add_heading("附录 B：来源清单", level=1)
         for source in bundle.sources:
-            document.add_paragraph(f"[{source.source_id}] {source.source_level.value}｜{source.source_title or source.source_domain}｜{source.canonical_url}")
-        self._add_visual(document, rendered_visuals.get("appendix_sources"), "B-1", figure_width)
+            document.add_paragraph(f"{source.source_title or source.source_domain}｜{source.canonical_url}")
         document.add_heading("附录 C：图片来源", level=1)
-        if bundle.images:
-            for image in bundle.images:
-                document.add_paragraph(f"[{image.image_id}] {image.image_type}｜{image.source_page_url}｜{image.verification_status.value}")
+        if publication_images:
+            for publication in publication_images.values():
+                document.add_paragraph(f"{publication.caption}｜{publication.source_page_url}")
         else:
-            document.add_paragraph("本次冻结包未包含可用于正式报告的已核验图片。")
-        self._add_visual(document, rendered_visuals.get("appendix_images"), "C-1", figure_width)
-        document.add_heading("附录 D：数据缺口与尽调", level=1)
+            document.add_paragraph("本次研究未包含满足核验标准的实体图片。")
+        document.add_heading("附录 D：待尽调事项", level=1)
         for gap in bundle.gaps:
-            document.add_heading(FIELD_LABELS.get(gap.field_name, gap.field_name), level=2)
-            document.add_paragraph(f"重要性：{gap.importance}；原因：{gap.reason}；建议动作：{gap.next_action}。")
-        self._add_visual(document, rendered_visuals.get("appendix_gaps"), "D-1", figure_width)
+            if gap.importance == "minor":
+                continue
+            document.add_heading(gap.field_name, level=2)
+            document.add_paragraph(gap.next_action)
+
         output_path.parent.mkdir(parents=True, exist_ok=True)
         document.save(output_path)
-        digest = hashlib.sha256(output_path.read_bytes()).hexdigest()
-        return ArtifactResult(
-            adapter=self.name, artifact_id=binding.artifact_id, artifact_type=binding.type,
-            path=output_path, content_sha256=digest, used_claim_ids=[x.claim_id for x in verified],
-            used_image_ids=selected_word_image_ids, status="published",
-            diagnostics=image_manifest.diagnostics if fixture_mode else [],
+
+    # ── figure/table helpers ──
+    @classmethod
+    def _add_visual(
+        cls,
+        document,
+        spec: VisualSpec,
+        result: VisualRenderResult,
+        figure_no: str,
+        width,
+        asset_root: Path,
+    ) -> None:
+        from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+        from docx.shared import Cm, Pt, RGBColor
+
+        lead = document.add_paragraph(
+            f"结论：{spec.business_thesis} 对应问题：{spec.decision_question}（见图 {figure_no}）。"
         )
+        lead.paragraph_format.keep_with_next = True
+        lead.paragraph_format.first_line_indent = Pt(0)
+        for run in lead.runs:
+            run.bold = True
+        if result.png_path is not None and result.png_path.is_file():
+            cls._insert_picture(document, result.png_path, width)
+        elif spec.items:
+            # PNG pipeline unavailable: structured table from the SAME spec data.
+            rows = [
+                {"指标": item.label, "数值": f"{item.value or ''} {item.unit or ''}".strip(),
+                 "期间": item.period or "", "说明": item.note or ""}
+                for item in spec.items
+            ]
+            cls._add_structured_table(document, rows, f"表 {figure_no} {spec.title}")
+        else:
+            return  # insight already kept as prose; QA recorded the failure
+        caption = document.add_paragraph(f"图 {figure_no} {spec.title}")
+        cls._format_caption(caption)
+        source = document.add_paragraph(spec.source_note or "数据来源：公开信息（详见附录来源清单）。")
+        source.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        source.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        source.paragraph_format.space_before = Pt(0)
+        source.paragraph_format.space_after = Pt(8)
+        for run in source.runs:
+            run.font.size = Pt(9)
+            run.font.color.rgb = RGBColor(74, 85, 104)
+
+    @classmethod
+    def _add_evidence_image(cls, document, image: PublicationImage, asset_root: Path, figure_no: str, width) -> None:
+        from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+        from docx.shared import Cm, Pt, RGBColor
+
+        paragraph = document.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        paragraph.paragraph_format.keep_together = True
+        paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        paragraph.paragraph_format.space_before = Pt(6)
+        paragraph.paragraph_format.space_after = Pt(6)
+        ratio = image.width / image.height if image.height else 1.0
+        picture_width = Cm(13.8 if ratio >= 1.1 else 9.5)
+        paragraph.add_run().add_picture(str(asset_root / image.publication_path), width=picture_width)
+        caption = document.add_paragraph(f"图 {figure_no} {image.caption}")
+        cls._format_caption(caption)
+        source = document.add_paragraph(image.source_note)
+        source.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        source.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        source.paragraph_format.space_before = Pt(0)
+        source.paragraph_format.space_after = Pt(10)
+        for run in source.runs:
+            run.font.size = Pt(9)
+            run.font.color.rgb = RGBColor(74, 85, 104)
 
     @staticmethod
-    def _visual_quality_issues(visual_manifest, wp: dict) -> list[str]:
-        """Reject non-Lieflat or weakly sourced figures without imposing chart quotas."""
-        issues: list[str] = []
-        visuals = visual_manifest.visuals
-        if not visuals:
-            return []
-        allowed = {"F4", "F5", "L13"}
-        for visual in visuals:
-            if visual.renderer != "lieflat-charts-gallery-port-svg-v2" or visual.template_id not in allowed:
-                issues.append(f"{visual.visual_id} is not routed through an approved Lieflat catalog template")
-            if not visual.template_source or not visual.template_card_title or visual.color_system != "mono":
-                issues.append(f"{visual.visual_id} does not record its Lieflat gallery source and global color system")
-            if not visual.data_contract:
-                issues.append(f"{visual.visual_id} has no Lieflat data contract")
-            if not visual.source_note.startswith("数据来源：证据冻结"):
-                issues.append(f"{visual.visual_id} has no adjacent freeze source note")
-        minimum_analysis = int(wp.get("minimum_analysis_characters_before_visual", 50))
-        lead_analysis = (
-            "基于冻结证据形成的结构化视图见图。该图用于呈现冻结快照中已核验与"
-            "待核验数据的分布关系，不扩展原始证据口径，也不替代正文中的事实叙述。"
-        )
-        if len(lead_analysis) < minimum_analysis:
-            issues.append(
-                f"visual lead analysis is {len(lead_analysis)} characters; "
-                f"minimum is {minimum_analysis}"
-            )
-        return issues
-
-    @staticmethod
-    def _add_cover_image(document, image: PublicationImage, asset_root: Path, width) -> None:
+    def _insert_picture(document, png_path: Path, width) -> None:
         from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
         from docx.shared import Pt
 
         paragraph = document.add_paragraph()
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        # 图片段落必须用单倍行距：固定行距（EXACTLY）会截断图片
+        paragraph.paragraph_format.keep_together = True
         paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
-        paragraph.paragraph_format.space_before = paragraph.paragraph_format.space_after = Pt(6)
-        paragraph.add_run().add_picture(str(asset_root / image.publication_path), width=width)
+        paragraph.paragraph_format.space_before = Pt(6)
+        paragraph.paragraph_format.space_after = Pt(6)
+        paragraph.add_run().add_picture(str(png_path), width=width)
 
     @classmethod
-    def _add_evidence_gallery(
-        cls,
-        document,
-        images: list[PublicationImage],
-        asset_root: Path,
-        chapter_number: str,
-        *,
-        maximum_images: int = 6,
-    ) -> None:
-        if not images:
+    def _add_structured_table(cls, document, rows: list[dict], caption: str) -> None:
+        if not rows:
             return
-        from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
-        from docx.shared import Cm, Pt, RGBColor
-
-        document.add_heading("真实图片证据", level=2)
-        lead = document.add_paragraph("以下图片均来自已核验原始页面，并已完成本地归档、哈希、格式和尺寸校验；图片用于主体、产品或生产场景识别，不替代产能、性能或运营状态证明。")
-        lead.paragraph_format.keep_with_next = True
-        for index, image in enumerate(images[:maximum_images], start=1):
-            # 图片段落：单倍行距 + 上下留白，避免固定行距截断图片
-            paragraph = document.add_paragraph()
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            paragraph.paragraph_format.keep_together = True
-            paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
-            paragraph.paragraph_format.space_before = Pt(6)
-            paragraph.paragraph_format.space_after = Pt(6)
-            ratio = image.width / image.height
-            width = Cm(13.8 if ratio >= 1.1 else 9.5)
-            paragraph.add_run().add_picture(str(asset_root / image.publication_path), width=width)
-            caption = document.add_paragraph(f"图 {chapter_number}-P{index} {image.caption}")
-            cls._format_caption(caption)
-            source = document.add_paragraph(image.source_note)
-            source.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            source.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
-            source.paragraph_format.space_before = Pt(0)
-            source.paragraph_format.space_after = Pt(10)
-            for run in source.runs:
-                run.font.size = Pt(9)
-                run.font.color.rgb = RGBColor(107, 114, 128)
+        table_caption = document.add_paragraph(caption)
+        cls._format_caption(table_caption)
+        columns = list(rows[0].keys())
+        table = document.add_table(rows=1, cols=len(columns))
+        table.autofit = False
+        for cell, text in zip(table.rows[0].cells, columns):
+            cell.text = str(text)
+        for row in rows:
+            cells = table.add_row().cells
+            for cell, column in zip(cells, columns):
+                cell.text = str(row.get(column) or "")
+        cell_width = 9360 // max(len(columns), 1)
+        cls._table_geometry(table, [cell_width] * len(columns))
+        cls._style_three_line_table(table)
 
     @staticmethod
     def _format_caption(paragraph) -> None:
@@ -580,42 +453,10 @@ class FrozenWordPublisher:
         paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
         paragraph.paragraph_format.space_before = Pt(8)
         paragraph.paragraph_format.space_after = Pt(4)
+        paragraph.paragraph_format.first_line_indent = Pt(0)
         for run in paragraph.runs:
             run.bold = True
             run.font.size = Pt(10)
-
-    @classmethod
-    def _add_visual(cls, document, rendered: tuple[VisualSpec, Path, Path] | None, figure_no: str, width) -> None:
-        from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
-        from docx.shared import Pt, RGBColor
-
-        if rendered is None:
-            return
-        spec, png_path, _ = rendered
-        lead = document.add_paragraph(
-            f"基于冻结证据形成的结构化视图见图 {figure_no}。该图用于{spec.purpose}，"
-            "仅呈现冻结快照中已核验与待核验数据的分布关系，不扩展原始证据口径，"
-            "也不替代正文中的事实叙述。"
-        )
-        lead.paragraph_format.keep_with_next = True
-        # 图片段落：单倍行距 + 留白，避免固定行距截断图表
-        picture_paragraph = document.add_paragraph()
-        picture_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        picture_paragraph.paragraph_format.keep_together = True
-        picture_paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
-        picture_paragraph.paragraph_format.space_before = Pt(6)
-        picture_paragraph.paragraph_format.space_after = Pt(6)
-        picture_paragraph.add_run().add_picture(str(png_path), width=width)
-        caption = document.add_paragraph(f"图 {figure_no} {spec.title}")
-        cls._format_caption(caption)
-        source = document.add_paragraph(spec.source_note)
-        source.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        source.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
-        source.paragraph_format.space_before = Pt(0)
-        source.paragraph_format.space_after = Pt(8)
-        for run in source.runs:
-            run.font.size = Pt(9)
-            run.font.color.rgb = RGBColor(107, 114, 128)
 
     @classmethod
     def _style_three_line_table(cls, table) -> None:
@@ -627,7 +468,7 @@ class FrozenWordPublisher:
 
         tc = theme_colors()
         navy_hex = tc["navy"].lstrip("#")
-        pale_hex = tc["pale_gray"].lstrip("#")
+        pale_hex = tc["canvas"].lstrip("#")
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
         tbl_pr = table._tbl.tblPr
         existing = tbl_pr.find(qn("w:tblBorders"))
@@ -640,7 +481,9 @@ class FrozenWordPublisher:
             ("insideH", "nil", "0", "FFFFFF"), ("insideV", "nil", "0", "FFFFFF"),
         ):
             node = OxmlElement(f"w:{edge}")
-            node.set(qn("w:val"), value); node.set(qn("w:sz"), size); node.set(qn("w:color"), color)
+            node.set(qn("w:val"), value)
+            node.set(qn("w:sz"), size)
+            node.set(qn("w:color"), color)
             borders.append(node)
         tbl_pr.append(borders)
         for row_index, row in enumerate(table.rows):
@@ -648,10 +491,16 @@ class FrozenWordPublisher:
                 cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
                 tc_pr = cell._tc.get_or_add_tcPr()
                 if row_index == 0:
-                    shade = OxmlElement("w:shd"); shade.set(qn("w:fill"), pale_hex); tc_pr.append(shade)
+                    shade = OxmlElement("w:shd")
+                    shade.set(qn("w:fill"), pale_hex)
+                    tc_pr.append(shade)
                     cell_border = OxmlElement("w:tcBorders")
-                    bottom = OxmlElement("w:bottom"); bottom.set(qn("w:val"), "single"); bottom.set(qn("w:sz"), "8"); bottom.set(qn("w:color"), navy_hex)
-                    cell_border.append(bottom); tc_pr.append(cell_border)
+                    bottom = OxmlElement("w:bottom")
+                    bottom.set(qn("w:val"), "single")
+                    bottom.set(qn("w:sz"), "8")
+                    bottom.set(qn("w:color"), navy_hex)
+                    cell_border.append(bottom)
+                    tc_pr.append(cell_border)
                 for paragraph in cell.paragraphs:
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     paragraph.paragraph_format.first_line_indent = Pt(0)
@@ -659,44 +508,69 @@ class FrozenWordPublisher:
                     paragraph.paragraph_format.right_indent = Pt(0)
                     paragraph.paragraph_format.keep_together = True
                     for run in paragraph.runs:
-                        run.font.name = "Times New Roman"; run.font.size = Pt(word_policy()["table_size_pt"])
+                        run.font.name = "Times New Roman"
+                        run.font.size = Pt(word_policy()["table_size_pt"])
                         run._element.rPr.rFonts.set(qn("w:eastAsia"), "SimSun")
                         if row_index == 0:
-                            run.bold = True; run.font.color.rgb = RGBColor.from_string(navy_hex)
+                            run.bold = True
+                            run.font.color.rgb = RGBColor.from_string(navy_hex)
 
     @staticmethod
     def _field(paragraph, instruction: str) -> None:
         from docx.oxml import OxmlElement
         from docx.oxml.ns import qn
+
         run = paragraph.add_run()
-        begin = OxmlElement("w:fldChar"); begin.set(qn("w:fldCharType"), "begin")
-        instr = OxmlElement("w:instrText"); instr.set(qn("xml:space"), "preserve"); instr.text = instruction
-        separate = OxmlElement("w:fldChar"); separate.set(qn("w:fldCharType"), "separate")
-        text = OxmlElement("w:t"); text.text = "更新域以显示"
-        end = OxmlElement("w:fldChar"); end.set(qn("w:fldCharType"), "end")
-        for node in (begin, instr, separate, text, end): run._r.append(node)
+        begin = OxmlElement("w:fldChar")
+        begin.set(qn("w:fldCharType"), "begin")
+        instr = OxmlElement("w:instrText")
+        instr.set(qn("xml:space"), "preserve")
+        instr.text = instruction
+        separate = OxmlElement("w:fldChar")
+        separate.set(qn("w:fldCharType"), "separate")
+        text = OxmlElement("w:t")
+        text.text = "更新域以显示"
+        end = OxmlElement("w:fldChar")
+        end.set(qn("w:fldCharType"), "end")
+        for node in (begin, instr, separate, text, end):
+            run._r.append(node)
 
     @staticmethod
     def _table_geometry(table, widths: list[int]) -> None:
         from docx.oxml import OxmlElement
         from docx.oxml.ns import qn
+
         table.autofit = False
         tbl_pr = table._tbl.tblPr
         tbl_w = tbl_pr.first_child_found_in("w:tblW")
         if tbl_w is None:
             tbl_w = OxmlElement("w:tblW")
-        tbl_w.set(qn("w:w"), str(sum(widths))); tbl_w.set(qn("w:type"), "dxa")
-        if tbl_w.getparent() is None: tbl_pr.append(tbl_w)
+        tbl_w.set(qn("w:w"), str(sum(widths)))
+        tbl_w.set(qn("w:type"), "dxa")
+        if tbl_w.getparent() is None:
+            tbl_pr.append(tbl_w)
         existing_layout = tbl_pr.find(qn("w:tblLayout"))
-        if existing_layout is not None: tbl_pr.remove(existing_layout)
-        tbl_layout = OxmlElement("w:tblLayout"); tbl_layout.set(qn("w:type"), "fixed"); tbl_pr.append(tbl_layout)
+        if existing_layout is not None:
+            tbl_pr.remove(existing_layout)
+        tbl_layout = OxmlElement("w:tblLayout")
+        tbl_layout.set(qn("w:type"), "fixed")
+        tbl_pr.append(tbl_layout)
         existing_ind = tbl_pr.find(qn("w:tblInd"))
-        if existing_ind is not None: tbl_pr.remove(existing_ind)
-        tbl_ind = OxmlElement("w:tblInd"); tbl_ind.set(qn("w:w"), "0"); tbl_ind.set(qn("w:type"), "dxa"); tbl_pr.append(tbl_ind)
+        if existing_ind is not None:
+            tbl_pr.remove(existing_ind)
+        tbl_ind = OxmlElement("w:tblInd")
+        tbl_ind.set(qn("w:w"), "0")
+        tbl_ind.set(qn("w:type"), "dxa")
+        tbl_pr.append(tbl_ind)
         grid = table._tbl.tblGrid
-        for child in list(grid): grid.remove(child)
+        for child in list(grid):
+            grid.remove(child)
         for width in widths:
-            col = OxmlElement("w:gridCol"); col.set(qn("w:w"), str(width)); grid.append(col)
+            col = OxmlElement("w:gridCol")
+            col.set(qn("w:w"), str(width))
+            grid.append(col)
         for row in table.rows:
             for cell, width in zip(row.cells, widths):
-                tc_w = cell._tc.get_or_add_tcPr().get_or_add_tcW(); tc_w.set(qn("w:w"), str(width)); tc_w.set(qn("w:type"), "dxa")
+                tc_w = cell._tc.get_or_add_tcPr().get_or_add_tcW()
+                tc_w.set(qn("w:w"), str(width))
+                tc_w.set(qn("w:type"), "dxa")

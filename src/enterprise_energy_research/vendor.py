@@ -10,7 +10,7 @@ EMBEDDED_SKILLS = (
     "ppt-master",
     "frontend-design",
     "kimi-webbridge",
-    "lieflat-charts",
+    "diagram-design",
 )
 
 

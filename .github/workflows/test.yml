@@ -16,10 +16,10 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[full,test]"
-      - name: Install Chrome for headless Lieflat rendering
+      - name: Install Chrome for headless diagram PNG rendering
         # ubuntu-latest ships a snap-wrapper chromium that cannot render in
         # the runner; replace it with Google Chrome so chart rasterization
-        # (visuals.py) works deterministically.
+        # (diagram_design_adapter.py) works deterministically.
         run: >
           wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           && sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y

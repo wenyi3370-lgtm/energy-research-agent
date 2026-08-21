@@ -11,7 +11,7 @@ WORKDIR /app
 # Install system rendering dependencies before application sources so ordinary
 # Python/HTML edits keep the large Chromium layer cached.
 COPY pyproject.toml ./
-# 中文字体用于 SVG 文本；Chromium 将与 HTML 完全相同的 Lieflat SVG 栅格化供 Word 嵌入。
+# 中文字体用于 SVG 文本；Chromium 将与 HTML 完全相同的 diagram-design SVG 栅格化供 Word 嵌入。
 RUN apt-get update \
     && apt-get -o Acquire::Retries=5 install -y --no-install-recommends chromium-headless-shell fonts-wqy-microhei \
     && rm -rf /var/lib/apt/lists/*

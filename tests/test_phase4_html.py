@@ -31,7 +31,7 @@ class Phase4HtmlTests(unittest.TestCase):
         store = EvidenceStore(Path(temp) / "evidence.sqlite3")
         store.create_run(RunManifest(
             run_id=run_id, request_id=request_id, status=RunStatus.RUNNING,
-            config_hash="fixture", code_version="0.4.0", model_gateway={"mode": "fixture"},
+            config_hash="fixture", code_version="0.9.1", model_gateway={"mode": "fixture"},
         ))
         state, manifest, _ = Phase3Runner(store, load_yaml(ROOT / "config" / "enterprise_rules.yaml")).process_batches(
             ResearchState(run_id=run_id, request_id=request_id, status=RunStatus.RUNNING),
@@ -46,6 +46,10 @@ class Phase4HtmlTests(unittest.TestCase):
             updated_images.append(image.model_copy(update={
                 "local_asset_ref": str(asset), "sha256": hashlib.sha256(asset.read_bytes()).hexdigest(),
                 "mime_type": "image/png",
+                # simulated pixel-level verification outcome (vision pipeline)
+                "visual_verified": True,
+                "target_entity_id": image.entity_id or image.factory_id or image.product_id,
+                "verification_method": "vision",
             }))
         bundle = bundle.model_copy(update={
             "images": updated_images,
@@ -60,20 +64,24 @@ class Phase4HtmlTests(unittest.TestCase):
             result = FrozenHtmlPublisher(ArtifactType.ENTERPRISE_HTML).publish(bundle, binding, target)
             text = target.read_text(encoding="utf-8")
             self.assertEqual(result.status, "published")
-            self.assertIn("SEVC", text)
             self.assertIn(bundle.freeze.root_hash, text)
             self.assertIn("frozen-data", text)
-            self.assertIn("lieflat-inline", text)
-            self.assertIn('"renderer":"lieflat-charts-gallery-port-svg-v2"', text)
-            self.assertIn('data-visual-system="lieflat-mono"', text)
-            self.assertIn('data-color-system="mono"', text)
-            self.assertIn('id="entityRegister"', text)
-            self.assertNotIn('id="orgChart"', text)
+            # diagram-design visual system, Lieflat fully gone from user output
+            self.assertIn('data-visual-system="diagram-design"', text)
+            self.assertNotIn("lieflat", text.lower())
+            self.assertNotIn("renderer", text.lower())
+            self.assertNotIn("qa_report", text.lower())
+            # no entity-register chapter, no organization-chart heuristics
+            self.assertNotIn('id="entityRegister"', text)
+            self.assertNotIn("集团与成员证据名录", text)
             self.assertNotIn("org-arrow", text)
             self.assertNotIn("linear-gradient", text)
             self.assertNotIn("--navy", text)
+            # fully standalone: no remote scripts/stylesheets
             self.assertNotIn("<script src=", text)
-            self.assertNotIn("<link rel=\"stylesheet\"", text)
+            self.assertNotIn('<link rel="stylesheet"', text)
+            # footer carries source + date + bias note
+            self.assertIn("偏差说明", text)
 
     def test_product_html_contains_interactions_and_no_fabricated_image(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -86,6 +94,9 @@ class Phase4HtmlTests(unittest.TestCase):
             self.assertIn("productSearch", text)
             self.assertIn("comparePanel", text)
             self.assertIn("最多 4 项对比", text)
+            # the VERIFIED product with no usable photo still appears in the matrix
+            self.assertIn("工商业液冷储能柜", text)
+            self.assertIn("产品图片待补充", text)
         self.assertIn("data:image/png;base64,", text)
 
     def test_product_html_rejects_bundle_without_qualified_products(self) -> None:
@@ -94,7 +105,11 @@ class Phase4HtmlTests(unittest.TestCase):
             binding = next(item for item in manifest.artifacts if item.type == ArtifactType.ENTERPRISE_HTML)
             result = FrozenHtmlPublisher(ArtifactType.ENTERPRISE_HTML).publish(bundle, binding, Path(temp) / "products.html")
             self.assertEqual(result.status, "published")
-            self.assertIn("暂无满足证据与图片门禁", (Path(temp) / "products.html").read_text(encoding="utf-8"))
+            text = (Path(temp) / "products.html").read_text(encoding="utf-8")
+            # no qualified products: the payload carries an empty product list and
+            # no products chapter — no fabricated product cards
+            self.assertIn('"products":[]', text)
+            self.assertNotIn('"kind":"products"', text)
 
 
 if __name__ == "__main__":

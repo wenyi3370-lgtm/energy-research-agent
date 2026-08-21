@@ -27,7 +27,7 @@ class Phase4OfficeTests(unittest.TestCase):
         company = raw[0]["entities"][0]["canonical_name"]
         run_id, request_id = new_sortable_id("RUN"), new_sortable_id("REQ")
         store = EvidenceStore(Path(temp) / "evidence.sqlite3")
-        store.create_run(RunManifest(run_id=run_id, request_id=request_id, status=RunStatus.RUNNING, config_hash="fixture", code_version="0.6.1", model_gateway={"mode": "fixture"}))
+        store.create_run(RunManifest(run_id=run_id, request_id=request_id, status=RunStatus.RUNNING, config_hash="fixture", code_version="0.9.1", model_gateway={"mode": "fixture"}))
         state, manifest, _ = Phase3Runner(store, load_yaml(ROOT / "config" / "enterprise_rules.yaml")).process_batches(
             ResearchState(run_id=run_id, request_id=request_id, status=RunStatus.RUNNING), company,
             [ExtractedEvidenceBatch.model_validate(item) for item in raw], output_dir=Path(temp) / "freeze",
@@ -65,7 +65,11 @@ class Phase4OfficeTests(unittest.TestCase):
             self.assertIn("PAGE", footer_xml)
             self.assertIn("tblLayout", document_xml)
             self.assertNotIn('w:val="TableGrid"', document_xml)
-            self.assertIn("数据来源：证据冻结", document_xml)
+            # consulting footer: source + date + bias note (footer1.xml)
+            self.assertIn("数据来源：公开渠道已核验证据", footer_xml)
+            self.assertIn("偏差说明", footer_xml)
+            # figure source notes live next to figures in the body
+            self.assertIn("数据来源：", document_xml)
             report = Document(target)
             self.assertTrue(report.tables)
             for table in report.tables:
@@ -78,17 +82,38 @@ class Phase4OfficeTests(unittest.TestCase):
                             self.assertEqual(paragraph.paragraph_format.first_line_indent, 0)
                             self.assertEqual(paragraph.paragraph_format.left_indent, 0)
                             self.assertEqual(paragraph.paragraph_format.right_indent, 0)
-            visual_manifest = target.parent / "report_assets" / "visual_manifest.json"
+            asset_root = target.parent / "report_assets"
+            visual_manifest = asset_root / "visual_manifest.json"
             self.assertTrue(visual_manifest.is_file())
             payload = json.loads(visual_manifest.read_text(encoding="utf-8"))
-            self.assertGreaterEqual(document_xml.count("<w:drawing>"), len(payload["visuals"]))
-            self.assertTrue(all(item["renderer"] == "lieflat-charts-gallery-port-svg-v2" for item in payload["visuals"]))
-            self.assertTrue(all(item["template_source"] and item["template_card_title"] for item in payload["visuals"]))
-            self.assertTrue(all(item["template_id"] in {"F4", "F5", "L13"} for item in payload["visuals"]))
+            self.assertEqual(payload["visual_system"], "diagram-design")
+            self.assertEqual(payload["theme"], "enterprise-consulting-diagram-design")
+            self.assertEqual(payload["schema_version"], "2.0")
+            figures = asset_root / "figures"
+            png_visuals = [
+                item for item in payload["visuals"]
+                if (figures / f"{item['visual_id']}.png").is_file()
+            ]
+            # every visual with a rendered PNG is embedded in the document
+            self.assertGreaterEqual(document_xml.count("<w:drawing>"), len(png_visuals))
             for item in payload["visuals"]:
-                self.assertTrue((target.parent / "report_assets" / "figures" / f"{item['visual_id']}.png").is_file())
-                self.assertTrue((target.parent / "report_assets" / "figures" / f"{item['visual_id']}.svg").is_file())
-                self.assertTrue((target.parent / "report_assets" / "figures" / f"{item['visual_id']}.html").is_file())
+                self.assertIn(item["visual_type"], {
+                    "line", "bar", "radar", "quadrant", "scatter", "treemap", "timeline",
+                    "process", "data_flow", "sankey", "gantt", "pyramid", "tree",
+                    "fishbone", "architecture", "journey", "kpi_cards", "table",
+                })
+                self.assertTrue(item["decision_question"])
+                self.assertTrue(item["business_thesis"])
+                self.assertTrue((figures / f"{item['visual_id']}.html").is_file())
+                self.assertTrue((figures / f"{item['visual_id']}.svg").is_file())
+            # QA report exists and is separate from the user document
+            qa_path = asset_root / "publication_qa_report.json"
+            self.assertTrue(qa_path.is_file())
+            qa = json.loads(qa_path.read_text(encoding="utf-8"))
+            self.assertEqual(qa["freeze_id"], bundle.freeze.freeze_id)
+            self.assertNotIn("QA", document_xml)
+            # narrative artifact drives the document
+            self.assertTrue((asset_root / "narrative.json").is_file())
 
 
 if __name__ == "__main__":

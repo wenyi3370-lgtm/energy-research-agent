@@ -43,11 +43,12 @@ COMPONENTS = {
         "source": "local Codex Skill snapshot",
         "required": ["SKILL.md", "references/operations.md"],
     },
-    "lieflat-charts": {
-        "source": "larashero3-dotcom/lieflat-charts snapshot",
+    "diagram-design": {
+        "source": "https://github.com/cathrynlavery/diagram-design (MIT)",
         "required": [
-            "SKILL.md", "catalog.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
-            "templates/basics-gallery.html", "templates/lupi-gallery.html",
+            "SKILL.md", "LICENSE", "THIRD_PARTY_LICENSES.md",
+            "references/style-guide.md", "references/export.md",
+            "references/output-spec.md", "references/semantic-patterns.md",
         ],
     },
 }

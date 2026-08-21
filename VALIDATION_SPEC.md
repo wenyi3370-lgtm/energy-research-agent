@@ -74,7 +74,7 @@ Aggregate status:
 ### `ArtifactValidator`
 
 - Excel: required sheets, table headers, numeric cell types, URLs and ID columns.
-- Word: required chapters/appendices, Heading 1-3, TOC field, captions, page fields, source mapping, 15,000+ characters and 30+ rendered pages. Require catalog-backed Lieflat data charts only, adjacent source notes, three-line tables, `visual_manifest.json`, and HTML+SVG+300 DPI PNG siblings for every emitted chart. There is no chart quota: chapters without a matching data contract use prose/tables. Each Word PNG must be a direct rasterization of the same canonical SVG used by HTML; process, relationship, hierarchy, decision-tree, legacy native-chart and separately redrawn PNG fallbacks are blocking defects. When verified real images are selected, require all three image manifests, exact binary revalidation, an embedded image for every selected ID, and a caption/source pair for every non-cover image.
+- Word: narrative-driven chapters (only chapters whose evidence gate passed), Heading 1-3, TOC field, captions, page fields, source mapping, 15,000+ characters and 30+ rendered pages. Require diagram-design figures with adjacent source notes, three-line tables, `visual_manifest.json`, and HTML+SVG+PNG siblings for every emitted figure. There is no chart quota: insufficient data degrades to table/KPI/prose. Each Word PNG must be a direct rasterization of the same diagram-design HTML whose SVG is inlined by HTML; separately redrawn Word charts and dual-logic charting are blocking defects. When verified real images are selected, require all three image manifests, exact binary revalidation, an embedded image for every selected ID, and a caption/source pair for every non-cover image.
 - Enterprise HTML: required sections, embedded data, company header, source drawer and no network-critical dependencies.
 - Product HTML: generation route, 2-4 comparison, `—` for nulls and verified images.
 - Product HTML additionally requires verified locally archived images in cards, detail and comparison views, plus no network-critical image dependency.
@@ -108,7 +108,7 @@ Immediate blockers include:
 - product dashboard generated without qualifying products;
 - PPT outside 15-20 slides;
 - formal Word report below the configured character/page depth without an explicit concise-report request;
-- Word with a missing visual manifest, a non-catalog or legacy chart renderer, missing HTML/SVG/300-DPI-PNG siblings, missing figure source notes, grid tables, or a chart whose frozen data violates the selected Lieflat template contract;
+- Word with a missing visual manifest, missing HTML/SVG/PNG siblings, missing figure source notes, grid tables, or a figure whose frozen data fails the Visual Router's data-sufficiency checks for the routed diagram-design type;
 - Word/PPT with a selected verified image missing from the package, a binary/hash/MIME/dimension mismatch, a remote-only image, a missing image caption/source, or an image used to replace a required chart;
 - PPT delivered without all-slide render inspection or the required fix/full-rerender cycle;
 - PPT without storyline/evidence map, with three consecutive identical layouts, wrapped KPI/page tokens, chart text below 8 pt or geometry overlap/escape above 3 pt;

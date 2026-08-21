@@ -25,5 +25,8 @@ automation*.db
 *shanshan*
 *Shanshan*
 
-# 旧门户冒烟资产（非源码，不上传）
-artifacts/
+# 旧门户冒烟资产（非源码，不上传；仅匹配仓库根目录）
+/artifacts/
+
+# 本地冒烟测试输出（HTML/Word/PNG 产物，不提交）
+smoke_output/

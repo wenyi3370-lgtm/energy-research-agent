@@ -17,18 +17,34 @@ from enterprise_energy_research.settings import load_yaml
 
 DEFAULT_POLICY: dict[str, Any] = {
     "theme": {
-        "name": "sevc-kami-broker-v2",
+        "name": "enterprise-consulting-diagram-design",
         "colors": {
             "white": "#FFFFFF",
-            "black": "#111111",
+            "black": "#1B1F26",
             "navy": "#1B365D",
             "cobalt": "#2D5A8A",
-            "sevc_purple": "#6F2B86",
-            "cool_gray": "#6B7280",
-            "pale_gray": "#D9E2EC",
+            "cool_gray": "#4A5568",
+            "pale_gray": "#C9D4E0",
             "canvas": "#F7F8FA",
         },
         "minimum_chart_font_pt": 8,
+    },
+    "diagram_design": {
+        # diagram-design semantic tokens, enterprise consulting adaptation
+        "paper": "#FFFFFF",
+        "ink": "#1B1F26",
+        "muted": "#4A5568",
+        "soft": "#7A8399",
+        "accent": "#1B365D",
+        "accent_tint": "rgba(27,54,93,0.08)",
+        "font_sans": "Microsoft YaHei, PingFang SC, Noto Sans CJK SC, Source Han Sans SC, Arial, sans-serif",
+        "font_serif": "Source Han Serif SC, Noto Serif CJK SC, SimSun, serif",
+        "png_scale": 3,
+        # per-chapter photograph budgets (P0 image count control)
+        "image_budget_executive_summary": 2,
+        "image_budget_factories": 6,
+        "image_budget_products": 8,
+        "image_budget_analysis": 4,
     },
     "word": {
         "page": "A4",
@@ -44,11 +60,7 @@ DEFAULT_POLICY: dict[str, Any] = {
         "table_style": "three-line",
         "figure_png_dpi": 300,
         "maximum_figure_width_cm": 15.6,
-        "require_visual_per_core_chapter": False,
-        "minimum_analysis_characters_before_visual": 50,
-        "minimum_visual_families_when_visuals_ge_10": 0,
-        "maximum_bar_family_ratio": 0.75,
-        "minimum_formal_figures": 0,
+        "minimum_analysis_characters_before_visual": 0,
     },
 }
 

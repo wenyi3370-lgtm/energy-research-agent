@@ -13,7 +13,7 @@ class VendorEmbeddingTests(unittest.TestCase):
     def test_all_external_skills_are_embedded(self) -> None:
         self.assertEqual(
             set(EMBEDDED_SKILLS),
-            {"anysearch", "excel-master", "ppt-master", "frontend-design", "kimi-webbridge", "lieflat-charts"},
+            {"anysearch", "excel-master", "ppt-master", "frontend-design", "kimi-webbridge", "diagram-design"},
         )
         for name in EMBEDDED_SKILLS:
             with self.subTest(name=name):
@@ -54,14 +54,21 @@ class VendorEmbeddingTests(unittest.TestCase):
             with self.subTest(relative=relative):
                 self.assertTrue((root / relative).is_file())
 
-    def test_lieflat_catalog_and_license_are_present(self) -> None:
-        root = embedded_skill_root("lieflat-charts")
+    def test_diagram_design_skill_and_license_are_present(self) -> None:
+        root = embedded_skill_root("diagram-design")
         for relative in (
-            "SKILL.md", "catalog.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
-            "templates/basics-gallery.html", "templates/lupi-gallery.html",
+            "SKILL.md", "LICENSE", "THIRD_PARTY_LICENSES.md",
+            "references/style-guide.md", "references/export.md",
+            "references/output-spec.md", "references/semantic-patterns.md",
         ):
             with self.subTest(relative=relative):
                 self.assertTrue((root / relative).is_file())
+
+    def test_diagram_design_third_party_notices_are_present(self) -> None:
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1]
+        self.assertTrue((root / "third_party" / "diagram-design" / "LICENSE").is_file())
+        self.assertTrue((root / "third_party" / "diagram-design" / "NOTICE.md").is_file())
 
 
 if __name__ == "__main__":

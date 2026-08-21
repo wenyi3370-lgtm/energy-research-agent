@@ -21,7 +21,7 @@ Use the copy under `vendor/skills/<name>/` first. Accept an explicitly injected 
 | Frontend Design | `vendor/skills/frontend-design/` | instructions consumed by `FrozenHtmlPublisher` | standalone HTML, accessibility, interaction and 360/768/1440 render checks |
 | Kimi WebBridge | `vendor/skills/kimi-webbridge/` | external daemon at `127.0.0.1:10086` | status must show daemon running and extension connected |
 | AnySearch | `vendor/skills/anysearch/` | `scripts/anysearch_cli.py` with JS/PowerShell/Bash alternatives | run `get_sub_domains` before vertical search; try all present bundled runtimes before outage; preserve required parameters and fail closed |
-| Lieflat Charts | `vendor/skills/lieflat-charts/` | deterministic Python/SVG adapter in `artifacts/visuals.py` | catalog-only data charts; one offline HTML + editable SVG + 300 DPI PNG; no process/relationship fallback; PolyForm Noncommercial license gate |
+| diagram-design | `vendor/skills/diagram-design/` | `artifacts/visual_router.py` (semantic routing) + `artifacts/diagram_design_adapter.py` (deterministic SVG/HTML/PNG) | consulting editorial design system with enterprise profile; one offline HTML (inline SVG) + editable SVG + high-resolution PNG rasterized from the same HTML; anti-chart-abuse routing; MIT license with notices in `third_party/diagram-design/` |
 
 ## Quality-preservation rules
 
