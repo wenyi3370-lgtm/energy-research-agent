@@ -1126,6 +1126,8 @@ class DiagramDesignAdapter:
             browser,
             "--headless=new", "--disable-gpu", "--hide-scrollbars",
             "--no-first-run", "--disable-extensions",
+            # containers/CI run as non-root without a usable sandbox
+            "--no-sandbox",
             f"--force-device-scale-factor={scale}",
             f"--window-size={width},{height}",
             f"--screenshot={png_path.resolve()}",
