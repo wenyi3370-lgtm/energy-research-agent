@@ -233,15 +233,15 @@ class EvidenceNormalizer:
     def _canonicalize(output: NormalizedEvidence) -> None:
         """P0: normalization must complete BEFORE Freeze (units, products, factories)."""
         output.claims = UnitNormalizer().normalize_claims(output.claims)
-        output.products = ProductCanonicalizer().canonicalize(output.products, output.images)
-        output.factories = FactoryCanonicalizer().canonicalize(output.factories)
-        # Merged-away product ids must not leave dangling ProducesProduct edges;
-        # the surviving canonical record keeps the union of source ids.
-        canonical_product_ids = {product.product_id for product in output.products}
-        output.edges = [
-            edge for edge in output.edges
-            if edge.relation != "ProducesProduct" or edge.to_id in canonical_product_ids
-        ]
+        output.products, product_rebind = ProductCanonicalizer().canonicalize(output.products, output.images)
+        output.factories, factory_rebind = FactoryCanonicalizer().canonicalize(output.factories)
+        # Merged-away ids must not leave dangling edges: remap to the
+        # surviving canonical records (referential integrity at freeze).
+        for edge in output.edges:
+            if edge.relation == "ProducesProduct" and edge.to_id in product_rebind:
+                edge.to_id = product_rebind[edge.to_id]
+            if edge.relation == "OperatesFactory" and edge.to_id in factory_rebind:
+                edge.to_id = factory_rebind[edge.to_id]
 
     @staticmethod
     def _edge(

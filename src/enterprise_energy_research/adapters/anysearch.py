@@ -128,6 +128,10 @@ class AnySearchCliAdapter:
             )
 
         diagnostics: list[str] = []
+        # Long-pole pages may hang on transport; bound each CLI call. The
+        # default stays 180s (production); ANYSEARCH_CLI_TIMEOUT allows
+        # faster fail-overs on slow/proxied networks.
+        cli_timeout = int(os.environ.get("ANYSEARCH_CLI_TIMEOUT", "180"))
         for index, prefix in enumerate(prefixes):
             command = self._build_command(
                 prefix,
@@ -145,7 +149,7 @@ class AnySearchCliAdapter:
                     text=True,
                     encoding="utf-8",
                     errors="replace",
-                    timeout=180,
+                    timeout=cli_timeout,
                 )
             except Exception as exc:
                 diagnostics.append(f"{runtime} runtime exception: {type(exc).__name__}: {exc}")

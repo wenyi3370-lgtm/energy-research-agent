@@ -224,16 +224,18 @@ class P0VisualSystemTests(unittest.TestCase):
                 "product_id": "PROD-DUP", "source_ids": ["S2"],
                 "description": "补充描述",
             })
-            merged = ProductCanonicalizer().canonicalize([product, duplicate])
+            merged, rebind = ProductCanonicalizer().canonicalize([product, duplicate])
             self.assertEqual(len(merged), 1)
             self.assertIn("S2", merged[0].source_ids)
             # first-seen record keeps its own data; the union only extends lists
             self.assertEqual(merged[0].description, product.description)
+            self.assertIn("PROD-DUP", rebind)
             factory = bundle.factories[0]
             factory_dup = factory.model_copy(update={"factory_id": "FAC-DUP", "processes": ["注塑"]})
-            factories = FactoryCanonicalizer().canonicalize([factory, factory_dup])
+            factories, factory_rebind = FactoryCanonicalizer().canonicalize([factory, factory_dup])
             self.assertEqual(len(factories), 1)
             self.assertIn("注塑", factories[0].processes)
+            self.assertIn("FAC-DUP", factory_rebind)
 
     # ── TEST 13: analysis layer, no fabrication ─────────────────────────────
     def test_13_analysis_derives_yoy_and_cagr_with_full_trace(self) -> None:

@@ -56,7 +56,7 @@ GOAL_CONTRACTS: dict[str, GoalExtractionContract] = {
     "company_identity": GoalExtractionContract(
         goal_family="company_identity",
         business_question="查明企业法定全称、注册名称、曾用名、统一社会信用代码与官方身份。",
-        expected_fields=["canonical_company_name", "registered_name", "aliases", "former_names", "official_website", "registration_identifier", "founded_date"],
+        expected_fields=["canonical_company_name", "registered_name", "aliases", "former_names", "official_website", "registration_identifier", "founded_date", "core_business", "business_segment"],
         preferred_source_types=OFFICIAL_TYPES,
         normalization_rules=["官方页面明确写出的公司全称必须形成 identity Claim，并保留原文引用"],
         criticality="critical",

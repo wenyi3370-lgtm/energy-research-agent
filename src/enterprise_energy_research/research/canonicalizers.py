@@ -72,9 +72,14 @@ def _name_key(name: str) -> str:
 
 
 class ProductCanonicalizer:
-    """Merge duplicate product records of the same real-world product."""
+    """Merge duplicate product records of the same real-world product.
 
-    def canonicalize(self, products: list[Product], images: list[ImageEvidence] | None = None) -> list[Product]:
+    Returns ``(merged_products, rebind)`` where ``rebind`` maps every
+    merged-away product id to its surviving canonical id, so edges and
+    images keep pointing at real records (referential integrity).
+    """
+
+    def canonicalize(self, products: list[Product], images: list[ImageEvidence] | None = None) -> tuple[list[Product], dict[str, str]]:
         images = images or []
         merged: dict[str, Product] = {}
         rebind: dict[str, str] = {}  # merged-away product_id -> canonical product_id
@@ -91,7 +96,7 @@ class ProductCanonicalizer:
         for image in images:
             if image.product_id in rebind:
                 image.product_id = rebind[image.product_id]
-        return list(merged.values())
+        return list(merged.values()), rebind
 
     @staticmethod
     def _merge(keep: Product, other: Product) -> Product:
@@ -113,10 +118,15 @@ class ProductCanonicalizer:
 
 
 class FactoryCanonicalizer:
-    """Merge duplicate factory records of the same physical site."""
+    """Merge duplicate factory records of the same physical site.
 
-    def canonicalize(self, factories: list[Factory]) -> list[Factory]:
+    Returns ``(merged_factories, rebind)`` so operators' edges can be
+    remapped to the surviving canonical factory id (referential integrity).
+    """
+
+    def canonicalize(self, factories: list[Factory]) -> tuple[list[Factory], dict[str, str]]:
         merged: dict[str, Factory] = {}
+        rebind: dict[str, str] = {}
         for factory in factories:
             key = _name_key(f"{factory.name or ''}|{factory.address or ''}")
             existing = merged.get(key)
@@ -124,7 +134,10 @@ class FactoryCanonicalizer:
                 merged[key] = factory.model_copy(deep=True)
             else:
                 merged[key] = FactoryCanonicalizer._merge(existing, factory)
-        return list(merged.values())
+                canonical_id = merged[key].factory_id
+                rebind[existing.factory_id] = canonical_id
+                rebind[factory.factory_id] = canonical_id
+        return list(merged.values()), rebind
 
     @staticmethod
     def _merge(keep: Factory, other: Factory) -> Factory:

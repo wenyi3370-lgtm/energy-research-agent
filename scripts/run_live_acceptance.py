@@ -80,12 +80,13 @@ def visual_regression_verdicts() -> dict:
 
     from enterprise_energy_research.artifacts import html as html_module
     from enterprise_energy_research.artifacts.visual_policy import colors, word_policy
-    frozen_css = "c9c996cb68ec55313327d86a2e872a450592135f57e33553e1bbcdad7252ff8e"
+    # P0 diagram-design baseline (was the Lieflat-era hash before the refactor).
+    frozen_css = "b6006cc8915c91199575fc937cb4483ffb9b6d46e72363e16b7dd293aef99167"
     css_ok = hashlib.sha256(html_module.CSS.encode("utf-8")).hexdigest() == frozen_css
     frozen_colors = {
-        "black": "#111111", "canvas": "#F7F8FA", "cobalt": "#2D5A8A",
-        "cool_gray": "#6B7280", "navy": "#1B365D", "pale_gray": "#D9E2EC",
-        "sevc_purple": "#6F2B86", "white": "#FFFFFF",
+        "black": "#1B1F26", "canvas": "#F7F8FA", "cobalt": "#2D5A8A",
+        "cool_gray": "#4A5568", "navy": "#1B365D", "pale_gray": "#C9D4E0",
+        "white": "#FFFFFF",
     }
     return {
         "VISUAL_REGRESSION": "PASS" if (css_ok and colors() == frozen_colors and word_policy()["page"] == "A4") else "FAIL",
