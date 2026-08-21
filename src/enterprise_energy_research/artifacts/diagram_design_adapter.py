@@ -1185,6 +1185,7 @@ class DiagramDesignAdapter:
             str(local_appdata / "Google" / "Chrome" / "Application" / "chrome.exe"),
             str(local_appdata / "Microsoft" / "Edge" / "Application" / "msedge.exe"),
             "/usr/bin/chromium", "/usr/bin/chromium-browser",
+            "/usr/bin/chromium-headless-shell",
             "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable",
         ]
         for candidate in candidates:
