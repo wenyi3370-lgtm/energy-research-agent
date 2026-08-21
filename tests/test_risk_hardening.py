@@ -48,12 +48,20 @@ def _load_bundle(temp: str):
 
 
 class RiskHardeningTests(unittest.TestCase):
+    def _fake_settings(self, *, deepseek_key=None, openai_key=None, provider="auto",
+                       deepseek_base="https://api.deepseek.com",
+                       openai_base="https://api.openai.com/v1"):
+        return mock.Mock(
+            deepseek_api_key=deepseek_key, openai_api_key=openai_key,
+            vision_provider=provider, deepseek_api_base=deepseek_base,
+            openai_api_base=openai_base,
+            deepseek_vision_model="deepseek-v4-flash-vision-exp",
+            openai_vision_model="gpt-4o-mini",
+        )
+
     def test_vision_verifier_prefers_deepseek_v4_flash_vision_exp(self) -> None:
-        with mock.patch.dict(os.environ, {
-            "EER_DEEPSEEK_API_KEY": "sk-deepseek-test",
-        }, clear=False):
-            settings = Settings()
-            self.assertEqual(settings.deepseek_vision_model, "deepseek-v4-flash-vision-exp")
+        with mock.patch("enterprise_energy_research.settings.Settings",
+                        return_value=self._fake_settings(deepseek_key="sk-deepseek-test")):
             verifier = default_vision_verifier()
             self.assertIsNotNone(verifier, "已配置 DeepSeek 网关凭据时视觉核验应自动可用")
             self.assertIsInstance(verifier, GatewayVisionVerifier)
@@ -61,34 +69,30 @@ class RiskHardeningTests(unittest.TestCase):
             self.assertEqual(verifier.model, "deepseek-v4-flash-vision-exp")
 
     def test_vision_verifier_falls_back_to_openai_when_no_deepseek_key(self) -> None:
-        env = {
-            "EER_DEEPSEEK_API_KEY": "",
-            "EER_OPENAI_API_KEY": "sk-openai-test",
-            "EER_OPENAI_API_BASE": "https://gateway.example.com/v1",
-        }
-        with mock.patch.dict(os.environ, env, clear=False):
-            for key in ("EER_DEEPSEEK_API_KEY",):
-                os.environ.pop(key, None)
+        with mock.patch("enterprise_energy_research.settings.Settings",
+                        return_value=self._fake_settings(openai_key="sk-openai-test",
+                                                         openai_base="https://gateway.example.com/v1")):
             verifier = default_vision_verifier()
             self.assertIsNotNone(verifier)
             self.assertEqual(verifier.endpoint, "https://gateway.example.com/v1")
             self.assertEqual(verifier.model, "gpt-4o-mini")
 
     def test_vision_verifier_absent_when_nothing_configured(self) -> None:
-        env = {
-            "ENTERPRISE_VISION_ENDPOINT": "",
-            "ENTERPRISE_VISION_KEY": "",
-            "ENTERPRISE_VISION_MODEL": "",
-            "EER_DEEPSEEK_API_KEY": "",
-            "EER_OPENAI_API_KEY": "",
-            "EER_OPENAI_API_BASE": "",
-        }
-        with mock.patch.dict(os.environ, env, clear=False):
-            for key in list(os.environ):
-                if key in env:
-                    os.environ.pop(key, None)
+        with mock.patch("enterprise_energy_research.settings.Settings",
+                        return_value=self._fake_settings()):
             verifier = default_vision_verifier()
         self.assertIsNone(verifier, "无任何视觉能力配置时必须诚实返回 None")
+
+    def test_settings_reads_env_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            env_path = Path(temp) / ".env"
+            env_path.write_text(
+                "EER_DEEPSEEK_API_KEY=sk-from-dotenv\nEER_OPENAI_API_KEY=sk-openai-dotenv\n",
+                encoding="utf-8",
+            )
+            settings = Settings(_env_file=env_path)
+            self.assertEqual(settings.deepseek_api_key, "sk-from-dotenv")
+            self.assertEqual(settings.openai_api_key, "sk-openai-dotenv")
 
     def test_visual_verify_runs_on_archived_bytes(self) -> None:
         from enterprise_energy_research.domain.models import ImageEvidence

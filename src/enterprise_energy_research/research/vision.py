@@ -114,7 +114,9 @@ class GatewayVisionVerifier:
                     {"type": "image_url", "image_url": {"url": data_url}},
                 ],
             }],
-            "max_tokens": 300,
+            # DeepSeek-V4-Flash-Vision-Exp is a reasoning model: reasoning
+            # tokens count against max_tokens, so keep headroom for the answer.
+            "max_tokens": 1500,
         }
         request = urllib.request.Request(
             self.endpoint + "/chat/completions",

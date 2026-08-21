@@ -9,9 +9,19 @@ import yaml
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# .env lives at the repository root; accept it from the working directory
+# first (docker-compose style), then from the repo root (source checkout).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_ENV_FILES: tuple[str, ...] = (".env", str(_REPO_ROOT / ".env"))
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="EER_", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="EER_",
+        extra="ignore",
+        env_file=_ENV_FILES,
+        env_file_encoding="utf-8",
+    )
 
     primary_provider: str = "deepseek"
     fallback_provider: str = "openai"
