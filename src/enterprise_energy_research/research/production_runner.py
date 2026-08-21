@@ -761,7 +761,8 @@ class AdaptiveResearchRunner:
         self.cumulative.entities, self.cumulative.edges = EntityMapper().apply_evidence(
             self.cumulative.entities, self.cumulative.edges, self.cumulative.claims,
         )
-        self.cumulative.images = ImageValidator().validate(
+        image_validator = ImageValidator()
+        self.cumulative.images = image_validator.validate(
             self.cumulative.images, self.cumulative.entities, self.cumulative.sources,
         )
         archive_result = ImageArchiveResult(images=self.cumulative.images)
@@ -776,6 +777,11 @@ class AdaptiveResearchRunner:
             self.cumulative.images = archive_result.images
             telemetry.images_archived = len(archive_result.archived_image_ids)
             telemetry.image_download_failures += len(archive_result.failed_image_ids)
+            # P0: pixel-level visual verification runs AFTER archiving — a
+            # vision verifier needs the local bytes, never context alone.
+            self.cumulative.images = image_validator.visual_verify(
+                self.cumulative.images, base_dir=output_dir,
+            )
         self.cumulative.products, _ = ProductDetector().detect(
             self.cumulative.products, self.cumulative.images, self.cumulative.sources,
             self.cumulative.claims,
