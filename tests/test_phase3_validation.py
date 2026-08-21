@@ -64,7 +64,7 @@ class Phase3ValidationTests(unittest.TestCase):
         self.assertEqual(conflicts, [])
         self.assertTrue(all(item.verification_status == VerificationStatus.VERIFIED for item in claims))
 
-    def test_conflicting_core_field_is_blocking_and_not_silently_selected(self) -> None:
+    def test_conflicting_core_field_selects_most_authoritative_claim(self) -> None:
         sources = [
             self._source("SOURCE-S001", SourceLevel.SOURCE_A, "official.example.com", "Company"),
             self._source("SOURCE-S002", SourceLevel.SOURCE_A, "filing.example.gov.cn", "Regulator"),
@@ -74,8 +74,12 @@ class Phase3ValidationTests(unittest.TestCase):
             self._claim("CLAIM-000002", "SOURCE-S002", 120),
         ], sources)
         self.assertEqual(len(conflicts), 1)
-        self.assertEqual(conflicts[0].status.value, "BLOCKING")
-        self.assertTrue(all(item.verification_status == VerificationStatus.CONFLICTING for item in claims))
+        conflict = conflicts[0]
+        self.assertEqual(conflict.status.value, "RESOLVED")
+        self.assertEqual(conflict.resolution, "select_authoritative")
+        self.assertEqual(conflict.selected_claim_ids, ["CLAIM-000002"])
+        self.assertEqual(claims[1].verification_status, VerificationStatus.VERIFIED)
+        self.assertEqual(claims[0].verification_status, VerificationStatus.CONFLICTING)
 
     def test_official_contextual_image_is_verified_but_small_image_is_rejected(self) -> None:
         entity = Entity(

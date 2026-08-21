@@ -54,8 +54,8 @@ class ReviewPolicy:
 
     DEFAULTS: dict[str, dict[str, Any]] = {
         "RV-01_pass_with_warnings": {
-            "enabled": True,
-            "reason": "validation passed with warnings; a human must confirm",
+            "enabled": False,
+            "reason": "validation warning retained for automatic adjudication audit",
         },
         "RV-02_low_confidence": {
             "enabled": False,

@@ -25,9 +25,8 @@ region/product/research_type/topics/priority/notes）。n8n 版本见 `automatio
 
 ## 通知时机
 
-`FeishuNotifier.NOTIFY_ON = {REVIEW_REQUIRED, PUBLISHED, FAILED, BLOCKED, REJECTED}`：
-- REVIEW_REQUIRED → 通知评审人介入
+`FeishuNotifier.NOTIFY_ON = {PUBLISHED, FAILED, BLOCKED, REJECTED}`：
 - PUBLISHED → 通知需求方交付
-- FAILED/BLOCKED/REJECTED → 通知异常与人工决策
+- FAILED/BLOCKED/REJECTED → 通知异常；不会要求业务人员裁决
 
 通知失败只写 warning 日志 + 事件，绝不影响 run 状态推进。

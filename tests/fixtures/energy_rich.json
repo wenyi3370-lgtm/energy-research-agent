@@ -1,0 +1,129 @@
+[
+  {
+    "source_url": "https://www.example-glass.com/energy",
+    "source_title": "示例玻璃制造有限公司 节能改造公示",
+    "publisher": "示例玻璃制造有限公司",
+    "source_kind": "official_company",
+    "extraction_method": "recorded_fixture",
+    "retrieval_adapter": "anysearch",
+    "is_search_snippet": false,
+    "entities": [
+      {
+        "entity_key": "gl",
+        "canonical_name": "示例玻璃制造有限公司",
+        "entity_type": "company",
+        "official_website": "https://www.example-glass.com"
+      }
+    ],
+    "claims": [
+      {
+        "entity_key": "gl",
+        "field_name": "canonical_company_name",
+        "value": "示例玻璃制造有限公司",
+        "value_type": "string",
+        "raw_text": "公司全称：示例玻璃制造有限公司",
+        "context_text": "示例玻璃制造有限公司主营玻璃制造。",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "gl",
+        "field_name": "electricity_consumption",
+        "value": 8000,
+        "value_type": "number",
+        "raw_text": "electricity_consumption=8000",
+        "context_text": "页面披露 electricity_consumption 为 8000",
+        "qualifier": "exact",
+        "unit": "万千瓦时"
+      },
+      {
+        "entity_key": "gl",
+        "field_name": "energy_consumption",
+        "value": 12000,
+        "value_type": "number",
+        "raw_text": "energy_consumption=12000",
+        "context_text": "页面披露 energy_consumption 为 12000",
+        "qualifier": "exact",
+        "unit": "吨标煤"
+      },
+      {
+        "entity_key": "gl",
+        "field_name": "roof_area",
+        "value": 30000,
+        "value_type": "number",
+        "raw_text": "roof_area=30000",
+        "context_text": "页面披露 roof_area 为 30000",
+        "qualifier": "exact",
+        "unit": "m2"
+      },
+      {
+        "entity_key": "gl",
+        "field_name": "transformer_capacity",
+        "value": 20000,
+        "value_type": "number",
+        "raw_text": "transformer_capacity=20000",
+        "context_text": "页面披露 transformer_capacity 为 20000",
+        "qualifier": "exact",
+        "unit": "kVA"
+      },
+      {
+        "entity_key": "gl",
+        "field_name": "energy_equipment",
+        "value": [
+          "空压机",
+          "冷机"
+        ],
+        "value_type": "string",
+        "raw_text": "energy_equipment=['空压机', '冷机']",
+        "context_text": "页面披露 energy_equipment 为 ['空压机', '冷机']",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "gl",
+        "field_name": "pv_capacity",
+        "value": 5,
+        "value_type": "number",
+        "raw_text": "pv_capacity=5",
+        "context_text": "页面披露 pv_capacity 为 5",
+        "qualifier": "exact",
+        "unit": "MW"
+      },
+      {
+        "entity_key": "gl",
+        "field_name": "project_name",
+        "value": "厂房屋顶分布式光伏项目",
+        "value_type": "string",
+        "raw_text": "project_name=厂房屋顶分布式光伏项目",
+        "context_text": "页面披露 project_name 为 厂房屋顶分布式光伏项目",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "gl",
+        "field_name": "energy_project",
+        "value": "屋顶光伏+储能示范项目",
+        "value_type": "string",
+        "raw_text": "energy_project=屋顶光伏+储能示范项目",
+        "context_text": "页面披露 energy_project 为 屋顶光伏+储能示范项目",
+        "qualifier": "exact",
+        "unit": null
+      }
+    ],
+    "factories": [
+      {
+        "factory_key": "g1",
+        "operator_entity_key": "gl",
+        "name": "玻璃制造基地",
+        "address": "河北省邢台市",
+        "processes": [
+          "熔炼",
+          "成型",
+          "退火"
+        ]
+      }
+    ],
+    "products": [],
+    "images": []
+  }
+]

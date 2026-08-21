@@ -17,9 +17,11 @@ from enterprise_energy_research.domain.models import (
     ImageEvidence,
     Product,
     Retrieval,
+    Solution,
     Source,
 )
 
+from .field_registry import CanonicalFieldRegistry
 from .source_grader import SourceGrader
 
 
@@ -36,6 +38,7 @@ class NormalizedEvidence:
     images: list[ImageEvidence] = field(default_factory=list)
     products: list[Product] = field(default_factory=list)
     energy_profiles: list[EnergyProfile] = field(default_factory=list)
+    solutions: list[Solution] = field(default_factory=list)
 
 
 class EvidenceNormalizer:
@@ -98,7 +101,10 @@ class EvidenceNormalizer:
                         entity_id=entity_id,
                         canonical_name=extracted.canonical_name,
                         entity_type=extracted.entity_type,
-                        registered_name=extracted.canonical_name,
+                        # registered_name is only the page-stated registered
+                        # name; a bare canonical name is never promoted into a
+                        # fabricated legal name.
+                        registered_name=extracted.registered_name,
                         aliases=extracted.aliases,
                         official_website=extracted.official_website,
                         registration_region=extracted.registration_region,
@@ -134,8 +140,12 @@ class EvidenceNormalizer:
                         brand=extracted.brand,
                         model=extracted.model,
                         category=extracted.category,
+                        series=extracted.series,
                         description=extracted.description,
                         parameters=extracted.parameters,
+                        applications=extracted.applications,
+                        customer_segment=extracted.customer_segment,
+                        commercial_status=extracted.commercial_status,
                         source_ids=[source_id],
                     ))
                     seen_products.add(extracted.product_key)
@@ -156,10 +166,15 @@ class EvidenceNormalizer:
                 else:
                     raw_text = extracted.field_name
                 context_text = extracted.context_text or raw_text
+                # CanonicalFieldRegistry (P0-4): raw field name -> canonical
+                # field; the raw name is preserved for audit.
+                raw_field_name = extracted.field_name
+                canonical_field = CanonicalFieldRegistry.canonicalize(raw_field_name)
                 output.claims.append(Claim(
                     claim_id=sequence.next("claim"),
                     entity_id=entity_id,
-                    field_name=extracted.field_name,
+                    field_name=canonical_field,
+                    raw_field_name=raw_field_name,
                     value=extracted.value,
                     value_type=extracted.value_type,
                     unit=extracted.unit,

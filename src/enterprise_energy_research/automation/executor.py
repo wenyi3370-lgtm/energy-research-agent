@@ -211,7 +211,7 @@ class SyntheticKernelExecutor:
             validation_status=report.status,
             confidence=self._mean_claim_confidence(store, run_id),
             risk_level=self._risk_for(report.status),
-            review_required=report.status == ValidationStatus.PASS_WITH_WARNINGS,
+            review_required=False,
             review_reasons=[f"{finding.code}: {finding.message}" for finding in report.findings],
             evidence_count=sum(len(store.list(run_id, kind)) for kind in EVIDENCE_KINDS),
             conflict_count=len(store.list(run_id, "conflict")),

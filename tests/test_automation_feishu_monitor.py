@@ -55,7 +55,7 @@ class FeishuTests(unittest.TestCase):
         self.assertEqual(len(adapter.sent), 0)
         gated = ResearchResult(run_id="R2", task_id="T2", status=TaskStatus.REVIEW_REQUIRED)
         notifier.notify(gated)
-        self.assertEqual(len(adapter.sent), 1)
+        self.assertEqual(len(adapter.sent), 0)
 
     def test_operational_text_does_not_create_research_result(self):
         adapter = MockFeishuAdapter()

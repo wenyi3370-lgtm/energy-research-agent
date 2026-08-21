@@ -194,35 +194,23 @@ class TestExecuteRun(ServiceTestCase):
         self.assertEqual(self.executor.freeze_calls, 0)
         self.assertIsNotNone(final.finished_at)
 
-    def test_review_required_then_approve_publishes(self):
+    def test_review_flag_is_auto_adjudicated_and_publishes(self):
         result = self.service.submit(make_request())
         self.executor.outcome = ExecutionOutcome(
             validation_status=ValidationStatus.PASS_WITH_WARNINGS,
             review_required=True,
             review_reasons=["CONFLICT_01: price conflict"],
         )
-        gated = self.service.execute_run(result.run_id)
-        self.assertEqual(gated.status, TaskStatus.REVIEW_REQUIRED)
-        self.assertTrue(gated.review_required)
-        self.assertIn("CONFLICT_01", gated.review_reasons[0])
-        self.assertEqual(self.executor.freeze_calls, 0)
-        approved = self.service.submit_review(
-            result.run_id,
-            ReviewSubmission(
-                reviewer="analyst_01",
-                decision=ReviewDecision.APPROVE,
-                reason="conflicts reviewed",
-            ),
-        )
+        approved = self.service.execute_run(result.run_id)
         self.assertEqual(approved.status, TaskStatus.PUBLISHED)
+        self.assertFalse(approved.review_required)
+        self.assertIn("CONFLICT_01", approved.review_reasons[0])
         self.assertEqual(self.executor.freeze_calls, 1)
         with self._session() as session:
             from enterprise_energy_research.automation.db import TaskRepository
 
             reviews = TaskRepository(session).list_reviews(result.run_id)
-        self.assertEqual(len(reviews), 1)
-        self.assertEqual(reviews[0].decision, "APPROVE")
-        self.assertEqual(reviews[0].reviewer, "analyst_01")
+        self.assertEqual(reviews, [])
 
     def test_edit_and_approve_requires_modified_value(self):
         from pydantic import ValidationError
@@ -234,36 +222,29 @@ class TestExecuteRun(ServiceTestCase):
                 reason="edit",
             )
 
-    def test_review_reject_is_terminal(self):
+    def test_review_reject_is_unavailable_after_auto_publish(self):
         result = self.service.submit(make_request())
         self.executor.outcome = ExecutionOutcome(
             validation_status=ValidationStatus.PASS_WITH_WARNINGS, review_required=True
         )
         self.service.execute_run(result.run_id)
-        rejected = self.service.submit_review(
-            result.run_id,
-            ReviewSubmission(reviewer="analyst_01", decision=ReviewDecision.REJECT, reason="not actionable"),
-        )
-        self.assertEqual(rejected.status, TaskStatus.REJECTED)
-        self.assertIsNotNone(rejected.finished_at)
+        with self.assertRaises(InvalidTransitionError):
+            self.service.submit_review(
+                result.run_id,
+                ReviewSubmission(reviewer="analyst_01", decision=ReviewDecision.REJECT, reason="not actionable"),
+            )
 
-    def test_review_research_again_requeues(self):
+    def test_review_research_again_is_unavailable_after_auto_publish(self):
         result = self.service.submit(make_request())
         self.executor.outcome = ExecutionOutcome(
             validation_status=ValidationStatus.PASS_WITH_WARNINGS, review_required=True
         )
         self.service.execute_run(result.run_id)
-        requeued = self.service.submit_review(
-            result.run_id,
-            ReviewSubmission(reviewer="analyst_01", decision=ReviewDecision.RESEARCH_AGAIN, reason="more sources needed"),
-        )
-        self.assertEqual(requeued.status, TaskStatus.QUEUED)
-        with self._session() as session:
-            from enterprise_energy_research.automation.db import TaskRepository
-
-            events = TaskRepository(session).list_events(result.run_id)
-        tail = [e.to_status for e in events if e.event_type == "STATUS_TRANSITION"][-2:]
-        self.assertEqual(tail, ["RETRYING", "QUEUED"])
+        with self.assertRaises(InvalidTransitionError):
+            self.service.submit_review(
+                result.run_id,
+                ReviewSubmission(reviewer="analyst_01", decision=ReviewDecision.RESEARCH_AGAIN, reason="more sources needed"),
+            )
 
     def test_review_on_non_gate_state_raises(self):
         result = self.service.submit(make_request())

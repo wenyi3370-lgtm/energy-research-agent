@@ -2,7 +2,7 @@
 
 将新能源 / 电池 / 储能 / V2G / 海外市场研究，从"人工 + AI 客户端"升级为
 **企业员工可自助使用的自动化研究平台**：一句话发起调研 → 真实联网研究 →
-证据冲突自动拦截 → 人工裁决 → 成果文件直达飞书群；每天自动推送
+身份与证据冲突自动裁决 → 成果文件直达飞书群；每天自动推送
 **V2G & 储能行业情报日报**。
 
 > Evidence-first：研究产出证据 → 校验冻结 → 发布器只消费冻结快照。
@@ -14,7 +14,7 @@
 
 - 🔍 **真实联网研究**：AnySearch 搜索 + Kimi WebBridge 浏览器深度调研 + DeepSeek 结构化抽取
 - 🗣️ **自然语言发起**：一句话描述需求，AI 自动解析参数（引导页 http://localhost:8000）
-- 🛡️ **证据冲突自动拦截**：不同来源说法冲突时停止发布，人工裁决后放行（可审计）
+- 🛡️ **冲突自动裁决**：按来源权威性、独立支持数、时效与精确度选择最可信说法，备选值完整留痕
 - 📄 **同源交付**：Excel 数据总表 + 咨询级 Word + 融合管理驾驶舱与产品数据库的单文件 HTML（直发飞书群）
 - 📊 **Lieflat 同源图表**：只用目录内真实数据图型，确定性生成离线 HTML + 可编辑 SVG + 300 DPI PNG；DeepSeek 等纯文本模型无需视觉能力即可稳定复现
 - 📊 **研究质量量化**：逐 Goal 饱和度、官方来源比例、三角验证率、目录/参数/图片覆盖率与关键缺口显式输出
@@ -55,7 +55,7 @@ docker compose up -d --build
 
 # 4. 打开引导页
 #   http://localhost:8000  —— 一句话发起调研 / 触发情报 / 查看成果
-#   http://localhost:8000/docs —— 高级操作面板（评审/裁决/反馈/ROI）
+#   http://localhost:8000/docs —— 高级操作面板（状态/反馈/ROI）
 ```
 
 启动后验证：`curl http://localhost:8000/health` → `{"status":"ok"}`
@@ -70,7 +70,7 @@ docker compose up -d --build
 |---|---|---|
 | research-api | 8000 | 研究服务（引导页 / API / 自动化编排 / 飞书通知） |
 | n8n | 5678 | 定时调度（仅每日情报 10:00；企业研究由本地网页触发） |
-| postgres | 5432 | 控制面数据库（任务/运行/评审/裁决/指标） |
+| postgres | 5432 | 控制面数据库（任务/运行/自动裁决审计/指标） |
 
 ### 2. 环境变量（.env，全部可选按需填）
 
@@ -126,11 +126,11 @@ EER_FEISHU_DEFAULT_RECEIVER=oc_xxx    # 群 chat_id / 邮箱 / open_id
 |---|---|
 | 一句话发起调研 | 引导页 http://localhost:8000 → 输入描述 → 解析确认 → 开始调查 |
 | 精确参数调研 | `POST /api/v1/research/prepare` + `/start` |
-| 查看任务状态 / 评审 / 裁决 / 反馈 / ROI | http://localhost:8000/docs |
+| 查看任务状态 / 自动裁决记录 / 反馈 / ROI | http://localhost:8000/docs |
 | 每日情报（手动触发） | `POST /api/v1/intelligence/daily` |
 | 飞书群 | 情报日报 / 完成通知 / 成果文件 / 失败提醒 |
 
-详细文档见 `docs/automation/`（架构、API、评审门、裁决、情报、监控、Runbook、部署、配置清单）。
+详细文档见 `docs/automation/`（架构、API、自动裁决、情报、监控、Runbook、部署、配置清单）。
 
 ---
 
@@ -138,7 +138,7 @@ EER_FEISHU_DEFAULT_RECEIVER=oc_xxx    # 群 chat_id / 邮箱 / open_id
 
 ```bash
 pip install -e ".[api,database,models]"
-PYTHONPATH="src;tests" python -m unittest discover -s tests   # 184 个测试
+PYTHONPATH="src;tests" python -m unittest discover -s tests   # 210 个测试
 PYTHONPATH="src" python scripts/run_automation_eval.py        # 自动化回归 eval
 ```
 
@@ -148,16 +148,16 @@ PYTHONPATH="src" python scripts/run_automation_eval.py        # 自动化回归 
 automation/          自动化层（服务/API/情报/监控/飞书/n8n 工作流）
 src/enterprise_energy_research/
   artifacts/         发布器（word/excel/html，配置驱动视觉规范）
-  research/          研究内核（搜索/抽取/规范化/冲突检测）
+  research/          研究内核（搜索/抽取/规范化/冲突自动裁决）
   evidence/          证据库（append-only / 冻结 / 哈希）
-  automation/        控制面（状态机/裁决/重试/ROI/情报）
-config/              YAML 配置（视觉规范/评审策略/重试/watchlist）
+  automation/        控制面（状态机/自动裁决审计/重试/ROI/情报）
+config/              YAML 配置（视觉规范/自动裁决策略/重试/watchlist）
 docs/automation/     完整文档（12 份 + ADR）
-tests/               184 个回归测试
+tests/               210 个回归测试
 ```
 
 ## 安全说明
 
 - 所有密钥只存在于本地 `.env`（已被 .gitignore 忽略），仓库不含任何真实凭证
 - 证据冻结不可变（全量 SHA-256）；发布器禁止联网、禁止补事实
-- 冲突/评审/裁决全程留痕，可审计可追溯
+- 冲突、机器选择理由与备选值全程留痕，可审计可追溯

@@ -3,6 +3,7 @@ name: test
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   quality:
@@ -17,7 +18,14 @@ jobs:
       - run: python -m pip install -e ".[full,test]"
       - name: Unit, integration and recorded-fixture tests
         run: python -m unittest discover -s tests -v
-      - name: Recorded research eval
+      - name: Content regression gates (identity / query context / normalization / content / Kimi / adaptive rounds / visual freeze)
+        run: >
+          python -m unittest tests.test_identity_verification tests.test_extraction_contract
+          tests.test_field_registry tests.test_content_gates tests.test_pipeline_trace
+          tests.test_kimi_image_discovery tests.test_catalog_synthesis
+          tests.test_opportunity_engine tests.test_adaptive_rounds tests.test_no_hardcoding
+          tests.test_visual_regression -v
+      - name: Recorded research accuracy eval (golden labels, Unsupported Claim Rate = 0)
         run: python scripts/run_recorded_research_eval.py --output build/evals/recorded_research_eval.json
       - name: Automation eval
         run: python scripts/run_automation_eval.py
@@ -27,3 +35,20 @@ jobs:
         run: python -c "import json,pathlib; [json.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('schemas').glob('*.json')]"
       - name: Docker build
         run: docker build -t enterprise-energy-research:${{ github.sha }} .
+
+  # Live browser / API acceptance is high-cost external-call work: manual only.
+  live-acceptance:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e ".[full,test]"
+      - name: Live acceptance (default company)
+        env:
+          EER_DEEPSEEK_API_KEY: ${{ secrets.EER_DEEPSEEK_API_KEY }}
+          EER_OPENAI_API_KEY: ${{ secrets.EER_OPENAI_API_KEY }}
+        run: python scripts/run_live_acceptance.py --company 宁德时代

@@ -24,13 +24,8 @@ from enterprise_energy_research.domain.models import ArtifactBinding, FrozenRese
 FIELD_LABELS = {
     "canonical_company_name": "公司名称", "stock_code": "股票代码", "core_business": "核心业务",
     "revenue": "营业收入", "profit": "归母净利润", "rd_expense": "研发费用", "process": "主要工艺",
-    "product_portfolio": "产品组合", "export": "销售区域", "polarizer_market_share": "偏光片市场份额",
-    "polarizer_capacity": "偏光片规划产能", "green_electricity_transaction_volume": "绿电交易量",
-    "roof_pv_generation": "屋顶光伏发电量", "green_factory_count": "绿色工厂数量",
-    "energy_management_certified_sites": "能源管理体系认证厂区", "energy_efficiency_signal": "节能管理信号",
-    "sichuan_factory_efficiency_improvement": "四川基地生产效率提升", "sichuan_factory_unit_energy_reduction": "四川基地单位能耗下降",
-    "waste_heat_recovery": "余热回收", "planned_overseas_project": "海外规划项目",
-    "planned_overseas_investment": "海外规划投资上限", "electricity_consumption": "年度用电量",
+    "product_portfolio": "产品组合", "export": "销售区域",
+    "electricity_consumption": "年度用电量",
     "load_curve": "负荷曲线", "operating_schedule": "生产班次", "transformer_capacity": "变压器容量", "roof_area": "可用屋面面积",
 }
 
@@ -61,6 +56,44 @@ class FrozenWordPublisher:
         from docx.shared import Cm, Mm, Pt, RGBColor
 
         entity = next((x for x in bundle.entities if x.entity_id == bundle.run_manifest.canonical_entity_id), bundle.entities[0])
+        # P0-6/P0-18: the body consumes a claim-bound Research Synthesis built
+        # from verified evidence — never raw internal metadata.
+        from enterprise_energy_research.research.parameter_registry import ParameterInterpretationRegistry
+        from enterprise_energy_research.research.profiles import (
+            CompanyProfileBuilder, GroupProfileBuilder, PublishableEntityEvaluator,
+        )
+        from enterprise_energy_research.research.synthesis import ResearchSynthesizer
+        synthesis = ResearchSynthesizer().synthesize(
+            run_id=bundle.run_manifest.run_id,
+            entity=entity,
+            entities=bundle.entities,
+            claims=bundle.claims,
+            sources=bundle.sources,
+            edges=bundle.edges,
+            factories=bundle.factories,
+            products=bundle.products,
+            energy_profiles=bundle.energy_profiles,
+            gaps=bundle.gaps,
+            solutions=bundle.solutions,
+        )
+        industry = next(
+            (str(claim.value) for claim in bundle.claims if claim.field_name == "industry" and claim.verification_status == VerificationStatus.VERIFIED),
+            None,
+        )
+        interpretation_registry = ParameterInterpretationRegistry()
+        profile_builder = CompanyProfileBuilder()
+        group_builder = GroupProfileBuilder()
+        evaluator = PublishableEntityEvaluator()
+        publishable_profiles = []
+        for item in bundle.entities:
+            publishable, _ = evaluator.evaluate(item, bundle.claims, bundle.edges, bundle.factories, bundle.products)
+            if not publishable:
+                continue
+            profile = profile_builder.build(
+                item, bundle.claims, bundle.edges, bundle.factories, bundle.products,
+                entities=bundle.entities,
+            )
+            publishable_profiles.append((item, profile))
         asset_root = output_path.parent / f"{output_path.stem}_assets"
         image_manifest = prepare_publication_images(
             bundle, binding, asset_root, extra_search_roots=[output_path.parent]
@@ -199,50 +232,167 @@ class FrozenWordPublisher:
         self._field(toc, 'TOC \\o "1-3" \\h \\z \\u')
         document.add_page_break()
         document.add_heading("1. 执行摘要", level=1)
-        document.add_paragraph(f"本报告基于冻结证据快照，对 {entity.canonical_name} 的企业实体、生产足迹、能源场景与合作机会进行结构化呈现。报告不把数据缺口写成事实，不在发布阶段新增研究结论。")
+        if synthesis.executive_summary:
+            for line in synthesis.executive_summary:
+                document.add_paragraph(line)
+        else:
+            document.add_paragraph(
+                f"本报告基于冻结证据快照，对 {entity.canonical_name} 的企业实体、生产足迹、能源场景与合作机会进行结构化呈现。"
+                "报告不把数据缺口写成事实，不在发布阶段新增研究结论。"
+            )
         self._add_visual(document, rendered_visuals.get("executive_summary"), "1-1", figure_width)
         document.add_heading("2. 调研概述", level=1)
-        document.add_paragraph("调研以企业身份、集团边界、生产基地、产品目录、经营活动、工艺用能及四类合作机会为主线。所有判断均绑定冻结证据；公开资料不足的字段保留为待尽调事项，不使用行业均值替代企业事实。")
+        document.add_paragraph("调研以企业身份、集团边界、生产基地、产品目录、经营活动、工艺用能及合作机会为主线。所有判断均绑定冻结证据；公开资料不足的字段保留为待尽调事项，不使用行业均值替代企业事实。")
         self._add_visual(document, rendered_visuals.get("research_scope"), "2-1", figure_width)
         document.add_heading("3. 集团与企业概况", level=1)
-        for item in bundle.entities:
-            document.add_heading(item.canonical_name, level=2)
-            document.add_paragraph(f"实体类型：{item.entity_type}；核验状态：{item.verification_status.value}；注册区域：{item.registration_region or '待核验'}。")
+        if publishable_profiles:
+            for item, profile in publishable_profiles:
+                document.add_heading(item.canonical_name, level=2)
+                if item.entity_type == "group":
+                    group = group_builder.build(
+                        item, bundle.entities, bundle.claims, bundle.edges,
+                        bundle.factories, bundle.products,
+                    )
+                    if group.registered_name:
+                        document.add_paragraph(f"注册名称：{group.registered_name}。")
+                    if group.tier1_subsidiaries:
+                        document.add_paragraph(
+                            "一级核心子公司：" + "、".join(
+                                f"{child['name']}（{child['business']}）" if child.get("business") else child["name"]
+                                for child in group.tier1_subsidiaries
+                            ) + "。"
+                        )
+                    if group.business_segments:
+                        document.add_paragraph("业务领域：" + "、".join(group.business_segments) + "。")
+                    if group.production_entities:
+                        document.add_paragraph(
+                            "生产主体：" + "、".join(item2["name"] for item2 in group.production_entities) + "。"
+                        )
+                    if group.factories:
+                        document.add_paragraph(
+                            "主要工厂：" + "、".join(factory["name"] for factory in group.factories[:10]) + "。"
+                        )
+                    if group.product_families:
+                        document.add_paragraph("核心产品：" + "、".join(group.product_families) + "。")
+                    continue
+                facts: list[str] = []
+                if profile.registered_name:
+                    facts.append(f"注册名称：{profile.registered_name}")
+                if profile.founded_date:
+                    facts.append(f"成立时间：{profile.founded_date}")
+                if profile.headquarters:
+                    facts.append(f"总部：{profile.headquarters}")
+                if profile.registration_region:
+                    facts.append(f"注册地：{profile.registration_region}")
+                if profile.official_website:
+                    facts.append(f"官方网站：{profile.official_website}")
+                if profile.parent_company:
+                    facts.append(f"母公司：{profile.parent_company}")
+                if profile.actual_controller:
+                    facts.append(f"实际控制人：{profile.actual_controller}")
+                if profile.ownership_summary:
+                    facts.append(f"股权关系：{profile.ownership_summary}")
+                if profile.core_business:
+                    facts.append(f"主营业务：{profile.core_business}")
+                if profile.business_segments:
+                    facts.append(f"业务板块：{'、'.join(profile.business_segments)}")
+                if profile.employee_count is not None:
+                    facts.append(f"员工人数：{profile.employee_count}")
+                if profile.revenue is not None:
+                    facts.append(f"营业收入：{profile.revenue}")
+                if profile.profit is not None:
+                    facts.append(f"净利润：{profile.profit}")
+                if profile.subsidiaries:
+                    facts.append(f"重要子公司：{'、'.join(profile.subsidiaries[:10])}")
+                if profile.factories:
+                    facts.append(f"生产基地：{'、'.join(profile.factories[:10])}")
+                if profile.product_families:
+                    facts.append(f"核心产品：{'、'.join(profile.product_families[:10])}")
+                for fact in facts:
+                    document.add_paragraph(fact)
+        else:
+            document.add_paragraph("当前冻结证据不足以形成可发布的企业概况，正式正文不输出内部核验状态与实体类型等研究元数据；相关记录保留在证据台账与附录中。")
         self._add_visual(document, rendered_visuals.get("entity_overview"), "3-1", figure_width)
         self._add_evidence_gallery(document, publication_images.get("entity_overview", []), asset_root, "3")
         document.add_heading("4. 重点产业与优势产品", level=1)
         if bundle.products:
             for product in bundle.products:
+                if product.verification_status != VerificationStatus.VERIFIED:
+                    continue
+                detail = [
+                    product.category, product.series, product.model,
+                    product.description, product.customer_segment, product.commercial_status,
+                ]
+                if not any(detail):
+                    # 族级证据：只保留产品族身份，不生成空卡片。
+                    document.add_paragraph(f"产品族：{product.name}。公开资料未披露可核验的系列、型号与参数，报告保留产品族身份，不推断定制型号或商业化状态。")
+                    continue
                 document.add_heading(product.name, level=2)
+                parts: list[str] = []
+                if product.category:
+                    parts.append(f"类别：{product.category}")
+                if product.series:
+                    parts.append(f"系列：{product.series}")
+                if product.model:
+                    parts.append(f"型号：{product.model}")
+                if product.customer_segment:
+                    parts.append(f"客户群体：{product.customer_segment}")
+                if product.commercial_status:
+                    parts.append(f"商业状态：{product.commercial_status}")
+                if product.applications:
+                    parts.append(f"应用领域：{'、'.join(product.applications)}")
+                if product.description:
+                    parts.append(f"产品说明：{product.description}")
                 parameter_text = "、".join(
                     f"{parameter.name}={parameter.value}{parameter.unit or ''}" for parameter in product.parameters
-                ) or "公开资料未披露可核验参数"
-                document.add_paragraph(f"类别：{product.category or '待核验'}；型号：{product.model or '未披露'}；参数：{parameter_text}。")
+                )
+                parts.append(f"参数：{parameter_text}" if parameter_text else "参数：公开资料未披露可核验参数")
+                document.add_paragraph("；".join(parts) + "。")
                 if product.parameters:
-                    names = {parameter.name for parameter in product.parameters}
                     interpretation = []
-                    if "D50" in names:
-                        interpretation.append("D50反映颗粒粒径中位水平，是配方分散、涂布稳定性及倍率性能评估的基础输入")
-                    if "比表面积" in names:
-                        interpretation.append("比表面积会影响界面反应与首次不可逆容量，需结合客户电解液体系和极片设计验证")
-                    if "振实密度" in names:
-                        interpretation.append("振实密度关系到极片压实及体积能量密度，但不能脱离颗粒强度与循环膨胀单独判断")
-                    if "容量" in names:
-                        interpretation.append("容量是材料克容量口径，尚不能直接等同于电芯能量密度")
-                    if "首次效率" in names:
-                        interpretation.append("首次效率影响首周锂损耗，应与补锂方案、正极匹配及客户测试方法共同核对")
+                    for parameter in product.parameters:
+                        text = interpretation_registry.interpretation(industry, product.category, parameter.name)
+                        if text:
+                            interpretation.append(f"{parameter.name}：{text}")
                     if interpretation:
-                        document.add_paragraph("参数解读：" + "；".join(interpretation) + "。上述解释为指标含义，不构成对客户电芯性能的承诺；正式导入仍需样品、测试方法、批次一致性和认证资料。")
-                else:
-                    document.add_paragraph("公开边界：该条目仅在官方业务页形成族级证据，未发现可核验的公开型号表和参数面板。报告保留其产品族身份，但不推断客户定制牌号、规格范围、商业化阶段或在售状态。")
+                        document.add_paragraph(
+                            "参数解读：" + "；".join(interpretation) + "。"
+                            "上述解释为指标含义，不构成对客户产品性能的承诺；正式导入仍需样品、测试方法、批次一致性和认证资料。"
+                        )
         else:
             document.add_paragraph("本次冻结证据未形成可核验的实体产品记录，因此不将业务描述推断为具体产品目录；相关信息应在后续尽调中补充。")
         self._add_visual(document, rendered_visuals.get("products"), "4-1", figure_width)
         self._add_evidence_gallery(document, publication_images.get("products", []), asset_root, "4")
         document.add_heading("5. 子公司与工厂逐一分析", level=1)
+        factory_rows: list[tuple] = []
         for factory in bundle.factories:
-            document.add_heading(factory.name or "未命名生产基地", level=2)
-            document.add_paragraph(f"地址：{factory.address or '待核验'}；工艺：{'、'.join(factory.processes) if factory.processes else '待核验'}。")
+            operator = next(
+                (item.canonical_name for item in bundle.entities if item.entity_id == factory.operator_entity_id),
+                None,
+            )
+            details = [
+                item for item in (
+                    factory.address,
+                    "、".join(factory.processes) if factory.processes else "",
+                    operator,
+                ) if item
+            ]
+            if len(details) >= 2:
+                factory_rows.append((factory, details))
+        if factory_rows:
+            for factory, _details in factory_rows:
+                document.add_heading(factory.name or "未命名生产基地", level=2)
+                operator = next(
+                    (item.canonical_name for item in bundle.entities if item.entity_id == factory.operator_entity_id),
+                    None,
+                )
+                address_text = factory.address or "公开资料未披露"
+                process_text = "、".join(factory.processes) if factory.processes else "公开资料未披露"
+                document.add_paragraph(
+                    f"地址：{address_text}；主要工艺：{process_text}；运营主体：{operator or '公开资料未披露'}。"
+                )
+        else:
+            document.add_paragraph("本次冻结证据未形成满足内容门槛的已核验工厂记录，本章不生成占位卡片。")
         self._add_visual(document, rendered_visuals.get("factories"), "5-1", figure_width)
         self._add_evidence_gallery(document, publication_images.get("factories", []), asset_root, "5")
         document.add_heading("6. 核心经营与生产证据", level=1)
@@ -279,48 +429,37 @@ class FrozenWordPublisher:
             document.add_paragraph("冻结证据未形成完整能源画像，报告仅保留工艺到能源设备的可核验映射，并把负荷曲线、变压器容量、运行班次和屋顶面积列为现场尽调输入。")
         self._add_visual(document, rendered_visuals.get("energy"), "7-1", figure_width)
 
-        solution_chapters = [
-            ("8. 新能源 EPC", "EPC"),
-            ("9. 零碳与节能改造", "ZERO_CARBON"),
-            ("10. 储能 ODM", "STORAGE_ODM"),
-            ("11. 出海合作", "OVERSEAS"),
-        ]
-        engine_visuals = {"EPC": ("epc", "8-1"), "ZERO_CARBON": ("zero_carbon", "9-1"), "STORAGE_ODM": ("storage_odm", "10-1"), "OVERSEAS": ("overseas", "11-1")}
-        for chapter_title, engine in solution_chapters:
-            document.add_page_break()
-            document.add_heading(chapter_title, level=1)
-            matched = [solution for solution in bundle.solutions if solution.engine == engine]
-            if not matched:
-                document.add_paragraph("当前冻结证据不足以形成可执行方案，本章保留为待补充的合作方向，不作事实性收益承诺。")
-            for solution in matched:
+        document.add_page_break()
+        document.add_heading("8. 合作机会矩阵", level=1)
+        evidence_solutions = [solution for solution in bundle.solutions if solution.statement_type.value == "EVIDENCE_SUPPORTED"]
+        if evidence_solutions:
+            for solution in sorted(evidence_solutions, key=lambda item: item.priority):
                 document.add_heading(f"优先级 {solution.priority}｜{solution.opportunity}", level=2)
                 document.add_paragraph(solution.proposed_solution)
-                label = "证据支持" if solution.statement_type.value == "EVIDENCE_SUPPORTED" else "分析推断"
-                document.add_paragraph(f"结论类型：{label}；收益逻辑：{solution.benefit_logic}；下一步：{solution.next_step}。")
-            visual_key, figure_no = engine_visuals[engine]
-            self._add_visual(document, rendered_visuals.get(visual_key), figure_no, figure_width)
-
+                document.add_paragraph(f"结论类型：证据支持；收益逻辑：{solution.benefit_logic}；下一步：{solution.next_step}。")
+        else:
+            document.add_paragraph("当前冻结证据未形成具备证据支持的合作机会，本章不生成推测性方案；潜在方向与所需数据列入风险与边界章节。")
+        self._add_visual(document, rendered_visuals.get("cooperation"), "8-1", figure_width)
         document.add_page_break()
-        document.add_heading("12. 合作模式与商务路径", level=1)
+        document.add_heading("9. 商务模式与推进路径", level=1)
         for solution in bundle.solutions:
-            document.add_heading(solution.engine, level=2)
+            document.add_heading(f"{solution.engine}｜{solution.opportunity}", level=2)
             document.add_paragraph(f"建议合作模式：{solution.business_model or '需双方确认'}；需补充数据：{'、'.join(solution.data_requirements) or '无新增要求'}。")
-        self._add_visual(document, rendered_visuals.get("cooperation"), "12-1", figure_width)
         document.add_page_break()
-        document.add_heading("13. 项目优先级与 90 天计划", level=1)
+        document.add_heading("10. 项目优先级与 90 天计划", level=1)
         for priority in ("A", "B", "C", "HOLD"):
             items = [solution for solution in bundle.solutions if solution.priority == priority]
             if items:
                 document.add_heading(f"优先级 {priority}", level=2)
-                document.add_paragraph("；".join(f"{item.engine}：{item.next_step}" for item in items) + "。")
-        self._add_visual(document, rendered_visuals.get("roadmap"), "13-1", figure_width)
-        document.add_heading("14. 风险与边界", level=1)
+                document.add_paragraph("；".join(f"{item.opportunity}：{item.next_step}" for item in items) + "。")
+        self._add_visual(document, rendered_visuals.get("roadmap"), "10-1", figure_width)
+        document.add_heading("11. 风险与边界", level=1)
         risks = [risk for solution in bundle.solutions for risk in solution.risks]
         document.add_paragraph("；".join(dict.fromkeys(risks)) + "。" if risks else "尚无足够证据量化项目风险，应在技术、商务、合规和现场数据四条线上完成尽调后再作投资决策。")
-        self._add_visual(document, rendered_visuals.get("risks"), "14-1", figure_width)
-        document.add_heading("15. 调研结论", level=1)
+        self._add_visual(document, rendered_visuals.get("risks"), "11-1", figure_width)
+        document.add_heading("12. 调研结论", level=1)
         document.add_paragraph("本报告给出的合作方向用于形成可验证的下一步，不替代现场测量、技术方案、商务报价、法律审查或投资决策。任何新增事实或数据修订均需进入新证据版本、重新验证并生成新的冻结快照。")
-        self._add_visual(document, rendered_visuals.get("conclusion"), "15-1", figure_width)
+        self._add_visual(document, rendered_visuals.get("conclusion"), "12-1", figure_width)
         document.add_heading("附录 A：术语与口径", level=1)
         document.add_paragraph("事实、分析推断、待确认事项分别对应不同证据状态；产能、收入、能耗等数值均以原始披露的时间、范围、单位和限定条件为准。")
         document.add_heading("附录 B：来源清单", level=1)

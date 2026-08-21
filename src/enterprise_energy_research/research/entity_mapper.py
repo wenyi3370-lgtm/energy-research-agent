@@ -5,6 +5,12 @@ from collections import defaultdict
 from enterprise_energy_research.domain.enums import VerificationStatus
 from enterprise_energy_research.domain.models import Claim, Entity, EnterpriseEdge
 
+from .contracts import IDENTITY_FIELDS
+
+
+def _normalize_name(value: str) -> str:
+    return "".join(value.lower().split())
+
 
 class EntityMapper:
     def apply_evidence(
@@ -18,15 +24,20 @@ class EntityMapper:
             claims_by_entity[claim.entity_id].append(claim)
         updated_entities: list[Entity] = []
         for entity in entities:
-            supporting = [claim.claim_id for claim in claims_by_entity.get(entity.entity_id, []) if claim.verification_status == VerificationStatus.VERIFIED]
-            status = VerificationStatus.VERIFIED if any(
-                claim.field_name in {"canonical_company_name", "registered_name"}
-                for claim in claims_by_entity.get(entity.entity_id, [])
-                if claim.verification_status == VerificationStatus.VERIFIED
-            ) else VerificationStatus.UNVERIFIED
+            entity_claims = claims_by_entity.get(entity.entity_id, [])
+            verified_claims = [claim for claim in entity_claims if claim.verification_status == VerificationStatus.VERIFIED]
+            # VERIFIED requires a verified identity Claim (canonical_company_name
+            # or registered_name) whose value actually names this entity — a
+            # verified financial claim alone must never verify an entity.
+            identity = [
+                claim for claim in verified_claims
+                if claim.field_name in {"canonical_company_name", "registered_name"}
+                and self._claims_this_entity(claim, entity)
+            ]
+            status = VerificationStatus.VERIFIED if identity else VerificationStatus.UNVERIFIED
             updated_entities.append(entity.model_copy(update={
                 "verification_status": status,
-                "supporting_claim_ids": supporting,
+                "supporting_claim_ids": [claim.claim_id for claim in verified_claims],
             }))
         updated_edges: list[EnterpriseEdge] = []
         for edge in edges:
@@ -38,3 +49,19 @@ class EntityMapper:
             }))
         return updated_entities, updated_edges
 
+    @staticmethod
+    def _claims_this_entity(claim: Claim, entity: Entity) -> bool:
+        value = _normalize_name(str(claim.value or ""))
+        names = {_normalize_name(entity.canonical_name), _normalize_name(entity.registered_name or "")}
+        names.update(_normalize_name(alias) for alias in entity.aliases)
+        names.discard("")
+        return bool(value and any(value in name or name in value for name in names))
+
+
+def identity_fields_covered(entity: Entity, claims: list[Claim]) -> list[str]:
+    """Return identity fields with a non-empty supporting Claim for this entity."""
+    covered: list[str] = []
+    for claim in claims:
+        if claim.entity_id == entity.entity_id and claim.field_name in IDENTITY_FIELDS and claim.value not in (None, "", []):
+            covered.append(claim.field_name)
+    return list(dict.fromkeys(covered))

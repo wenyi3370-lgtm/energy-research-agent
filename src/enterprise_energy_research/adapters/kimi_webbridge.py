@@ -22,6 +22,9 @@ class KimiWebBridgeSearchAdapter:
         self.session = session
         self.daemon_url = daemon_url.rstrip("/")
         self.skill_root = skill_root or embedded_skill_root("kimi-webbridge")
+        # Per-run usage telemetry (P0-14): routing alone is not usage.
+        from enterprise_energy_research.research.image_discovery import KimiUsageTelemetry
+        self.usage = KimiUsageTelemetry()
 
     @staticmethod
     def _binary() -> Path | None:
@@ -78,20 +81,50 @@ class KimiWebBridgeSearchAdapter:
         data = payload.get("data")
         return data if isinstance(data, dict) else payload
 
+    def navigate_to(self, url: str, *, new_tab: bool = False) -> dict[str, Any]:
+        """Open a REAL target page (deep research), not a search-result page."""
+        self.usage.kimi_pages_visited += 1
+        if url and not url.startswith(("http://", "https://")):
+            raise ValueError(f"target page must be an absolute URL: {url}")
+        return self._command("navigate", {
+            "url": url,
+            "newTab": new_tab,
+            "group_title": "企业产业与能源调研",
+        })
+
+    def evaluate(self, code: str) -> dict[str, Any]:
+        """Run JS in the current page and return the value (DOM inspection)."""
+        self.usage.kimi_dom_inspections += 1
+        payload = self._command("evaluate", {"code": code})
+        if isinstance(payload, dict) and "value" in payload:
+            return payload["value"] if isinstance(payload["value"], dict) else {"value": payload["value"]}
+        return payload
+
     def search(self, request: SearchRequest) -> SearchResultEnvelope:
         health = self.health()
         if not health.available:
+            self.usage.kimi_status = "BLOCKED"
+            self.usage.reason = "browser daemon/extension unavailable: " + "; ".join(health.diagnostics)
             return SearchResultEnvelope(adapter=self.name, query_id=request.query_id, status="blocked", diagnostics=health.diagnostics)
+        self.usage.kimi_status = "AVAILABLE"
+        self.usage.kimi_queries += 1
         url = request.metadata.get("url") or ("https://www.bing.com/search?q=" + urllib.parse.quote(request.query))
+        is_target_page = bool(request.metadata.get("url"))
         try:
-            navigation = self._command("navigate", {
-                "url": url,
-                "newTab": True,
-                "group_title": request.metadata.get("group_title", "企业产业与能源调研"),
-            })
+            navigation = self.navigate_to(url, new_tab=True)
+            if is_target_page:
+                self.usage.kimi_target_pages_visited += 1
             snapshot = self._command("snapshot", {})
             tree = str(snapshot.get("tree", ""))
             final_url = str(snapshot.get("url") or navigation.get("url") or url)
+            # Browser error pages (navigation failures) are not sources.
+            if not final_url.lower().startswith(("http://", "https://")):
+                self.usage.kimi_status = "BLOCKED"
+                self.usage.reason = f"navigation did not reach a real page for {url}"
+                return SearchResultEnvelope(
+                    adapter=self.name, query_id=request.query_id, status="error",
+                    diagnostics=[f"navigation error page for {url}"],
+                )
             return SearchResultEnvelope(
                 adapter=self.name,
                 query_id=request.query_id,
@@ -104,10 +137,12 @@ class KimiWebBridgeSearchAdapter:
                     status="ok" if tree else "partial",
                     retrieved_at=datetime.now(timezone.utc).isoformat(),
                     diagnostics=[] if tree else ["empty accessibility snapshot"],
-                    metadata={"tab_id": navigation.get("tabId")},
+                    metadata={"tab_id": navigation.get("tabId"), "target_page": is_target_page},
                 )],
             )
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+            self.usage.kimi_status = "BLOCKED"
+            self.usage.reason = f"webbridge command failed: {type(exc).__name__}: {exc}"
             return SearchResultEnvelope(adapter=self.name, query_id=request.query_id, status="error", diagnostics=[f"webbridge command failed: {type(exc).__name__}: {exc}"])
 
 

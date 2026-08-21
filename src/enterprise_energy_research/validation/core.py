@@ -17,9 +17,8 @@ class CoreValidator:
         resolved_conflict_ids: frozenset[str] | None = None,
     ) -> None:
         self.store = store
-        # Conflict groups a human reviewer already adjudicated (冲突裁决);
-        # they are no longer treated as blocking. Empty by default, so
-        # behaviour is unchanged without resolutions.
+        # Legacy externally resolved conflict IDs remain supported for old
+        # evidence stores. New runs persist automatic RESOLVED conflicts.
         self.resolved_conflict_ids = resolved_conflict_ids or frozenset()
 
     def validate(self, run_id: str, evidence_version: int) -> ValidationReport:

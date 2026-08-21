@@ -29,6 +29,17 @@ class SearchRequest(BaseModel):
     max_results: int = Field(default=10, ge=1, le=100)
     requires_browser: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # Research goal context (P0-2): the extractor must know WHY a page is
+    # being retrieved, not just that a page arrived.
+    topic: str | None = None
+    collection_round: str | None = None
+    round_goal: str | None = None
+    trigger: str | None = None
+    target_gap_ids: list[str] = Field(default_factory=list)
+    target_conflict_ids: list[str] = Field(default_factory=list)
+    target_claim_ids: list[str] = Field(default_factory=list)
+    canonical_company_name: str | None = None
+    expected_fields: list[str] = Field(default_factory=list)
 
 
 class SearchHit(BaseModel):
@@ -48,6 +59,18 @@ class SearchResultEnvelope(BaseModel):
     hits: list[SearchHit] = Field(default_factory=list)
     status: Literal["ok", "partial", "blocked", "error"]
     diagnostics: list[str] = Field(default_factory=list)
+    # Research goal context echoed by the executor so the extractor stage
+    # sees the same goal the planner declared (P0-2).
+    topic: str | None = None
+    purpose: str | None = None
+    collection_round: str | None = None
+    round_goal: str | None = None
+    trigger: str | None = None
+    target_gap_ids: list[str] = Field(default_factory=list)
+    target_conflict_ids: list[str] = Field(default_factory=list)
+    target_claim_ids: list[str] = Field(default_factory=list)
+    canonical_company_name: str | None = None
+    expected_fields: list[str] = Field(default_factory=list)
 
 
 class ArtifactResult(BaseModel):

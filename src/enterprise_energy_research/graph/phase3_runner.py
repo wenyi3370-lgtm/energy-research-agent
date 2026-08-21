@@ -13,6 +13,7 @@ from enterprise_energy_research.research.classifier import EnterpriseComplexityC
 from enterprise_energy_research.research.entity_mapper import EntityMapper
 from enterprise_energy_research.research.image_validator import ImageValidator
 from enterprise_energy_research.research.image_archiver import ImageAssetArchiver, ImageArchiveResult
+from enterprise_energy_research.research.identity_evidence import IdentityEvidenceSynthesizer
 from enterprise_energy_research.research.ingestor import EvidenceIngestor
 from enterprise_energy_research.research.normalizer import EvidenceNormalizer
 from enterprise_energy_research.research.product_detector import ProductDetector
@@ -63,10 +64,9 @@ class Phase3Runner:
     ) -> tuple[ResearchState, ProductDetection | None]:
         """Run all Phase 3 processing up to EVIDENCE_INGEST; never freezes.
 
-        Split out so the automation service can hold the human gate
-        *between* validation and freeze: this method ingests and validates
-        evidence, then the service decides REVIEW_REQUIRED/APPROVED, and
-        only afterwards may the caller freeze (via ``finalize_evidence``).
+        Split out so the automation service can validate before freeze. Identity
+        ambiguity and claim conflicts are resolved deterministically by source
+        credibility; the selected and rejected alternatives remain auditable.
         ``product_detection`` is returned so the freeze step can reuse it.
         """
         state.transition("COMPANY_RESOLVER", status=RunStatus.RUNNING)
@@ -85,6 +85,14 @@ class Phase3Runner:
         }
         state.transition("EVIDENCE_NORMALIZER")
         evidence = EvidenceNormalizer().normalize(batches, official_domains=official_domains)
+        # P0-1: official-page identity evidence becomes provenance-bound
+        # identity Claims BEFORE validation, so a resolved company is never
+        # left UNVERIFIED when its own page states its identity.
+        evidence.claims.extend(
+            IdentityEvidenceSynthesizer().synthesize(
+                resolution, batches, evidence.entities, evidence.sources,
+            )
+        )
         selected_candidate = next(item for item in resolution.candidates if item.candidate_id == resolution.selected_candidate_id)
         selected_entity = next((item for item in evidence.entities if item.canonical_name == selected_candidate.canonical_name), None)
         if not selected_entity:

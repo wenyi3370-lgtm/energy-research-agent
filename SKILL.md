@@ -47,6 +47,15 @@ Build every run around one rule: research produces evidence, validation freezes 
 
 Version comes only from `pyproject.toml`. The v0.9 baseline includes typed evidence schemas, append-only storage, immutable freezes, ambiguity/conflict/gap gates, Goal-Family research, catalog enumeration, approved Kimi WebBridge/AnySearch adapters, three image manifests, one cross-artifact visual manifest, deterministic Lieflat data-chart rendering, frozen-bundle publishers, visual QA and deterministic release packaging. PPT Master still receives a deterministic 17-slide frozen brief and remains blocked until its confirmation, SVG, preview and export gates complete. Use `PYTHONPATH=src python -m unittest discover -s tests -v` for recorded-fixture regression and `python scripts/run_recorded_research_eval.py` for L2 eval. Fixtures never justify real-company claims.
 
+## Content pipeline contract (v0.9.1 remediation)
+
+- Research content, not research metadata, is the body of every formal report: CompanyProfile/GroupProfile built from verified claims replace `entity_type`/`verification_status` dumps (research/profile.py).
+- Every goal family has a `GoalExtractionContract` (expected fields + business question); the full ResearchGoal (topic/purpose/round/trigger/gap/conflict targets) travels into the EvidenceExtractor prompt (research/contracts.py).
+- Raw field names canonicalize through `CanonicalFieldRegistry` and are preserved as `raw_field_name` (research/field_registry.py).
+- Official-page identity evidence becomes provenance-bound identity Claims before validation, so a resolved company is never left UNVERIFIED (research/identity_evidence.py).
+- Kimi WebBridge opens REAL target pages (AnySearch discovers, Kimi navigates + DOM-inspects); image discovery reads `<img>/<picture>/srcset/lazy/background` and binds product/factory images (research/image_discovery.py). Adapter routing is not usage: `kimi_telemetry.json` records availability, pages, DOM inspections and image-pipeline counters.
+- The adaptive production runner executes R1 -> Gap -> R2 -> Conflict -> R3 with real EvidenceDelta saturation, precise gap reasons, chapter/placeholder/readiness gates, claim-bound synthesis, high-value claim utilization and the goal pipeline trace (research/production_runner.py). Live acceptance: `PYTHONPATH=src python scripts/run_live_acceptance.py --company 宁德时代` and read `acceptance_summary.json` (sections A-L).
+
 ## Publish a run
 
 Use `outputs/{canonical_company}/{run_id}/` and preserve the directory contract in [ARTIFACT_SPEC.md](ARTIFACT_SPEC.md). A successful run must end as `PASS` or `PASS_WITH_WARNINGS`; a blocked run must retain evidence, diagnostics, and missing-data reasons instead of publishing misleading final artifacts.

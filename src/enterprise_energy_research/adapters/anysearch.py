@@ -29,6 +29,9 @@ class AnySearchCliAdapter:
     def __init__(self, skill_root: Path | None = None, cli_path: Path | None = None) -> None:
         self.skill_root = Path(skill_root) if skill_root else embedded_skill_root("anysearch")
         self.cli_path = Path(cli_path) if cli_path else None
+        # Health TTL: per-query calls must not restart the CLI subprocess for
+        # every search/extract (live-run speed).
+        self._health_cache: tuple[float, AdapterHealth] | None = None
 
     def _command_prefix(self) -> list[str] | None:
         prefixes = self._command_prefixes()
@@ -62,7 +65,16 @@ class AnySearchCliAdapter:
                 prefixes.append([bash, str(path)])
         return prefixes
 
-    def health(self) -> AdapterHealth:
+    def health(self, *, refresh: bool = False) -> AdapterHealth:
+        import time as _time
+        now = _time.monotonic()
+        if not refresh and self._health_cache is not None and now - self._health_cache[0] < 120:
+            return self._health_cache[1]
+        result = self._health_probe()
+        self._health_cache = (now, result)
+        return result
+
+    def _health_probe(self) -> AdapterHealth:
         prefixes = self._command_prefixes()
         required = [self.skill_root / "SKILL.md", self.skill_root / "LICENSE", self.skill_root / "NOTICE"]
         missing = [str(path) for path in required if not path.is_file()]
@@ -240,7 +252,9 @@ class AnySearchCliAdapter:
                     text=str(text) if text is not None else None,
                     status="ok" if (url or text) else "partial",
                     retrieved_at=now,
-                    metadata={"format": "json", "raw": item},
+                    # Search-result text is a snippet: discovery-only. The
+                    # extractor downgrades snippet-derived batches to SOURCE_D.
+                    metadata={"format": "json", "raw": item, "snippet": True},
                 )
             )
         if not hits and isinstance(payload, dict):
@@ -304,7 +318,7 @@ class AnySearchCliAdapter:
                 text=text or None,
                 status="ok" if (url and text) else "partial",
                 retrieved_at=now,
-                metadata={"format": "markdown"},
+                metadata={"format": "markdown", "snippet": True},
             ))
         return hits
 

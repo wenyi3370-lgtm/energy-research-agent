@@ -9,7 +9,6 @@ small, stable REST surface:
 - ``GET  /api/v1/research/{run_id}``   current status summary.
 - ``GET  /api/v1/research/{run_id}/result``    full structured result.
 - ``GET  /api/v1/research/{run_id}/artifacts`` published artifact manifest.
-- ``POST /api/v1/research/{run_id}/review``    human decision at the gate.
 - ``POST /api/v1/research/{run_id}/retry``     bounded re-queue of FAILED/BLOCKED.
 - ``GET  /health``                     liveness + DB connectivity.
 
@@ -36,13 +35,11 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy import text
 
 from ..contracts import (
-    ConflictResolutionPayload,
     FeedbackPayload,
     FeishuFormPayload,
     NaturalLanguagePrompt,
     ResearchRequest,
     ResearchResult,
-    ReviewSubmission,
 )
 from ..db import AutomationDatabase, DuplicateTaskError, RunNotFoundError
 from ..enums import Priority, ResearchType, TaskStatus
@@ -495,13 +492,6 @@ def create_app(
             ],
         }
 
-    @app.post("/api/v1/research/{run_id}/review")
-    def submit_review(run_id: str, review: ReviewSubmission, background: BackgroundTasks) -> ResearchResult:
-        result = service.submit_review(run_id, review)
-        if str(result.status) == "QUEUED":  # RESEARCH_AGAIN decision
-            background.add_task(service.execute_run, run_id)
-        return result
-
     @app.post("/api/v1/research/{run_id}/retry")
     def retry_run(run_id: str, background: BackgroundTasks) -> ResearchResult:
         result = service.retry(run_id)
@@ -551,23 +541,6 @@ def create_app(
     def list_conflicts(run_id: str) -> dict:
         """Evidence conflicts of a run (BLOCKED runs: adjudicate before resume)."""
         return {"run_id": run_id, "conflicts": service.list_conflicts(run_id)}
-
-    @app.post("/api/v1/research/{run_id}/conflicts/{conflict_id}/resolve")
-    def resolve_conflict(run_id: str, conflict_id: str, payload: ConflictResolutionPayload) -> ResearchResult:
-        """Adjudicate a BLOCKING conflict; the run moves to QUEUED for resume."""
-        return service.resolve_conflict(
-            run_id,
-            conflict_id,
-            decision=payload.decision,
-            reviewer=payload.reviewer,
-            rationale=payload.rationale,
-            selected_claim_id=payload.selected_claim_id,
-        )
-
-    @app.post("/api/v1/research/{run_id}/resume")
-    def resume_run(run_id: str) -> ResearchResult:
-        """Continue an adjudicated run: validate preserved evidence, freeze, publish."""
-        return service.resume(run_id)
 
     @app.post("/api/v1/research/prepare", status_code=201)
     def prepare_research(payload: ResearchRequest) -> dict:

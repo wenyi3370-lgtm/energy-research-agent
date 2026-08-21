@@ -1,8 +1,116 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "cases": [
-    {"fixture": "small_simple.json", "minimum_entities": 1, "minimum_sources": 1},
-    {"fixture": "normal_manufacturer.json", "minimum_entities": 1, "minimum_products": 1, "minimum_images": 1},
-    {"fixture": "large_group.json", "minimum_entities": 2, "minimum_factories": 2}
+    {
+      "fixture": "small_simple.json",
+      "minimum_entities": 1,
+      "minimum_sources": 1,
+      "golden": {
+        "expected_entities": ["示例节能服务有限公司"],
+        "expected_claims": ["canonical_company_name=示例节能服务有限公司"],
+        "expected_products": [],
+        "expected_factories": [],
+        "expected_parameters": [],
+        "expected_conflicts": [],
+        "expected_sources": ["small-demo.example.com"]
+      }
+    },
+    {
+      "fixture": "normal_manufacturer.json",
+      "minimum_entities": 1,
+      "minimum_products": 1,
+      "minimum_images": 1,
+      "golden": {
+        "expected_entities": ["示例能源装备有限公司"],
+        "expected_claims": ["canonical_company_name=示例能源装备有限公司", "roof_area=12000"],
+        "expected_products": ["工商业液冷储能柜"],
+        "expected_factories": ["成都生产基地"],
+        "expected_parameters": [],
+        "expected_conflicts": [],
+        "expected_sources": ["acme-energy.example.com"]
+      }
+    },
+    {
+      "fixture": "large_group.json",
+      "minimum_entities": 2,
+      "minimum_factories": 2,
+      "golden": {
+        "expected_entities": ["示例工业集团有限公司", "示例工业装备有限公司", "示例工业材料有限公司"],
+        "expected_claims": ["canonical_company_name=示例工业集团有限公司"],
+        "expected_products": [],
+        "expected_factories": ["装备基地", "材料基地"],
+        "expected_parameters": [],
+        "expected_conflicts": [],
+        "expected_sources": ["demo-group.example.com"]
+      }
+    },
+    {
+      "fixture": "listed_company.json",
+      "golden": {
+        "expected_entities": ["示例新能源股份有限公司"],
+        "expected_claims": [
+          "canonical_company_name=示例新能源股份有限公司",
+          "revenue=100亿元", "profit=8亿元", "employee_count=5000", "stock_code=300999"
+        ],
+        "expected_products": [],
+        "expected_factories": [],
+        "expected_parameters": [],
+        "expected_conflicts": [],
+        "expected_sources": ["cninfo.com.cn"]
+      }
+    },
+    {
+      "fixture": "subsidiary_group.json",
+      "golden": {
+        "expected_entities": ["示例工业集团有限公司", "示例工业装备有限公司", "示例工业材料有限公司", "示例工业能源有限公司"],
+        "expected_claims": ["canonical_company_name=示例工业集团有限公司"],
+        "expected_products": [],
+        "expected_factories": ["装备制造基地", "材料生产基地"],
+        "expected_parameters": [],
+        "expected_conflicts": [],
+        "expected_sources": ["demo-group.example.com"]
+      }
+    },
+    {
+      "fixture": "product_model_rich.json",
+      "golden": {
+        "expected_entities": ["示例电池材料有限公司"],
+        "expected_claims": ["canonical_company_name=示例电池材料有限公司"],
+        "expected_products": ["人造石墨负极材料"],
+        "expected_factories": [],
+        "expected_parameters": ["D50", "比表面积"],
+        "expected_conflicts": [],
+        "expected_sources": ["example-battery-material.com"]
+      }
+    },
+    {
+      "fixture": "energy_rich.json",
+      "golden": {
+        "expected_entities": ["示例玻璃制造有限公司"],
+        "expected_claims": [
+          "canonical_company_name=示例玻璃制造有限公司",
+          "electricity_consumption=8000", "energy_consumption=12000",
+          "roof_area=30000", "transformer_capacity=20000", "pv_capacity=5",
+          "project_name=厂房屋顶分布式光伏项目"
+        ],
+        "expected_products": [],
+        "expected_factories": ["玻璃制造基地"],
+        "expected_parameters": [],
+        "expected_conflicts": [],
+        "expected_sources": ["example-glass.com"]
+      }
+    },
+    {
+      "fixture": "sparse_public_info.json",
+      "golden": {
+        "expected_entities": ["示例小型零部件厂"],
+        "expected_claims": ["core_business=金属零部件加工"],
+        "expected_products": [],
+        "expected_factories": [],
+        "expected_parameters": [],
+        "expected_conflicts": [],
+        "expected_sources": ["news.example-media.cn"]
+      }
+    }
   ]
 }

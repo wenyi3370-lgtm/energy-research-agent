@@ -1,0 +1,113 @@
+[
+  {
+    "source_url": "https://www.example-battery-material.com/products",
+    "source_title": "示例电池材料有限公司 产品中心",
+    "publisher": "示例电池材料有限公司",
+    "source_kind": "official_company",
+    "extraction_method": "recorded_fixture",
+    "retrieval_adapter": "anysearch",
+    "is_search_snippet": false,
+    "entities": [
+      {
+        "entity_key": "bm",
+        "canonical_name": "示例电池材料有限公司",
+        "entity_type": "company",
+        "official_website": "https://www.example-battery-material.com"
+      }
+    ],
+    "claims": [
+      {
+        "entity_key": "bm",
+        "field_name": "canonical_company_name",
+        "value": "示例电池材料有限公司",
+        "value_type": "string",
+        "raw_text": "公司全称：示例电池材料有限公司",
+        "context_text": "示例电池材料有限公司主营负极材料。",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "bm",
+        "field_name": "industry",
+        "value": "battery_material",
+        "value_type": "string",
+        "raw_text": "industry=battery_material",
+        "context_text": "页面披露 industry 为 battery_material",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "bm",
+        "field_name": "product_catalog_scope",
+        "value": {
+          "official_product_centers": [
+            "https://www.example-battery-material.com/products"
+          ],
+          "enumerated": true,
+          "catalog_items": [
+            "人造石墨负极材料"
+          ]
+        },
+        "value_type": "string",
+        "raw_text": "product_catalog_scope={'official_product_centers': ['https://www.example-battery-material.com/products'], 'enumerated': True, 'catalog_items': ['人造石墨负极材料']}",
+        "context_text": "页面披露 product_catalog_scope 为 {'official_product_centers': ['https://www.example-battery-material.com/products'], 'enumerated': True, 'catalog_items': ['人造石墨负极材料']}",
+        "qualifier": "exact",
+        "unit": null
+      }
+    ],
+    "factories": [],
+    "products": [
+      {
+        "product_key": "p1",
+        "entity_key": "bm",
+        "name": "人造石墨负极材料",
+        "category": "负极材料",
+        "series": "GS 系列",
+        "model": "GS-8",
+        "description": "高容量人造石墨",
+        "applications": [
+          "动力电池"
+        ],
+        "customer_segment": "电芯厂",
+        "commercial_status": "量产",
+        "parameters": [
+          {
+            "name": "D50",
+            "value": 9.5,
+            "unit": "μm",
+            "claim_ids": []
+          },
+          {
+            "name": "比表面积",
+            "value": 1.2,
+            "unit": "m2/g",
+            "claim_ids": []
+          }
+        ]
+      },
+      {
+        "product_key": "p2",
+        "entity_key": "bm",
+        "name": "人造石墨负极材料",
+        "category": "负极材料",
+        "series": "TS 系列",
+        "model": "TS-3",
+        "description": "快充型人造石墨",
+        "applications": [
+          "储能电池"
+        ],
+        "customer_segment": "电芯厂",
+        "commercial_status": "量产",
+        "parameters": [
+          {
+            "name": "D50",
+            "value": 7.0,
+            "unit": "μm",
+            "claim_ids": []
+          }
+        ]
+      }
+    ],
+    "images": []
+  }
+]

@@ -4,48 +4,22 @@
 
 | 状态 | 含义 | 处理 |
 |---|---|---|
-| REVIEW_REQUIRED | 人工评审门 | 评审人 POST review（APPROVE/EDIT_AND_APPROVE/REJECT/RESEARCH_AGAIN） |
 | FAILED | 执行失败（error.retryable 区分） | retryable=true → POST retry（有限次）；false → 人工诊断 |
-| BLOCKED | 验证阻断 / 适配器不可用 / **证据冲突** | 见下方「BLOCKED 与证据冲突」 |
+| BLOCKED | 无可用证据 / 结构错误 / 适配器不可用 | 修复数据源或环境后从网页重跑 |
 | RETRY_EXHAUSTED | 重试次数耗尽 | 人工介入，确认后手工重置或升级资源 |
 
-## BLOCKED 与证据冲突（重要）
+## 自动裁决与 BLOCKED（重要）
 
-真实研究最常见的 BLOCKED 原因不是故障，而是**系统发现了来源冲突并拒绝自行裁决**
-（铁律：冲突是一等记录，禁止静默平均/覆盖）。review_reasons 会带
-`UNRESOLVED_CORE_CONFLICT: <field>` 及 WARNING（产品覆盖不完整等）。
-
-处理步骤：
-
-1. **查看冲突详情**（操作面板或 API）：
+身份或证据冲突会自动按可信度排序并继续，不再造成 BLOCKED。冲突仍是一等记录，
+不会静默平均或覆盖。可通过以下接口审计：
 
 ```
 GET /api/v1/research/{run_id}/conflicts        # 列出所有冲突组
-GET /api/v1/research/{run_id}/result           # review_reasons 含 UNRESOLVED_CORE_CONFLICT
+GET /api/v1/research/{run_id}/result           # 最终状态与警告
 ```
 
-（也可在容器内查具体 claim 值与来源，见下方命令。）
-
-2. **判断并裁决**：确认冲突各方数值与来源后，选择处置：
-
-```bash
-# 选定权威说法（revenue 案例：以年报 PDF 口径为准）
-curl -X POST http://localhost:8000/api/v1/research/{run_id}/conflicts/{conflict_id}/resolve \
-  -H "Content-Type: application/json" \
-  -d '{"reviewer":"你的名字","decision":"select_authoritative","selected_claim_id":"CLAIM-xxx","rationale":"以官方年报为准"}'
-# 或 coexist（口径差异可共存）/ superseded（已被取代）
-```
-
-3. **恢复执行**（不重跑研究，直接验证+发布）：
-
-```bash
-curl -X POST http://localhost:8000/api/v1/research/{run_id}/resume
-```
-
-4. 若还有**其他 BLOCKING 冲突**，会再次 BLOCKED（freeze 拒绝），重复 2-3 步逐个裁决。
-
-> 裁决记录全量落 `conflict_resolutions` 表（reviewer/decision/selected_claim/rationale），
-> 冻结证据保持不可变——完全可审计、可追溯。未裁决的 BLOCKING 冲突绝不放行。
+若仍为 BLOCKED，说明没有可供选择的有效证据或出现运行/结构故障，应修复环境或数据源，
+再从本地网页重新发起；业务人员不参与内容裁决。
 
 ## 僵尸任务检测（自动保险）
 
@@ -64,8 +38,8 @@ curl -X POST http://localhost:8000/api/v1/research/{run_id}/resume
 SELECT status, count(*) FROM research_runs GROUP BY status;
 -- 失败原因
 SELECT error_type, count(*) FROM research_runs WHERE status='FAILED' GROUP BY error_type;
--- 人工评审耗时
-SELECT run_id, human_review_seconds FROM research_runs WHERE human_review_seconds IS NOT NULL;
+-- 自动裁决冲突数
+SELECT run_id, conflict_count FROM run_metrics WHERE conflict_count > 0;
 -- ROI 输入
 SELECT * FROM user_feedback ORDER BY created_at DESC LIMIT 20;
 ```

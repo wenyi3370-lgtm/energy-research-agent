@@ -4,6 +4,8 @@ from enterprise_energy_research.domain.enums import EnterpriseComplexity, Source
 from enterprise_energy_research.domain.ids import RunSequence, new_sortable_id
 from enterprise_energy_research.domain.models import ConflictGroup, DataGap, ResearchPlan, ResearchQuery
 
+from .contracts import contract_for
+
 
 GOAL_FAMILIES: tuple[tuple[str, str], ...] = (
     ("company_identity", "官网 注册主体 曾用名 统一社会信用代码"),
@@ -58,15 +60,28 @@ ROUND_SUFFIXES = {
 }
 
 BROWSER_DEPTH_TOPICS = {
+    # Kimi WebBridge is reserved for two jobs: IMAGE discovery on real pages,
+    # and PRODUCT CATALOG traversal (official product centers are SPA pages
+    # that plain HTTP extraction cannot enumerate — P0-17). All other search
+    # and text collection runs through AnySearch (search + full-text extract).
+    "image_evidence",
     "products", "product_series", "product_models", "product_parameters",
-    "image_evidence", "subsidiaries", "organization", "factories", "production_lines",
 }
 
 
 class ResearchPlanner:
-    def build(self, run_id: str, entity_id: str, canonical_name: str, complexity: EnterpriseComplexity, budget: dict[str, int]) -> ResearchPlan:
+    def build(self, run_id: str, entity_id: str, canonical_name: str, complexity: EnterpriseComplexity, budget: dict[str, int], *, only_topics: list[str] | None = None) -> ResearchPlan:
         sequence = RunSequence()
-        topics = list(GOAL_FAMILIES)
+        # image_evidence is planned FIRST so it always receives a query slot:
+        # routing an image goal to Kimi is mandatory (P0-15), and a query
+        # budget must never silently drop the image pipeline.
+        families = [topic for topic in GOAL_FAMILIES if topic[0] == "image_evidence"] + [
+            topic for topic in GOAL_FAMILIES if topic[0] != "image_evidence"
+        ]
+        if only_topics is not None:
+            allowed = set(only_topics)
+            families = [topic for topic in families if topic[0] in allowed]
+        topics = families
         max_queries = int(budget.get("max_queries", 80))
         queries: list[ResearchQuery] = []
         seen: set[str] = set()
@@ -80,7 +95,11 @@ class ResearchPlanner:
                 if normalized in seen or len(queries) >= max_queries:
                     continue
                 seen.add(normalized)
-                browser_round = topic in BROWSER_DEPTH_TOPICS and round_name in {"R2", "R3"}
+                browser_round = topic in BROWSER_DEPTH_TOPICS
+                # Product-catalog topics DISCOVER via AnySearch, then Kimi
+                # opens the REAL official product pages (SPA) in the depth
+                # pass. Only image goals run their own search on the bridge.
+                adapter = "kimi_webbridge" if topic == "image_evidence" else "anysearch"
                 queries.append(ResearchQuery(
                     query_id=sequence.next("query"),
                     entity_id=entity_id,
@@ -88,13 +107,15 @@ class ResearchPlanner:
                     query=query_text,
                     purpose=f"{round_name} {round_goal}: collect {topic} evidence for {canonical_name}",
                     preferred_source_levels=[SourceLevel.SOURCE_A, SourceLevel.SOURCE_B],
-                    adapter_preference="kimi_webbridge" if browser_round else "anysearch",
-                    max_results=min(10, int(budget.get("max_pages", 120))),
+                    adapter_preference=adapter,
+                    max_results=min(int(budget.get("max_results_per_query", 10)), int(budget.get("max_pages", 120))),
                     requires_browser=browser_round,
                     collection_round=round_name,
                     round_goal=round_goal,
                     high_priority=topic != "image_evidence",
                     trigger=("official_discovery" if round_name == "R1" else "catalog_enumeration" if topic in {"products", "product_series", "product_models", "product_parameters"} else "triangulation" if round_name == "R3" else "baseline"),
+                    canonical_company_name=canonical_name,
+                    expected_fields=list(contract_for(topic).expected_fields),
                 ))
         return ResearchPlan(
             plan_id=new_sortable_id("PLAN"), run_id=run_id, complexity=complexity,
@@ -102,6 +123,7 @@ class ResearchPlanner:
             completion_contract=[name for name, _ in GOAL_FAMILIES],
             scoped_goal_families=[name for name, _ in GOAL_FAMILIES],
             requires_catalog_enumeration=True,
+            canonical_company_name=canonical_name,
         )
 
     def gap_queries(self, plan: ResearchPlan, canonical_name: str, gaps: list[DataGap]) -> list[ResearchQuery]:
@@ -118,6 +140,8 @@ class ResearchPlanner:
                 max_results=10, requires_browser=family in BROWSER_DEPTH_TOPICS,
                 collection_round="R2", round_goal="depth", high_priority=gap.importance != "minor",
                 trigger="gap", target_gap_ids=[gap.gap_id],
+                canonical_company_name=canonical_name,
+                expected_fields=list(contract_for(family).expected_fields),
             ))
         return queries
 
@@ -137,6 +161,8 @@ class ResearchPlanner:
                 collection_round="R3", round_goal="triangulation", high_priority=True,
                 trigger="conflict", target_conflict_ids=[conflict.conflict_group_id],
                 target_claim_ids=list(conflict.claim_ids),
+                canonical_company_name=canonical_name,
+                expected_fields=list(contract_for(family).expected_fields),
             ))
         return queries
 

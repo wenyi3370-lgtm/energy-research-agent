@@ -19,7 +19,7 @@ from .base import FeishuAdapter, FeishuDelivery, FeishuMessage
 
 logger = logging.getLogger("enterprise_energy_research.automation.feishu")
 
-NOTIFY_ON = {"REVIEW_REQUIRED", "PUBLISHED", "FAILED", "BLOCKED", "REJECTED"}
+NOTIFY_ON = {"PUBLISHED", "FAILED", "BLOCKED", "REJECTED"}
 
 # Deliverable types delivered as files on PUBLISHED (ordered).
 FILE_DELIVERABLES = ("excel", "word", "enterprise_html")
@@ -70,7 +70,7 @@ class FeishuNotifier:
 
     @staticmethod
     def _status_text(result: ResearchResult) -> str:
-        """Status-specific notification copy; BLOCKED tells the reviewer how to proceed."""
+        """Status-specific copy; no status asks a business user to adjudicate."""
         task = result.task_id
         run = result.run_id
         if str(result.status) == "PUBLISHED":
@@ -82,17 +82,9 @@ class FeishuNotifier:
             )
         if str(result.status) == "BLOCKED":
             return (
-                f"[需人工处理] {task}\nrun={run}\n"
-                "存在证据冲突（UNRESOLVED_CORE_CONFLICT），系统已停止发布。\n"
-                "请查看 conflicts 详情后裁决：\n"
-                "  POST /api/v1/research/{run_id}/conflicts/{conflict_id}/resolve\n"
-                "  然后 POST /api/v1/research/{run_id}/resume 恢复发布。"
-            )
-        if str(result.status) == "REVIEW_REQUIRED":
-            return (
-                f"[需评审] {task}\nrun={run}\n"
-                f"原因: {'; '.join(result.review_reasons[:3])}\n"
-                "请评审后提交决策（APPROVE/REJECT/RESEARCH_AGAIN）。"
+                f"[研究已自动终止] {task}\nrun={run}\n"
+                "系统已自动选择最可信的身份与证据；本次仍无法继续，说明属于无可用证据或运行故障，"
+                "不是待人工裁决任务。请修复数据源/运行环境后从本地网页重新发起。"
             )
         if str(result.status) == "REJECTED":
             return f"[已拒绝] {task}\nrun={run}\n任务已被评审拒绝，流程终止。"

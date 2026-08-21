@@ -1,0 +1,33 @@
+[
+  {
+    "source_url": "https://news.example-media.cn/2025/01/1",
+    "source_title": "某小型零部件厂动态",
+    "publisher": "普通媒体",
+    "source_kind": "ordinary_media",
+    "extraction_method": "recorded_fixture",
+    "retrieval_adapter": "anysearch",
+    "is_search_snippet": false,
+    "entities": [
+      {
+        "entity_key": "sp",
+        "canonical_name": "示例小型零部件厂",
+        "entity_type": "company"
+      }
+    ],
+    "claims": [
+      {
+        "entity_key": "sp",
+        "field_name": "core_business",
+        "value": "金属零部件加工",
+        "value_type": "string",
+        "raw_text": "core_business=金属零部件加工",
+        "context_text": "页面披露 core_business 为 金属零部件加工",
+        "qualifier": "exact",
+        "unit": null
+      }
+    ],
+    "factories": [],
+    "products": [],
+    "images": []
+  }
+]

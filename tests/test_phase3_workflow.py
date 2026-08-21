@@ -59,7 +59,13 @@ class Phase3WorkflowTests(unittest.TestCase):
             self.assertEqual(state.complexity, EnterpriseComplexity.ENTERPRISE_NORMAL)
             self.assertEqual(detection.dashboard_decision, ProductDashboardDecision.GENERATE)
             self.assertEqual(len(store.list(state.run_id, "energy_profile")), 1)
-            self.assertEqual(len(store.list(state.run_id, "solution")), 4)
+            # P0-20: opportunities are evidence-driven, not a fixed four-engine
+            # menu. Every evidence-supported solution must be claim-bound.
+            solutions = store.list(state.run_id, "solution")
+            self.assertGreaterEqual(len(solutions), 1)
+            for solution in solutions:
+                if solution.statement_type.value == "EVIDENCE_SUPPORTED":
+                    self.assertTrue(solution.claim_ids)
             self.assertTrue(all(item.verification_status == VerificationStatus.VERIFIED for item in store.list(state.run_id, "image")))
             product_artifact = next(item for item in manifest.artifacts if item.type.value == "product_html")
             self.assertEqual(product_artifact.status.value, "SKIPPED")
@@ -104,7 +110,7 @@ class Phase3WorkflowTests(unittest.TestCase):
             self.assertEqual(state.complexity, EnterpriseComplexity.SMALL_SIMPLE)
             self.assertEqual(detection.dashboard_decision, ProductDashboardDecision.SKIP_PRODUCT_DASHBOARD)
 
-    def test_ambiguous_identity_routes_to_human_review_without_ingest(self) -> None:
+    def test_ambiguous_identity_auto_selects_and_continues(self) -> None:
         _, batches = self._load("normal_manufacturer.json")
         first = batches[0]
         rival = first.model_copy(update={
@@ -133,12 +139,12 @@ class Phase3WorkflowTests(unittest.TestCase):
                 [first, rival],
                 output_dir=Path(temp) / "outputs",
             )
-            self.assertEqual(state.status, RunStatus.HUMAN_REVIEW)
-            self.assertIsNone(manifest)
-            self.assertIsNone(detection)
-            self.assertEqual(store.list(run_id, "entity"), [])
+            self.assertEqual(state.status, RunStatus.PASS)
+            self.assertIsNotNone(manifest)
+            self.assertIsNotNone(detection)
+            self.assertNotEqual(store.list(run_id, "entity"), [])
 
-    def test_core_field_conflict_blocks_freeze(self) -> None:
+    def test_core_field_conflict_is_automatically_adjudicated(self) -> None:
         company, batches = self._load("normal_manufacturer.json")
         first = batches[0]
         revenue_claim = first.claims[0].model_copy(update={
@@ -182,10 +188,12 @@ class Phase3WorkflowTests(unittest.TestCase):
                 batches,
                 output_dir=Path(temp) / "outputs",
             )
-            self.assertEqual(state.status, RunStatus.BLOCKED)
-            self.assertIsNone(manifest)
-            self.assertIn("UNRESOLVED_CORE_CONFLICT", state.blocking_findings)
-            self.assertEqual(store.list(run_id, "conflict")[0].status.value, "BLOCKING")
+            self.assertEqual(state.status, RunStatus.PASS)
+            self.assertIsNotNone(manifest)
+            conflict = store.list(run_id, "conflict")[0]
+            self.assertEqual(conflict.status.value, "RESOLVED")
+            self.assertEqual(conflict.resolution, "select_authoritative")
+            self.assertTrue(conflict.selected_claim_ids)
 
 
 if __name__ == "__main__":

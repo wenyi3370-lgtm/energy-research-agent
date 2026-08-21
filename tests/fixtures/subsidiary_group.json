@@ -1,0 +1,114 @@
+[
+  {
+    "source_url": "https://www.demo-group.example.com/group",
+    "source_title": "示例工业集团官网",
+    "publisher": "示例工业集团",
+    "source_kind": "official_company",
+    "extraction_method": "recorded_fixture",
+    "retrieval_adapter": "anysearch",
+    "is_search_snippet": false,
+    "entities": [
+      {
+        "entity_key": "g",
+        "canonical_name": "示例工业集团有限公司",
+        "entity_type": "group",
+        "official_website": "https://www.demo-group.example.com",
+        "registered_name": "示例工业集团有限公司"
+      },
+      {
+        "entity_key": "s1",
+        "canonical_name": "示例工业装备有限公司",
+        "entity_type": "company",
+        "parent_entity_key": "g"
+      },
+      {
+        "entity_key": "s2",
+        "canonical_name": "示例工业材料有限公司",
+        "entity_type": "company",
+        "parent_entity_key": "g"
+      },
+      {
+        "entity_key": "s3",
+        "canonical_name": "示例工业能源有限公司",
+        "entity_type": "company",
+        "parent_entity_key": "g"
+      }
+    ],
+    "claims": [
+      {
+        "entity_key": "g",
+        "field_name": "canonical_company_name",
+        "value": "示例工业集团有限公司",
+        "value_type": "string",
+        "raw_text": "公司全称：示例工业集团有限公司",
+        "context_text": "示例工业集团有限公司是一家综合工业集团。",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "g",
+        "field_name": "core_business",
+        "value": "装备制造与新材料",
+        "value_type": "string",
+        "raw_text": "core_business=装备制造与新材料",
+        "context_text": "页面披露 core_business 为 装备制造与新材料",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "s1",
+        "field_name": "core_business",
+        "value": "高端装备制造",
+        "value_type": "string",
+        "raw_text": "core_business=高端装备制造",
+        "context_text": "页面披露 core_business 为 高端装备制造",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "s2",
+        "field_name": "core_business",
+        "value": "锂电材料生产",
+        "value_type": "string",
+        "raw_text": "core_business=锂电材料生产",
+        "context_text": "页面披露 core_business 为 锂电材料生产",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "s3",
+        "field_name": "core_business",
+        "value": "综合能源服务",
+        "value_type": "string",
+        "raw_text": "core_business=综合能源服务",
+        "context_text": "页面披露 core_business 为 综合能源服务",
+        "qualifier": "exact",
+        "unit": null
+      }
+    ],
+    "factories": [
+      {
+        "factory_key": "f1",
+        "operator_entity_key": "s1",
+        "name": "装备制造基地",
+        "address": "江苏省常州市",
+        "processes": [
+          "机加工",
+          "装配"
+        ]
+      },
+      {
+        "factory_key": "f2",
+        "operator_entity_key": "s2",
+        "name": "材料生产基地",
+        "address": "四川省宜宾市",
+        "processes": [
+          "粉碎",
+          "烧结"
+        ]
+      }
+    ],
+    "products": [],
+    "images": []
+  }
+]

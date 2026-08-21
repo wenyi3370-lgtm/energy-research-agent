@@ -1,16 +1,13 @@
-# Review Gate policy (Phase 5). Only `enabled` rules are enforced by the
-# automation service.
-# 已按生产推荐启用：RV-01（警告即评审，V1 基线）、RV-02（低置信度）、
-# RV-04（数据冲突）、RV-09（政策/渠道类敏感研究）。这些规则对合成演示
-# 不产生干扰（合成数据置信度 1.0、无冲突），对真实研究提供安全兜底。
-# 需要更严时可继续启用 RV-05（缺口评审）/ RV-06（证据量过少）/ RV-03（高风险）。
+# Automatic adjudication policy. Human-review triggers are disabled: warnings,
+# low confidence and conflicts are preserved in the audit trail while the most
+# credible supported option is selected and execution continues.
 schema_version: "1.0"
 rules:
   RV-01_pass_with_warnings:
-    enabled: true
-    reason: "validation passed with warnings; a human must confirm"
+    enabled: false
+    reason: "validation warning retained for automatic adjudication audit"
   RV-02_low_confidence:
-    enabled: true
+    enabled: false
     min_confidence: 0.70
     reason: "model confidence {confidence} is below {min_confidence}"
   RV-03_high_risk:
@@ -18,8 +15,8 @@ rules:
     min_risk: "HIGH"
     reason: "risk level is {risk_level}"
   RV-04_conflicts:
-    enabled: true
-    reason: "{conflict_count} conflicting claims need adjudication"
+    enabled: false
+    reason: "{conflict_count} conflicting claims were automatically adjudicated"
   RV-05_gaps:
     enabled: false
     reason: "{gap_count} open evidence gaps need acceptance"
@@ -34,7 +31,7 @@ rules:
     enabled: false
     reason: "market-level scope without a named company"
   RV-09_sensitive_types:
-    enabled: true
+    enabled: false
     research_types: ["policy_regulation", "channel_research"]
     reason: "research type {research_type} is policy-sensitive"
   RV-10_urgent_priority:

@@ -163,6 +163,9 @@ class Claim(StrictModel):
     claim_id: str
     entity_id: str
     field_name: str = Field(min_length=1)
+    # Canonicalized field name. ``raw_field_name`` preserves the exact
+    # field name as extracted from the page before alias normalization.
+    raw_field_name: str | None = None
     value: Any = None
     value_type: str
     unit: str | None = None
@@ -208,7 +211,21 @@ class DataGap(StrictModel):
     entity_id: str | None = None
     field_name: str
     importance: Literal["critical", "major", "minor"]
-    reason: Literal["missing", "conflicting", "stale", "unverifiable", "requires_site_due_diligence"]
+    reason: Literal[
+        "missing", "conflicting", "stale", "unverifiable", "requires_site_due_diligence",
+        # Pipeline-stage taxonomy: a gap must say WHERE the chain stopped,
+        # not just that public information is missing.
+        "NOT_SEARCHED",
+        "SEARCH_FAILED",
+        "SEARCHED_NOT_FOUND",
+        "FOUND_NOT_RETRIEVED",
+        "RETRIEVED_NOT_EXTRACTED",
+        "EXTRACTED_NOT_NORMALIZED",
+        "NORMALIZED_NOT_VERIFIED",
+        "VERIFIED_NOT_SYNTHESIZED",
+        "SYNTHESIZED_NOT_PUBLISHED",
+        "PUBLIC_EVIDENCE_GAP",
+    ]
     attempted_query_ids: list[str] = Field(default_factory=list)
     next_action: str
     status: GapStatus = GapStatus.OPEN
@@ -256,8 +273,14 @@ class Product(StrictModel):
     brand: str | None = None
     model: str | None = None
     category: str | None = None
+    # Distinct catalog level below category: one family can ship several series.
+    series: str | None = None
     description: str | None = None
     parameters: list[ProductParameter] = Field(default_factory=list)
+    # Real business fields; never replaced by empty placeholders.
+    applications: list[str] = Field(default_factory=list)
+    customer_segment: str | None = None
+    commercial_status: str | None = None
     image_id: str | None = None
     source_ids: list[str] = Field(default_factory=list)
     verification_status: VerificationStatus = VerificationStatus.UNVERIFIED
@@ -338,6 +361,9 @@ class ResearchQuery(StrictModel):
     target_gap_ids: list[str] = Field(default_factory=list)
     target_conflict_ids: list[str] = Field(default_factory=list)
     target_claim_ids: list[str] = Field(default_factory=list)
+    # P0-2: goal context declared at planning time so extraction never loses it.
+    canonical_company_name: str | None = None
+    expected_fields: list[str] = Field(default_factory=list)
     status: QueryStatus = QueryStatus.PLANNED
 
 
@@ -350,6 +376,7 @@ class ResearchPlan(StrictModel):
     completion_contract: list[str]
     scoped_goal_families: list[str] = Field(default_factory=list)
     requires_catalog_enumeration: bool = True
+    canonical_company_name: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
 
     @model_validator(mode="after")
@@ -385,6 +412,13 @@ class ExtractedEntity(StrictModel):
     official_website: HttpUrl | None = None
     registration_region: str | None = None
     parent_entity_key: str | None = None
+    # Identity fields below may ONLY be filled when the page states them.
+    registered_name: str | None = None
+    headquarters: str | None = None
+    founded_date: str | None = None
+    parent_company: str | None = None
+    actual_controller: str | None = None
+    registration_identifier: str | None = None
 
 
 class ExtractedFactory(StrictModel):
@@ -402,8 +436,12 @@ class ExtractedProduct(StrictModel):
     brand: str | None = None
     model: str | None = None
     category: str | None = None
+    series: str | None = None
     description: str | None = None
     parameters: list[ProductParameter] = Field(default_factory=list)
+    applications: list[str] = Field(default_factory=list)
+    customer_segment: str | None = None
+    commercial_status: str | None = None
     image_key: str | None = None
 
 
@@ -413,7 +451,7 @@ class ExtractedImage(StrictModel):
     factory_key: str | None = None
     product_key: str | None = None
     source_url: HttpUrl
-    image_type: Literal["logo", "factory", "office", "production_line", "product", "location", "certificate", "other"]
+    image_type: Literal["logo", "headquarters", "factory", "office", "production_line", "product", "location", "certificate", "project", "other"]
     width: int = Field(gt=0)
     height: int = Field(gt=0)
     mime_type: str
@@ -441,7 +479,16 @@ class ExtractedEvidenceBatch(StrictModel):
 
 class Solution(StrictModel):
     solution_id: str
-    engine: Literal["EPC", "ZERO_CARBON", "STORAGE_ODM", "OVERSEAS"]
+    engine: Literal[
+        "EPC", "ZERO_CARBON", "STORAGE_ODM", "OVERSEAS",
+        # Evidence-driven Opportunity Registry types (P0-20). Legacy values
+        # above remain valid for previously frozen runs.
+        "PV_EPC", "STORAGE", "V2G", "CHARGING", "ENERGY_EFFICIENCY",
+        "COMPRESSED_AIR", "WASTE_HEAT", "HVAC", "GREEN_POWER",
+        "ENERGY_MANAGEMENT", "CARBON_MANAGEMENT", "ZERO_CARBON_FACTORY",
+        "MICROGRID", "ENERGY_DIGITALIZATION", "PRODUCT_COOPERATION",
+        "JOINT_RND", "SUPPLY_CHAIN", "ODM", "CHANNEL", "OTHER",
+    ]
     target_ids: list[str]
     opportunity: str
     proposed_solution: str

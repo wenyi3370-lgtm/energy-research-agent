@@ -25,3 +25,6 @@ automation*.db
 *shanshan*
 *Shanshan*
 vendor/skills/ppt-master/
+
+# 旧门户冒烟资产（非源码，不上传）
+artifacts/

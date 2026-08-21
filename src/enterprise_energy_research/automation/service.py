@@ -8,10 +8,9 @@ unittest and reusable by n8n-side workers. It owns the workflow rules:
   ``task_id``.
 - status changes always go through ``TaskRepository.update_run_status``,
   which enforces ``LEGAL_TRANSITIONS`` at the persistence boundary.
-- the human gate sits between validation and freeze: the run may only
-  reach FROZEN after REVIEW_REQUIRED -> APPROVED (or validation auto-pass
-  -> APPROVED), and ``executor.freeze_and_publish`` is invoked only from
-  APPROVED.
+- validation warnings and ambiguity are adjudicated automatically; the run
+  reaches FROZEN through APPROVED without a human decision task. The chosen
+  evidence and rejected alternatives remain auditable in the evidence store.
 - every failure is captured as a structured ``ResearchError`` and the run
   moves to FAILED; retries are bounded by ``max_retries``.
 """
@@ -135,13 +134,12 @@ class ResearchService:
     # -- execution ---------------------------------------------------------
 
     def execute_run(self, run_id: str) -> ResearchResult:
-        """Run the deterministic workflow until a gate, terminal state or failure.
+        """Run the deterministic workflow until a terminal state or failure.
 
         Research -> evidence -> validation always ends at one of:
-        BLOCKED (finished), REVIEW_REQUIRED (human gate per the review
-        policy) or APPROVED -> freeze -> publish -> PUBLISHED. Failures
-        move the run to FAILED with a structured error and never leave it
-        wedged mid-state.
+        BLOCKED is reserved for non-recoverable evidence/operational failure.
+        Ambiguity, conflicts and PASS_WITH_WARNINGS are automatically
+        adjudicated, then continue APPROVED -> freeze -> publish -> PUBLISHED.
         """
         session = self.db.session()
         try:
@@ -180,29 +178,51 @@ class ResearchService:
                     repo.update_run_status(run_id, TaskStatus.BLOCKED, reason="validation blocked", finished=True)
                     return self._settle(repo, run_id, outcome, TaskStatus.BLOCKED)
                 gate = self._gate(outcome, request)
-                if outcome.review_required or gate.review_required:
-                    reasons = list(outcome.review_reasons)
-                    reasons.extend(reason for reason in gate.reasons if reason not in reasons)
-                    outcome.review_reasons = reasons
-                    outcome.review_required = True
-                    repo.update_run_status(run_id, TaskStatus.REVIEW_REQUIRED, reason="human review gate")
-                    return self._settle(repo, run_id, outcome, TaskStatus.REVIEW_REQUIRED)
-                repo.update_run_status(run_id, TaskStatus.APPROVED, reason="validation auto-pass")
-                return self._freeze_and_publish(repo, run_id)
+                reasons = list(outcome.review_reasons)
+                reasons.extend(reason for reason in gate.reasons if reason not in reasons)
+                outcome.review_reasons = reasons
+                outcome.review_required = False
+                repo.update_run_status(
+                    run_id,
+                    TaskStatus.APPROVED,
+                    reason="automatic credibility adjudication and validation pass",
+                )
+                return self._freeze_and_publish(repo, run_id, research_outcome=outcome)
             except Exception as exc:  # noqa: BLE001 - a run must never wedge mid-state
                 return self._fail(repo, run_id, exc)
         finally:
             session.close()
 
     def _gate(self, outcome: ExecutionOutcome, request: ResearchRequest) -> ReviewGateResult:
-        """Apply the configured Review Policy rules on top of the executor flag."""
+        """Evaluate legacy policy rules for audit reasons only; never pause a run."""
         return self.review_policy.evaluate(outcome, request)
 
-    def _freeze_and_publish(self, repo: TaskRepository, run_id: str) -> ResearchResult:
+    def _freeze_and_publish(
+        self,
+        repo: TaskRepository,
+        run_id: str,
+        *,
+        research_outcome: ExecutionOutcome | None = None,
+    ) -> ResearchResult:
         """Freeze -> publish -> audit; only ever invoked from APPROVED."""
         try:
             with run_span("publishing", run_id=run_id):
                 outcome = self.executor.freeze_and_publish(run_id, self.workdir)
+            if research_outcome is not None:
+                outcome = outcome.model_copy(update={
+                    "confidence": research_outcome.confidence,
+                    "risk_level": research_outcome.risk_level,
+                    "review_required": False,
+                    "review_reasons": list(research_outcome.review_reasons),
+                    "evidence_count": research_outcome.evidence_count,
+                    "conflict_count": research_outcome.conflict_count,
+                    "gap_count": research_outcome.gap_count,
+                    "verified_claim_count": research_outcome.verified_claim_count,
+                    "input_tokens": research_outcome.input_tokens,
+                    "output_tokens": research_outcome.output_tokens,
+                    "llm_calls": research_outcome.llm_calls,
+                    "search_calls": research_outcome.search_calls,
+                })
             repo.update_run_status(run_id, TaskStatus.FROZEN, reason="evidence frozen")
             repo.update_run_status(run_id, TaskStatus.PUBLISHING, reason="publishing artifacts")
             repo.update_run_status(run_id, TaskStatus.PUBLISHED, finished=True)

@@ -31,7 +31,12 @@ class ImageArchiveResult:
 
 
 class ImageAssetArchiver:
-    """Archive already-verified image URLs as deterministic local evidence assets."""
+    """Archive already-verified image URLs as deterministic local evidence assets.
+
+    Downloads run CONCURRENTLY (each verified image is an independent HTTP
+    fetch) so a batch of failing CDN URLs cannot stall the run for tens of
+    minutes; failures are counted and recorded, never silent.
+    """
 
     MIME_EXTENSIONS = {
         "image/jpeg": ".jpg",
@@ -40,10 +45,11 @@ class ImageAssetArchiver:
         "image/gif": ".gif",
     }
 
-    def __init__(self, *, max_bytes: int = 15_000_000, timeout_seconds: int = 30, fetcher: FetchImage | None = None) -> None:
+    def __init__(self, *, max_bytes: int = 15_000_000, timeout_seconds: int = 12, fetcher: FetchImage | None = None, workers: int = 6) -> None:
         self.max_bytes = max_bytes
         self.timeout_seconds = timeout_seconds
         self.fetcher = fetcher or self._fetch_direct
+        self.workers = workers
 
     def archive(self, images: list[ImageEvidence], evidence_root: Path) -> ImageArchiveResult:
         asset_dir = evidence_root / "assets" / "images"
@@ -52,11 +58,9 @@ class ImageAssetArchiver:
         archived: list[str] = []
         failed: list[str] = []
         diagnostics: list[str] = []
+        lock = __import__("threading").Lock()
 
-        for image in images:
-            if image.verification_status != VerificationStatus.VERIFIED:
-                updated.append(image)
-                continue
+        def fetch_one(image: ImageEvidence) -> tuple[ImageEvidence, str | None]:
             try:
                 payload, response_type = self.fetcher(str(image.source_url), str(image.source_page_url))
                 if not payload or len(payload) > self.max_bytes:
@@ -82,13 +86,31 @@ class ImageAssetArchiver:
                     temporary.write_bytes(payload)
                     temporary.replace(target)
                 local_ref = target.relative_to(evidence_root).as_posix()
-                updated.append(image.model_copy(update={"local_asset_ref": local_ref}))
-                archived.append(image.image_id)
-            except Exception as exc:
-                updated.append(image.model_copy(update={"local_asset_ref": None}))
-                failed.append(image.image_id)
-                diagnostics.append(f"{image.image_id}: {type(exc).__name__}: {exc}")
+                return image.model_copy(update={"local_asset_ref": local_ref}), None
+            except Exception as exc:  # noqa: BLE001
+                return image.model_copy(update={"local_asset_ref": None}), f"{type(exc).__name__}: {exc}"
 
+        def worker(image: ImageEvidence) -> None:
+            outcome, error = fetch_one(image)
+            with lock:
+                updated.append(outcome)
+                if outcome.local_asset_ref:
+                    archived.append(outcome.image_id)
+                else:
+                    failed.append(outcome.image_id)
+                    if error:
+                        diagnostics.append(f"{image.image_id}: {error}")
+
+        with __import__("concurrent.futures").futures.ThreadPoolExecutor(max_workers=self.workers) as pool:
+            pool.map(
+                worker,
+                [image for image in images if image.verification_status == VerificationStatus.VERIFIED],
+            )
+        # Non-verified images pass through untouched.
+        unverified = [image for image in images if image.verification_status != VerificationStatus.VERIFIED]
+        updated = unverified + updated
+        for image_id in failed:
+            diagnostics.append(f"{image_id}: archive failed (see telemetry image_download_failures)")
         return ImageArchiveResult(
             images=updated,
             archived_image_ids=archived,

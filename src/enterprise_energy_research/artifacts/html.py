@@ -93,6 +93,10 @@ class FrozenHtmlPublisher:
         } for item in verified_claims]
         products = []
         missing_product_images: list[str] = []
+        # Formal product dashboards (PRODUCT_HTML) demand 100% archived
+        # product-image coverage; the unified enterprise dashboard does not —
+        # image-less verified products stay in Word/appendix instead.
+        product_image_required = self.artifact_type == ArtifactType.PRODUCT_HTML
         for product in bundle.products:
             if product.verification_status != VerificationStatus.VERIFIED:
                 continue
@@ -109,8 +113,8 @@ class FrozenHtmlPublisher:
                 "imageSource": publication.source_page_url if publication else None,
                 "evidenceStatus": product.verification_status.value, "sourceIds": product.source_ids,
             })
-        if missing_product_images:
-            raise ValueError("Unified formal HTML requires 100% archived product-image coverage: " + ", ".join(missing_product_images))
+        if missing_product_images and product_image_required:
+            raise ValueError("Formal product dashboard requires 100% archived product-image coverage: " + ", ".join(missing_product_images))
         gallery = [{
             "id": item.image_id, "role": item.image_type, "entityId": item.entity_id, "factoryId": item.factory_id,
             "productId": item.product_id, "caption": item.caption, "source": item.source_page_url,
@@ -129,14 +133,67 @@ class FrozenHtmlPublisher:
             "markup": inline_visuals[item.visual_id],
         } for item in visual_manifest.visuals if "html" in item.artifact_targets]
         high_priority = [item for item in bundle.solutions if str(item.priority).upper() in {"HIGH", "P0", "P1", "A", "1"}]
-        insights = [item.opportunity for item in high_priority[:3]] or [item.opportunity for item in bundle.solutions[:3]]
-        insights.extend([
-            f"当前冻结版本含 {len(verified_claims)} 条已核验主张与 {len(bundle.sources)} 个来源。",
-            f"仍有 {len(bundle.gaps)} 项数据缺口，正式投资决策前须完成现场尽调。",
-        ])
+        # P0-6/P0-18: body content comes from the claim-bound synthesis and
+        # publishable profiles, never from research-system metadata.
+        from enterprise_energy_research.research.profiles import CompanyProfileBuilder, PublishableEntityEvaluator
+        from enterprise_energy_research.research.synthesis import ResearchSynthesizer
+        synthesis = ResearchSynthesizer().synthesize(
+            run_id=bundle.run_manifest.run_id,
+            entity=entity,
+            entities=bundle.entities,
+            claims=bundle.claims,
+            sources=bundle.sources,
+            edges=bundle.edges,
+            factories=bundle.factories,
+            products=bundle.products,
+            energy_profiles=bundle.energy_profiles,
+            gaps=bundle.gaps,
+            solutions=bundle.solutions,
+        )
+        evaluator = PublishableEntityEvaluator()
+        profile_builder = CompanyProfileBuilder()
+        publishable_entities = []
+        for item in bundle.entities:
+            publishable, _ = evaluator.evaluate(item, bundle.claims, bundle.edges, bundle.factories, bundle.products)
+            if not publishable:
+                continue
+            profile = profile_builder.build(
+                item, bundle.claims, bundle.edges, bundle.factories, bundle.products,
+                entities=bundle.entities,
+            )
+            publishable_entities.append({
+                "id": item.entity_id, "name": item.canonical_name,
+                "coreBusiness": profile.core_business,
+            })
+        profile_payload = synthesis.company_profile.model_dump(mode="json") if synthesis.company_profile else None
+        hero_tagline = (
+            profile_payload.get("core_business") if profile_payload and profile_payload.get("core_business")
+            else "企业产业与能源合作智能调研"
+        )
+        insights = list(synthesis.executive_summary) or [
+            item.opportunity for item in high_priority[:3]
+        ] or [item.opportunity for item in bundle.solutions[:3]]
+        if not insights:
+            insights = [
+                f"当前冻结版本含 {len(verified_claims)} 条已核验主张与 {len(bundle.sources)} 个来源。",
+                f"仍有 {len(bundle.gaps)} 项数据缺口，正式投资决策前须完成现场尽调。",
+            ]
         payload = {
             "entity": {"id": entity.entity_id, "name": entity.canonical_name, "type": entity.entity_type, "region": entity.registration_region, "website": str(entity.official_website or ""), "status": entity.verification_status.value},
             "entities": [{"id": item.entity_id, "name": item.canonical_name, "type": item.entity_type, "status": item.verification_status.value} for item in bundle.entities],
+            "publishableEntities": publishable_entities,
+            "synthesis": {
+                "executiveSummary": synthesis.executive_summary,
+                "profile": profile_payload,
+                "groupProfile": synthesis.group_profile,
+                "findings": [finding.model_dump(mode="json") for finding in synthesis.findings],
+                "energyProjects": synthesis.existing_energy_projects,
+                "opportunities": synthesis.cooperation_opportunities,
+                "risks": synthesis.risks,
+                "keyUnknowns": synthesis.key_unknowns,
+                "nextActions": synthesis.recommended_next_actions,
+            },
+            "heroTagline": hero_tagline,
             "factories": [{"id": item.factory_id, "name": item.name or "未命名基地", "address": item.address, "processes": item.processes} for item in bundle.factories],
             "edges": children, "claims": claims, "products": products, "gallery": gallery, "visuals": visuals,
             "gaps": [{"field": FIELD_LABELS.get(item.field_name, item.field_name), "importance": item.importance, "reason": item.reason, "next": item.next_action} for item in bundle.gaps],
@@ -157,7 +214,7 @@ class FrozenHtmlPublisher:
         nav = "".join(f'<a href="#{key}"><b>{index:02d}</b><span>{label}</span></a>' for index, (key, label) in enumerate(NAV_ITEMS, 1))
         return f'''<!doctype html><html lang="zh-CN" data-visual-system="lieflat-mono"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#1C1C1A"><link rel="icon" href="data:,"><title>{safe_title}｜企业研究决策驾驶舱</title><style>{CSS}</style></head>
 <body data-color-system="mono"><aside class="sidebar" aria-label="报告索引"><div class="brand"><strong>SEVC</strong><span>RESEARCH INTELLIGENCE</span></div><nav aria-label="章节导航">{nav}</nav><div class="freeze">FREEZE<br><code>{html.escape(payload['meta']['freeze'])}</code></div></aside>
-<main><section id="overview" class="hero"><div><span class="eyebrow">EVIDENCE-FIRST ENTERPRISE RESEARCH</span><h1>{safe_title}</h1><p>{html.escape(payload['entity']['type'])} · {html.escape(payload['entity']['region'] or '区域待核验')} · 研究日期 {payload['meta']['researchDate']}</p></div><div class="coverage"><b>{len(payload['claims'])}</b><span>VERIFIED CLAIMS</span><small>{len(payload['sources'])} SOURCES · {len(payload['gaps'])} GAPS</small></div></section>
+<main><section id="overview" class="hero"><div><span class="eyebrow">EVIDENCE-FIRST ENTERPRISE RESEARCH</span><h1>{safe_title}</h1><p>{html.escape(payload['heroTagline'])} · 研究日期 {payload['meta']['researchDate']}</p></div><div class="coverage"><b>{len(payload['claims'])}</b><span>VERIFIED CLAIMS</span><small>{len(payload['sources'])} SOURCES · {len(payload['gaps'])} GAPS</small></div></section>
 <section class="workspace"><div id="kpis" class="kpis"></div><article class="panel insight"><header><span>EXECUTIVE INSIGHT</span><h2>是否值得合作，以及从哪里切入</h2></header><ol id="insights"></ol></article><div class="visual-grid" data-chapter="research_scope"></div></section>
 <section id="company" class="workspace"><header class="section-title"><b>02</b><div><span>COMPANY PROFILE</span><h2>企业画像</h2></div></header><div id="companyProfile" class="split"></div><div id="gallery" class="gallery"></div><div class="visual-grid" data-chapter="appendix_images"></div></section>
 <section id="organization" class="workspace"><header class="section-title"><b>03</b><div><span>ENTITY REGISTER</span><h2>集团与成员证据名录</h2></div></header><p class="section-deck">成员实体按冻结证据逐条列示；本页不使用关系图、层级图或推测性连接。</p><div id="entityRegister" class="entity-register"></div></section>
@@ -269,8 +326,8 @@ dialog{width:min(980px,94vw);border:0;border-radius:24px;padding:30px;background
 JS = r'''
 const DATA=JSON.parse(document.getElementById('frozen-data').textContent);const $=id=>document.getElementById(id);const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const value=(key,fallback='—')=>{const c=DATA.claims.find(x=>x.fieldKey===key);return c?`${typeof c.value==='object'?JSON.stringify(c.value):c.value}${c.unit||''}`:fallback};
-function overview(){const metrics=[['营收',value('revenue')],['员工',value('employees',value('employee_count'))],['子公司',Math.max(DATA.entities.length-1,0)],['工厂',DATA.factories.length],['核心产品',DATA.products.length],['高优机会',DATA.solutions.filter(x=>String(x.priority).match(/HIGH|P0|P1|A|1/i)).length],['Evidence Sources',DATA.sources.length],['Verified Claims',DATA.claims.length]];$('kpis').innerHTML=metrics.map(x=>`<article class="kpi"><b>${esc(x[1])}</b><span>${esc(x[0])}</span></article>`).join('');$('insights').innerHTML=DATA.insights.map(x=>`<li>${esc(x)}</li>`).join('');$('companyProfile').innerHTML=`<article class="profile-card"><b>${esc(DATA.entity.name)}</b><p>实体类型：${esc(DATA.entity.type)}<br>注册区域：${esc(DATA.entity.region||'待核验')}<br>证据状态：${esc(DATA.entity.status)}</p></article><article class="profile-card"><b>研究边界</b><p>冻结版本：${esc(DATA.meta.freeze)}<br>根哈希：${esc(DATA.meta.rootHash)}<br>复杂度路由：${esc(DATA.meta.complexity)}</p></article>`}
-function structures(){$('entityRegister').innerHTML=DATA.entities.map((e,i)=>`<article class="entity-row"><span class="entity-index">${String(i+1).padStart(2,'0')}</span><div class="entity-main"><b>${esc(e.name)}</b><small>${esc(e.type)}</small></div><span class="entity-status">${esc(e.status)}</span></article>`).join('')||'<article class="evidence-boundary">暂无满足证据门禁的成员实体记录。</article>';$('factoryGrid').innerHTML=DATA.factories.map(f=>`<article class="entity-card"><span class="tag">FACTORY</span><h3>${esc(f.name)}</h3><p>${esc(f.address||'地址待核验')}<br>${esc((f.processes||[]).join('、')||'工艺待核验')}</p></article>`).join('')||'<article class="entity-card"><h3>暂无已核验工厂记录</h3></article>';}
+function overview(){const metrics=[['营收',value('revenue')],['员工',value('employees',value('employee_count'))],['子公司',Math.max(DATA.entities.length-1,0)],['工厂',DATA.factories.length],['核心产品',DATA.products.length],['高优机会',DATA.solutions.filter(x=>String(x.priority).match(/HIGH|P0|P1|A|1/i)).length],['Evidence Sources',DATA.sources.length],['Verified Claims',DATA.claims.length]];$('kpis').innerHTML=metrics.map(x=>`<article class="kpi"><b>${esc(x[1])}</b><span>${esc(x[0])}</span></article>`).join('');$('insights').innerHTML=DATA.insights.map(x=>`<li>${esc(x)}</li>`).join('');const P=(DATA.synthesis&&DATA.synthesis.profile)||{};const rows=[['注册名称',P.registered_name],['成立时间',P.founded_date],['总部',P.headquarters],['注册地',P.registration_region],['官方网站',P.official_website],['母公司',P.parent_company],['实际控制人',P.actual_controller],['主营业务',P.core_business],['业务板块',(P.business_segments||[]).join('、')],['员工人数',P.employee_count],['营业收入',P.revenue],['净利润',P.profit]].filter(x=>x[1]!==null&&x[1]!==undefined&&x[1]!=='');$('companyProfile').innerHTML=`<article class="profile-card"><b>${esc(DATA.entity.name)}</b><p>${rows.map(x=>`${esc(x[0])}：${esc(x[1])}`).join('<br>')||'企业概况详见正文与证据台账。'}</p></article><article class="profile-card"><b>产业足迹</b><p>子公司：${Math.max(DATA.entities.length-1,0)} 家<br>生产基地：${DATA.factories.length} 处<br>已核验产品：${DATA.products.length} 项<br>能源项目：${esc(((DATA.synthesis&&DATA.synthesis.energyProjects)||[]).slice(0,3).join('；'))||'未识别'}</p></article>`}
+function structures(){$('entityRegister').innerHTML=DATA.entities.map((e,i)=>{const pub=(DATA.publishableEntities||[]).find(x=>x.id===e.id);return `<article class="entity-row"><span class="entity-index">${String(i+1).padStart(2,'0')}</span><div class="entity-main"><b>${esc(e.name)}</b><small>${esc((pub&&pub.coreBusiness)||'证据保留于台账')}</small></div><span class="entity-status">${pub?'企业概况见正文':'保留附录'}</span></article>`}).join('')||'<article class="evidence-boundary">暂无满足证据门禁的成员实体记录。</article>';$('factoryGrid').innerHTML=DATA.factories.map(f=>`<article class="entity-card"><span class="tag">FACTORY</span><h3>${esc(f.name)}</h3><p>${esc(f.address||'地址公开资料未披露')}<br>${esc((f.processes||[]).join('、')||'工艺公开资料未披露')}</p></article>`).join('')||'<article class="entity-card"><h3>暂无已核验工厂记录</h3></article>';}
 function visualMarkup(v){return `<div class="lieflat-inline" data-template="${esc(v.templateId)}" data-template-source="${esc(v.templateSource)}" data-color-system="${esc(v.colorSystem)}">${v.markup}</div>`}
 function visuals(){document.querySelectorAll('.visual-grid').forEach(grid=>{const chapter=grid.dataset.chapter;const rows=DATA.visuals.filter(v=>v.chapter===chapter);grid.innerHTML=rows.map(v=>`<article class="visual-card"><header><span class="tag">LIEFLAT ${esc(v.templateId)} · ${esc(v.templateName)} · ${esc(v.colorSystem).toUpperCase()}</span></header>${visualMarkup(v)}<div class="source-note">${esc(v.sourceNote)}<br>${esc(v.transformation)}<br>TEMPLATE: ${esc(v.templateSource)} · ${esc(v.templateCardTitle)}</div></article>`).join('')||'<article class="evidence-boundary">该章节没有满足 Lieflat 数据契约的冻结数据，已改用正文或表格呈现，未生成旧式流程图、关系图或推测图。</article>'})}
 function galleries(){$('gallery').innerHTML=DATA.gallery.filter(x=>!x.productId).map(x=>`<figure data-gallery="${esc(x.id)}"><img src="${x.asset}" alt="${esc(x.caption)}"><figcaption><b>${esc(x.caption)}</b><br><span class="muted">${esc(x.role)}</span></figcaption></figure>`).join('');document.querySelectorAll('[data-gallery]').forEach(el=>el.onclick=()=>{const x=DATA.gallery.find(i=>i.id===el.dataset.gallery);$('lightboxBody').innerHTML=`<img class="lightbox-image" src="${x.asset}" alt="${esc(x.caption)}"><h3>${esc(x.caption)}</h3><p><a href="${esc(x.source)}" target="_blank" rel="noreferrer">原始页面来源 ↗</a></p>`;$('lightbox').showModal()})}

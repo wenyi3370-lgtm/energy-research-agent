@@ -263,7 +263,7 @@ class OrchestratingExecutor:
             validation_status=report.status,
             confidence=mean_claim_confidence(store, run_id),
             risk_level=risk_for(report.status),
-            review_required=report.status == ValidationStatus.PASS_WITH_WARNINGS,
+            review_required=False,
             review_reasons=reasons,
             evidence_count=sum(len(store.list(run_id, kind)) for kind in EVIDENCE_KINDS),
             conflict_count=len(store.list(run_id, "conflict")),

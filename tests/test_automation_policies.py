@@ -32,18 +32,18 @@ def make_request(**overrides) -> ResearchRequest:
 
 
 class ReviewPolicyTests(unittest.TestCase):
-    def test_default_only_rv01_enabled(self):
+    def test_default_has_no_human_review_rules_enabled(self):
         policy = ReviewPolicy()
         outcome = ExecutionOutcome(validation_status=ValidationStatus.PASS)
         result = policy.evaluate(outcome, make_request())
         self.assertFalse(result.review_required)
 
-    def test_rv01_warnings_trigger_review(self):
+    def test_default_warnings_do_not_trigger_review(self):
         policy = ReviewPolicy()
         outcome = ExecutionOutcome(validation_status=ValidationStatus.PASS_WITH_WARNINGS)
         result = policy.evaluate(outcome, make_request())
-        self.assertTrue(result.review_required)
-        self.assertTrue(result.reasons[0].startswith("RV-01"))
+        self.assertFalse(result.review_required)
+        self.assertEqual(result.reasons, [])
 
     def test_rv02_low_confidence(self):
         policy = ReviewPolicy({"RV-02_low_confidence": {"enabled": True, "min_confidence": 0.70}})
@@ -89,7 +89,7 @@ class ReviewPolicyTests(unittest.TestCase):
 
     def test_load_from_yaml(self):
         policy = ReviewPolicy.load(ROOT / "config" / "review_policy.yaml")
-        self.assertTrue(policy.rules["RV-01_pass_with_warnings"]["enabled"])
+        self.assertFalse(any(rule.get("enabled") for rule in policy.rules.values()))
 
     def test_all_ten_rules_exist(self):
         policy = ReviewPolicy()

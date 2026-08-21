@@ -43,30 +43,17 @@
 1. 回到 /docs，找到 **GET /api/v1/research/{run_id}**，点 Try it out。
 2. 把刚才的 `run_id` 填进去，Execute。
 3. 看到 `"status": "PUBLISHED"` 就是**完成了**（一般 10 秒内）。
-   - 如果 `"status": "REVIEW_REQUIRED"` —— 说明系统判断**需要你人工确认**（见第 4 步）。
+   - 如果 `"status": "BLOCKED"` —— 属于无可用证据或运行故障，不是待你裁决。
    - 如果 `"status": "FAILED"` —— 看 `error.message`，按提示处理（多半是配置问题）。
 
 4. 看产出文件：**GET /api/v1/research/{run_id}/artifacts** → 你会看到
    `excel`（数据表格）、`word`（报告文档）、`enterprise_html`（网页版报告）三个文件。
    文件存在项目的 `automation_work/<run_id>/outputs/` 目录里。
 
-## 第 4 步：需要人工评审时怎么办（1 分钟）
+## 第 4 步：自动裁决（无需操作）
 
-系统碰到**数据有冲突、置信度低、政策类研究**等情况，会停下来等你拍板（这是设计好的，
-不是出错）。找到 **POST /api/v1/research/{run_id}/review**：
-
-```json
-{
-  "reviewer": "你的名字",
-  "decision": "APPROVE",
-  "reason": "内容确认无误"
-}
-```
-
-- `APPROVE` = 批准，继续发布
-- `REJECT` = 不通过，任务终止
-- `RESEARCH_AGAIN` = 重新研究
-- `EDIT_AND_APPROVE` = 改完再批准（要带上修改内容）
+公司简称有多个候选或不同来源数值冲突时，系统自动选择最可信项并继续；选择理由、
+入选 claim 与备选 claim 都会保留在证据库。业务人员不需要批准、拒绝或恢复任务。
 
 ## 第 5 步：反馈和看回报（1 分钟）
 

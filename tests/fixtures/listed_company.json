@@ -1,0 +1,96 @@
+[
+  {
+    "source_url": "https://www.cninfo.com.cn/new/disclosure/detail?stockCode=300999&id=1",
+    "source_title": "示例新能源股份有限公司 2025 年年度报告",
+    "publisher": "示例新能源股份有限公司",
+    "source_kind": "annual_report",
+    "extraction_method": "recorded_fixture",
+    "retrieval_adapter": "anysearch",
+    "is_search_snippet": false,
+    "entities": [
+      {
+        "entity_key": "listed",
+        "canonical_name": "示例新能源股份有限公司",
+        "entity_type": "company",
+        "official_website": "https://www.example-newenergy.com",
+        "registration_region": "浙江省湖州市",
+        "registered_name": "示例新能源股份有限公司"
+      }
+    ],
+    "claims": [
+      {
+        "entity_key": "listed",
+        "field_name": "canonical_company_name",
+        "value": "示例新能源股份有限公司",
+        "value_type": "string",
+        "raw_text": "公司全称：示例新能源股份有限公司",
+        "context_text": "示例新能源股份有限公司成立于2010年。",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "listed",
+        "field_name": "revenue",
+        "value": "100亿元",
+        "value_type": "string",
+        "raw_text": "revenue=100亿元",
+        "context_text": "页面披露 revenue 为 100亿元",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "listed",
+        "field_name": "profit",
+        "value": "8亿元",
+        "value_type": "string",
+        "raw_text": "profit=8亿元",
+        "context_text": "页面披露 profit 为 8亿元",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "listed",
+        "field_name": "employee_count",
+        "value": "5000",
+        "value_type": "string",
+        "raw_text": "employee_count=5000",
+        "context_text": "页面披露 employee_count 为 5000",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "listed",
+        "field_name": "stock_code",
+        "value": "300999",
+        "value_type": "string",
+        "raw_text": "stock_code=300999",
+        "context_text": "页面披露 stock_code 为 300999",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "listed",
+        "field_name": "industry_position",
+        "value": "国内储能逆变器出货量前列",
+        "value_type": "string",
+        "raw_text": "industry_position=国内储能逆变器出货量前列",
+        "context_text": "页面披露 industry_position 为 国内储能逆变器出货量前列",
+        "qualifier": "exact",
+        "unit": null
+      },
+      {
+        "entity_key": "listed",
+        "field_name": "core_business",
+        "value": "储能逆变器与系统集成",
+        "value_type": "string",
+        "raw_text": "core_business=储能逆变器与系统集成",
+        "context_text": "页面披露 core_business 为 储能逆变器与系统集成",
+        "qualifier": "exact",
+        "unit": null
+      }
+    ],
+    "factories": [],
+    "products": [],
+    "images": []
+  }
+]

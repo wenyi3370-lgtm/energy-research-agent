@@ -161,7 +161,7 @@ class TestSubmitAndStatus(ApiTestCase):
 
 
 class TestReviewApi(ApiTestCase):
-    def test_review_gate_flow(self):
+    def test_review_flag_auto_publishes(self):
         self.executor.outcome = ExecutionOutcome(
             validation_status=ValidationStatus.PASS_WITH_WARNINGS,
             review_required=True,
@@ -169,45 +169,29 @@ class TestReviewApi(ApiTestCase):
         )
         body = self.submit()
         status = self.client.get(f"/api/v1/research/{body['run_id']}").json()
-        self.assertEqual(status["status"], "REVIEW_REQUIRED")
-        resp = self.client.post(
-            f"/api/v1/research/{body['run_id']}/review",
-            json={
-                "reviewer": "analyst_01",
-                "decision": "APPROVE",
-                "reason": "reviewed",
-            },
-        )
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["status"], "PUBLISHED")
+        self.assertEqual(status["status"], "PUBLISHED")
+        self.assertFalse(status["review_required"])
 
-    def test_review_illegal_state_is_409(self):
+    def test_review_endpoint_is_removed(self):
         body = self.submit()  # stub auto-passes straight to PUBLISHED
         resp = self.client.post(
             f"/api/v1/research/{body['run_id']}/review",
             json={"reviewer": "analyst_01", "decision": "APPROVE"},
         )
-        self.assertEqual(resp.status_code, 409)
-        self.assertEqual(resp.json()["error"]["type"], "INVALID_TRANSITION")
+        self.assertEqual(resp.status_code, 404)
 
-    def test_review_reject_is_terminal(self):
+    def test_conflict_resolution_endpoint_is_removed(self):
         self.executor.outcome = ExecutionOutcome(
             validation_status=ValidationStatus.PASS_WITH_WARNINGS, review_required=True
         )
         body = self.submit()
-        resp = self.client.post(
-            f"/api/v1/research/{body['run_id']}/review",
-            json={"reviewer": "analyst_01", "decision": "REJECT", "reason": "n/a"},
-        )
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["status"], "REJECTED")
+        resp = self.client.post(f"/api/v1/research/{body['run_id']}/conflicts/C1/resolve", json={})
+        self.assertEqual(resp.status_code, 404)
 
-    def test_review_validation_error_is_422(self):
+    def test_resume_endpoint_is_removed(self):
         body = self.submit()
-        resp = self.client.post(
-            f"/api/v1/research/{body['run_id']}/review", json={"reviewer": ""}
-        )
-        self.assertEqual(resp.status_code, 422)
+        resp = self.client.post(f"/api/v1/research/{body['run_id']}/resume")
+        self.assertEqual(resp.status_code, 404)
 
 
 class TestRetryApi(ApiTestCase):
