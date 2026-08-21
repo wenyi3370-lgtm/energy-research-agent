@@ -233,6 +233,60 @@ class KimiImageDiscoveryTests(unittest.TestCase):
         self.assertEqual(telemetry.image_discovery_status, "EMPTY")
         self.assertEqual(telemetry.kimi_dom_inspections, 1)
 
+    def test_decorative_chrome_is_filtered_in_dom(self) -> None:
+        """Icons/avatars/QR-code chrome must never become evidence images."""
+        kimi = FakeKimiAdapter()
+        kimi.evaluate_payload = {
+            "page_title": "CATL 产品页", "page_url": "https://www.catl.com/products",
+            "images": [
+                {"url": "https://www.catl.com/static/icon/arrow.png", "src_attr": "src",
+                 "alt": "", "surrounding_text": "", "width": 24, "height": 24},
+                {"url": "https://www.catl.com/avatar.png", "src_attr": "src",
+                 "alt": "", "surrounding_text": "", "width": 60, "height": 60},
+                {"url": "https://www.catl.com/qrcode.png", "src_attr": "src",
+                 "alt": "", "surrounding_text": "", "width": 200, "height": 200},
+                {"url": "https://www.catl.com/upload/product-a.jpg", "src_attr": "src",
+                 "alt": "", "surrounding_text": "", "width": 800, "height": 600},
+            ],
+        }
+        candidates = KimiImageDiscovery(kimi, KimiUsageTelemetry()).discover(
+            [{"url": "https://www.catl.com/products", "kind": "product"}],
+        )
+        urls = {candidate.url for candidate in candidates}
+        self.assertNotIn("https://www.catl.com/static/icon/arrow.png", urls)
+        self.assertNotIn("https://www.catl.com/avatar.png", urls)
+        self.assertNotIn("https://www.catl.com/qrcode.png", urls)
+        self.assertIn("https://www.catl.com/upload/product-a.jpg", urls)
+
+    def test_url_hints_and_size_heuristics_classify_images(self) -> None:
+        cases = [
+            # (raw, page_kind, expected_type)
+            ({"url": "https://x.com/static/logo.png", "alt": "", "surrounding_text": ""}, "factory", "logo"),
+            ({"url": "https://x.com/upload/a.png", "alt": "", "surrounding_text": "",
+              "width": 100, "height": 100}, "factory", "logo"),  # small square → logo
+            ({"url": "https://x.com/upload/b.jpg", "alt": "", "surrounding_text": "",
+              "width": 900, "height": 600}, "factory", "factory"),  # scene → page fallback
+            ({"url": "https://x.com/upload/c.jpg", "alt": "", "surrounding_text": "",
+              "width": 900, "height": 600}, "product", "product"),
+            ({"url": "https://x.com/upload/c.jpg", "alt": "", "surrounding_text": "",
+              "width": 900, "height": 600}, "image", "other"),
+        ]
+        for raw, page_kind, expected in cases:
+            with self.subTest(raw=raw, page_kind=page_kind):
+                self.assertEqual(
+                    KimiImageDiscovery._classify(raw, "页面标题", page_kind), expected,
+                )
+
+    def test_page_kind_is_carried_on_candidates(self) -> None:
+        kimi = FakeKimiAdapter()
+        kimi.evaluate_payload = IMAGE_PAYLOAD
+        candidates = KimiImageDiscovery(kimi, KimiUsageTelemetry()).discover(
+            [{"url": "https://www.acme-corp.com/products", "kind": "product", "product_key": "P-1"}],
+        )
+        self.assertTrue(candidates)
+        for candidate in candidates:
+            self.assertEqual(candidate.page_kind, "product")
+
     def test_verified_image_reaches_archiver(self) -> None:
         import hashlib
         payload = png_bytes()

@@ -841,24 +841,36 @@ class AdaptiveResearchRunner:
         known_products = {
             product.name: product.product_id for product in evidence.products if product.name
         }
+        known_factories = {
+            factory.name: factory.factory_id for factory in evidence.factories if factory.name
+        }
         for candidate in candidates:
             if not str(candidate.page_url).lower().startswith(("http://", "https://")):
                 telemetry.image_download_failures += 1
                 continue
-            # Product images without an explicit page binding are matched by
-            # their own context (alt/surrounding/page title) against verified
-            # product names — never randomly assigned.
-            if candidate.product_key is None and candidate.image_type == "product":
-                context = " ".join(filter(None, (
-                    candidate.alt or "", candidate.surrounding_text or "", candidate.page_title or "",
-                )))
+            context = " ".join(filter(None, (
+                candidate.alt or "", candidate.surrounding_text or "", candidate.page_title or "",
+            )))
+            # Images found on product/factory pages bind to the concrete
+            # product/factory by their own context (alt/surrounding/page
+            # title) — never randomly assigned.  A context match also
+            # corrects the page-kind fallback type.
+            if candidate.product_key is None and (candidate.image_type == "product" or candidate.page_kind == "product"):
                 matched = next(
                     (product_id for name, product_id in known_products.items()
                      if name and name in context),
                     None,
                 )
                 if matched:
-                    candidate = candidate.model_copy(update={"product_key": matched})
+                    candidate = candidate.model_copy(update={"product_key": matched, "image_type": "product"})
+            if candidate.factory_key is None and (candidate.image_type == "factory" or candidate.page_kind == "factory"):
+                matched = next(
+                    (factory_id for name, factory_id in known_factories.items()
+                     if name and name in context),
+                    None,
+                )
+                if matched:
+                    candidate = candidate.model_copy(update={"factory_key": matched, "image_type": "factory"})
             source_id = page_sources.get(candidate.page_url)
             if source_id is None:
                 level, reason = grader.grade(candidate.page_url, candidate.source_kind, official_domains=official_domains)

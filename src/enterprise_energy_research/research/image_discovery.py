@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import re
 from pathlib import Path
 from typing import Any
 
@@ -20,13 +21,26 @@ from enterprise_energy_research.domain.enums import VerificationStatus
 from enterprise_energy_research.domain.ids import new_sortable_id
 from enterprise_energy_research.domain.models import ImageEvidence
 
+# Mirrors the browser-side SKIP filter (decorative chrome is never evidence);
+# the Python-side copy guarantees the same behavior for non-JS discovery paths.
+DECORATIVE_URL_RE = re.compile(
+    r"(icon|avatar|btn|qrcode|weixin|wxpay|share|loading|spinner|arrow|emoji|favicon|logo_\d+|\.ico)",
+    re.IGNORECASE,
+)
+MIN_DECORATIVE_PX = 80  # images below 80x80 are icons/thumbnails, not evidence
+
 IMAGE_DISCOVERY_JS = r"""
 (() => {
   const out = [];
   const seen = new Set();
+  // decorative chrome (icons, avatars, QR codes, spinners) is never evidence
+  const SKIP = /(icon|avatar|btn|qrcode|weixin|wxpay|share|loading|spinner|arrow|emoji|favicon|logo_\d+|\.ico)/i;
   const abs = (u) => { try { return new URL(u, location.href).href; } catch (e) { return u || ''; } };
   const push = (url, el, srcAttr) => {
     if (!url || seen.has(url)) return;
+    if (SKIP.test(url)) return;
+    const w = el.naturalWidth || 0, h = el.naturalHeight || 0;
+    if (w && h && w < 80 && h < 80) return;  // icons/thumbnails below 80px
     seen.add(url);
     let link = null;
     try { link = el.closest ? el.closest('a') : null; } catch (e) {}
@@ -37,7 +51,7 @@ IMAGE_DISCOVERY_JS = r"""
       alt: (el.alt || '').trim(), title: (el.title || '').trim(),
       surrounding_text: surrounding,
       link_target: link ? abs(link.getAttribute('href') || '') : '',
-      width: el.naturalWidth || 0, height: el.naturalHeight || 0
+      width: w, height: h
     });
   };
   document.querySelectorAll('img').forEach(el => {
@@ -56,7 +70,7 @@ IMAGE_DISCOVERY_JS = r"""
     const m = (el.getAttribute('style') || '').match(/background(?:-image)?\s*:\s*url\(["']?([^"')]+)["']?\)/);
     if (m) push(m[1], el, 'background-image');
   });
-  return { page_title: document.title, page_url: location.href, images: out.slice(0, 60) };
+  return { page_title: document.title, page_url: location.href, images: out.slice(0, 24) };
 })()
 """
 
@@ -69,6 +83,17 @@ IMAGE_TYPE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("certificate", ("证书", "认证", "certificate")),
     ("project", ("项目现场", "工程项目", "交付项目")),
     ("location", ("园区", "区位", "地图")),
+)
+
+# URL path hints, applied AFTER contextual keywords; "icon" maps to "other"
+# because decorative chrome is never report evidence.
+URL_TYPE_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("logo", ("/logo", "logo-", "brand", "标志")),
+    ("icon", ("icon", "avatar", "btn", "qrcode", "favicon")),
+    ("product", ("/product", "product-", "goods")),
+    ("factory", ("/factory", "factory-", "plant")),
+    ("certificate", ("cert", "certificate")),
+    ("location", ("map", "地图", "园区")),
 )
 
 
@@ -110,6 +135,7 @@ class ImageCandidate(BaseModel):
     width: int = 0
     height: int = 0
     image_type: str = "other"
+    page_kind: str | None = None
     entity_key: str | None = None
     factory_key: str | None = None
     product_key: str | None = None
@@ -172,6 +198,13 @@ class KimiImageDiscovery:
             page_title = str(payload.get("page_title") or "")
             page_url = str(payload.get("page_url") or url)
             for raw in payload.get("images") or []:
+                url = str(raw.get("url") or "")
+                width = int(raw.get("width") or 0)
+                height = int(raw.get("height") or 0)
+                if DECORATIVE_URL_RE.search(url):
+                    continue
+                if width and height and width < MIN_DECORATIVE_PX and height < MIN_DECORATIVE_PX:
+                    continue
                 candidate = ImageCandidate(
                     candidate_id=new_sortable_id("IMG"),
                     url=str(raw.get("url") or ""),
@@ -185,6 +218,7 @@ class KimiImageDiscovery:
                     width=int(raw.get("width") or 0),
                     height=int(raw.get("height") or 0),
                     image_type=self._classify(raw, page_title, kind),
+                    page_kind=kind,
                     entity_key=page.get("entity_key"),
                     factory_key=page.get("factory_key"),
                     product_key=page.get("product_key"),
@@ -199,12 +233,25 @@ class KimiImageDiscovery:
 
     @staticmethod
     def _classify(raw: dict, page_title: str, page_kind: str) -> str:
-        context = " ".join(filter(None, (
-            str(raw.get("alt") or ""), str(raw.get("surrounding_text") or ""), page_title,
-        ))).lower()
+        """Context keywords first, then URL hints, then size heuristics;
+        the page-kind fallback only runs when nothing else said otherwise."""
+        alt = str(raw.get("alt") or "").lower()
+        title_attr = str(raw.get("title") or "").lower()
+        surrounding = str(raw.get("surrounding_text") or "").lower()
+        url = str(raw.get("url") or "").lower()
+        width = int(raw.get("width") or 0)
+        height = int(raw.get("height") or 0)
+        context = " ".join(filter(None, (alt, surrounding, title_attr, page_title or "")))
         for image_type, keywords in IMAGE_TYPE_KEYWORDS:
             if any(keyword.lower() in context for keyword in keywords):
                 return image_type
+        for image_type, tokens in URL_TYPE_HINTS:
+            if any(token in url for token in tokens):
+                # decorative chrome is never report evidence
+                return "other" if image_type == "icon" else image_type
+        # small, roughly square images are logos/icons — never scene photos
+        if width and height and max(width, height) <= 120 and abs(width - height) <= 40:
+            return "logo"
         if page_kind == "product":
             return "product"
         if page_kind == "factory":
