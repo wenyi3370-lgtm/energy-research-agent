@@ -70,19 +70,18 @@ TEXT_SUFFIXES = {
 }
 
 
-def digest(path: Path) -> str:
-    """Line-ending normalized SHA-256.
+def digest(path: Path) -> tuple[str, int]:
+    """Line-ending normalized (SHA-256, byte count).
 
     Working trees differ across platforms (Git autocrlf produces CRLF on
-    Windows, LF on CI), so raw-byte hashes would never match. Text files are
-    hashed with CRLF normalized to LF; binaries are hashed verbatim.
+    Windows, LF on CI), so both the hash AND the byte count must come from
+    the normalized bytes, or the manifest can never verify cross-platform.
+    Text files are normalized CRLF -> LF; binaries are used verbatim.
     """
-    sha = hashlib.sha256()
     raw = path.read_bytes()
     if path.suffix.lower() in TEXT_SUFFIXES or path.name in {"LICENSE", "NOTICE"}:
         raw = raw.replace(b"\r\n", b"\n")
-    sha.update(raw)
-    return sha.hexdigest()
+    return hashlib.sha256(raw).hexdigest(), len(raw)
 
 
 def iter_files() -> list[Path]:
@@ -118,6 +117,10 @@ def build_manifest() -> dict:
     findings = safety_findings(files)
     if findings:
         raise ValueError("Unsafe vendor snapshot:\n" + "\n".join(findings))
+    workers = min(32, max(4, (len(files) // 500) + 1))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        digests = list(executor.map(digest, files))
+    size_by_path = {path: size for path, (_hash, size) in zip(files, digests)}
     components = {}
     for name, metadata in COMPONENTS.items():
         root = VENDOR_ROOT / name
@@ -128,11 +131,8 @@ def build_manifest() -> dict:
         components[name] = {
             **metadata,
             "file_count": len(component_files),
-            "byte_count": sum(path.stat().st_size for path in component_files),
+            "byte_count": sum(size_by_path[path] for path in component_files),
         }
-    workers = min(32, max(4, (len(files) // 500) + 1))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-        hashes = list(executor.map(digest, files))
     return {
         "schema_version": "1.0",
         "policy": {
@@ -143,10 +143,10 @@ def build_manifest() -> dict:
         "components": components,
         "files": {
             path.relative_to(VENDOR_ROOT).as_posix(): {
-                "bytes": path.stat().st_size,
+                "bytes": size_by_path[path],
                 "sha256": file_hash,
             }
-            for path, file_hash in zip(files, hashes, strict=True)
+            for path, (file_hash, _size) in zip(files, digests, strict=True)
         },
     }
 

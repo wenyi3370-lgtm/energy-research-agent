@@ -17,7 +17,7 @@
       "source": "Claude Skill snapshot v3.0.1"
     },
     "excel-master": {
-      "byte_count": 213693,
+      "byte_count": 212084,
       "file_count": 12,
       "required": [
         "SKILL.md",
@@ -154,7 +154,7 @@
       "sha256": "5213170f114b0da6bacf5410ecd4d04999b76a3c430871f4dc32bf3082048abf"
     },
     "excel-master/SKILL.md": {
-      "bytes": 22348,
+      "bytes": 22060,
       "sha256": "a70d261d40c1d5425caff70805701d899d8dfabec3f091e7835d0fd1fdec5cf0"
     },
     "excel-master/color-card.png": {
@@ -162,7 +162,7 @@
       "sha256": "82ebd3dae6720adecacbd7d48d5f5ea49d4a12a843275e04cb1cd49e8f2b8a63"
     },
     "excel-master/references/camera-screenshot-white-bg.md": {
-      "bytes": 1902,
+      "bytes": 1864,
       "sha256": "25d284f1691e4c272876e1e4da3e27ec303f2e0f1a74c008ce4268e472c3ee70"
     },
     "excel-master/references/chart-layout-contract.md": {
@@ -170,11 +170,11 @@
       "sha256": "1923d299ea216d48e3af7fa1410f5dee61eed578d746dca6eb415c46cbaff942"
     },
     "excel-master/references/dual-header-format.py": {
-      "bytes": 5563,
+      "bytes": 5432,
       "sha256": "14b19451ff181cd1867309e4a2e27153e36e680e12d4cbe00a90f431c91e1415"
     },
     "excel-master/references/implementation-checklist.md": {
-      "bytes": 3227,
+      "bytes": 3182,
       "sha256": "dab73bda84206726f48edd23cec1ce83ecd673e526b9bab3e21655a95674cf53"
     },
     "excel-master/references/type-inference-rules.md": {
@@ -190,7 +190,7 @@
       "sha256": "c61d27d4d78b64e99ba1421cfcb209a409782761755002e78c09b6b975669bcd"
     },
     "excel-master/scripts/make_excel.py": {
-      "bytes": 47840,
+      "bytes": 46733,
       "sha256": "785dd169d2dd8611bc0f519e68a65ab067a67246e35a03e28302bee13bf84aaf"
     },
     "excel-master/test-prompts.json": {
