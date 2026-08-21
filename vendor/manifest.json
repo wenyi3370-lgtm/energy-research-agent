@@ -155,7 +155,7 @@
     },
     "excel-master/SKILL.md": {
       "bytes": 22348,
-      "sha256": "bcd14b87246e02a527c71034ea9b8a3643e4188cd84eb57f4da9f0c08c4abae9"
+      "sha256": "a70d261d40c1d5425caff70805701d899d8dfabec3f091e7835d0fd1fdec5cf0"
     },
     "excel-master/color-card.png": {
       "bytes": 106982,
@@ -163,7 +163,7 @@
     },
     "excel-master/references/camera-screenshot-white-bg.md": {
       "bytes": 1902,
-      "sha256": "3c8a7e4356bf0e379cb22cdc7653c9a08fb02dac9178b623e9d26809ade51c12"
+      "sha256": "25d284f1691e4c272876e1e4da3e27ec303f2e0f1a74c008ce4268e472c3ee70"
     },
     "excel-master/references/chart-layout-contract.md": {
       "bytes": 4641,
@@ -171,11 +171,11 @@
     },
     "excel-master/references/dual-header-format.py": {
       "bytes": 5563,
-      "sha256": "1fef665aa7fb4caa108d82c17835504801d6ed5184773a50b15158707c4f2701"
+      "sha256": "14b19451ff181cd1867309e4a2e27153e36e680e12d4cbe00a90f431c91e1415"
     },
     "excel-master/references/implementation-checklist.md": {
       "bytes": 3227,
-      "sha256": "4488d0940fd2b2b969473c87b139841b10df81f9ff89200239dbfc7d17fac0aa"
+      "sha256": "dab73bda84206726f48edd23cec1ce83ecd673e526b9bab3e21655a95674cf53"
     },
     "excel-master/references/type-inference-rules.md": {
       "bytes": 1649,
@@ -191,7 +191,7 @@
     },
     "excel-master/scripts/make_excel.py": {
       "bytes": 47840,
-      "sha256": "14285f29762d8036ddc1e718024e2ff70509a6bc5fc4ab4a39e1e6a9b9a030d9"
+      "sha256": "785dd169d2dd8611bc0f519e68a65ab067a67246e35a03e28302bee13bf84aaf"
     },
     "excel-master/test-prompts.json": {
       "bytes": 802,

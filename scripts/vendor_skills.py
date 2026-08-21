@@ -64,11 +64,24 @@ SECRET_PATTERN = re.compile(
 )
 
 
+TEXT_SUFFIXES = {
+    ".md", ".py", ".yaml", ".yml", ".json", ".txt", ".toml", ".sh", ".ps1",
+    ".js", ".html", ".css", ".xml", ".svg", ".example", ".cjs", ".mjs",
+}
+
+
 def digest(path: Path) -> str:
+    """Line-ending normalized SHA-256.
+
+    Working trees differ across platforms (Git autocrlf produces CRLF on
+    Windows, LF on CI), so raw-byte hashes would never match. Text files are
+    hashed with CRLF normalized to LF; binaries are hashed verbatim.
+    """
     sha = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            sha.update(chunk)
+    raw = path.read_bytes()
+    if path.suffix.lower() in TEXT_SUFFIXES or path.name in {"LICENSE", "NOTICE"}:
+        raw = raw.replace(b"\r\n", b"\n")
+    sha.update(raw)
     return sha.hexdigest()
 
 
