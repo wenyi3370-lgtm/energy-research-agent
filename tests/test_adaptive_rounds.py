@@ -184,14 +184,29 @@ class AdaptiveRoundTests(unittest.TestCase):
         referenced = {gap_id for item in r2.round_queries for gap_id in item["target_gap_ids"]}
         self.assertTrue(referenced.issubset(set(gap_ids)))
 
-    def test_r2_not_generated_without_gap(self) -> None:
+    def test_r2_driven_only_by_searchable_gaps(self) -> None:
         def handler(request):
             if request.topic == "company_identity":
                 return [IDENTITY_BATCH]
             return []
 
-        report, runner = self._run(handler)
-        self.assertNotIn("R2", {item.round for item in report.rounds})
+        # identity results produce requires_site_due_diligence gaps (NOT
+        # searchable); the empty product families produce SEARCHED_NOT_FOUND
+        # gaps (searchable).  R2 must be driven by the latter only.
+        report, runner = self._run(handler, {"max_queries": 20, "max_pages": 30})
+        r2 = next((item for item in report.rounds if item.round == "R2"), None)
+        self.assertIsNotNone(r2)
+        # every R2 query targets a real searchable gap (product families)
+        self.assertTrue(all(item["target_gap_ids"] for item in r2.round_queries))
+        self.assertTrue(all(
+            item["topic"].startswith("product") for item in r2.round_queries
+        ))
+        energy_gap_ids = {
+            gap.gap_id for gap in runner.cumulative.gaps
+            if gap.reason == "requires_site_due_diligence"
+        }
+        referenced = {gap_id for item in r2.round_queries for gap_id in item["target_gap_ids"]}
+        self.assertFalse(referenced & energy_gap_ids, "site-due-diligence gaps must not drive R2")
 
     def test_new_r2_evidence_is_ingested_before_next_round(self) -> None:
         def handler(request):

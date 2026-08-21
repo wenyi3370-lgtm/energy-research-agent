@@ -76,10 +76,14 @@ class ResearchPlanner:
         # query slot: image discovery (P0-15) and product-catalog traversal
         # (P0-17) are mandatory Kimi jobs, and a query budget must never
         # silently starve them (live runs showed products getting 0 queries).
-        browser_first = {"image_evidence", "products", "product_series", "product_models", "product_parameters"}
-        families = [topic for topic in GOAL_FAMILIES if topic[0] in browser_first] + [
-            topic for topic in GOAL_FAMILIES if topic[0] not in browser_first
-        ]
+        # image_evidence keeps its absolute first slot; the product families
+        # follow, then everything else in GOAL_FAMILIES order.
+        browser_priority = ("image_evidence", "products", "product_series", "product_models", "product_parameters")
+        families = (
+            [topic for topic in GOAL_FAMILIES if topic[0] == "image_evidence"]
+            + [topic for topic in GOAL_FAMILIES if topic[0] in browser_priority[1:]]
+            + [topic for topic in GOAL_FAMILIES if topic[0] not in browser_priority]
+        )
         if only_topics is not None:
             allowed = set(only_topics)
             families = [topic for topic in families if topic[0] in allowed]
