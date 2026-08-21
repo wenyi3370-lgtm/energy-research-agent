@@ -766,15 +766,19 @@ class AdaptiveResearchRunner:
             self.cumulative.images, self.cumulative.entities, self.cumulative.sources,
         )
         archive_result = ImageArchiveResult(images=self.cumulative.images)
-        if self.enable_image_archiving and self.fetcher is not None and any(
-            batch.extraction_method != "recorded_fixture" for batch in batches
-        ):
+        # Archiving depends on the IMAGES themselves, never on whether this
+        # round produced text batches: the last round may attach discovered
+        # images while contributing no new text evidence, and those images
+        # must still be archived + visually verified before freeze.
+        pending_images = [image for image in self.cumulative.images if not image.local_asset_ref]
+        if self.enable_image_archiving and self.fetcher is not None and pending_images:
             # The discovery fetcher returns bytes; the archiver expects
             # (payload, content_type) so it can re-verify against the headers.
             archive_result = ImageAssetArchiver(
                 fetcher=lambda url, referer: (self.fetcher(url, referer), None),
-            ).archive(self.cumulative.images, output_dir)
-            self.cumulative.images = archive_result.images
+            ).archive(pending_images, output_dir)
+            by_id = {image.image_id: image for image in archive_result.images}
+            self.cumulative.images = [by_id.get(image.image_id, image) for image in self.cumulative.images]
             telemetry.images_archived = len(archive_result.archived_image_ids)
             telemetry.image_download_failures += len(archive_result.failed_image_ids)
             # P0: pixel-level visual verification runs AFTER archiving — a
