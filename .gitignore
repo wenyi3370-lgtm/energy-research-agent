@@ -24,7 +24,6 @@ automation*.db
 # 客户专案脚本（含真实企业信息，不上传）
 *shanshan*
 *Shanshan*
-vendor/skills/ppt-master/
 
 # 旧门户冒烟资产（非源码，不上传）
 artifacts/

@@ -753,7 +753,7 @@ def _png(spec: VisualSpec, path: Path) -> None:
             f"--screenshot={raw_png}",
             html_path.as_uri(),
         ]
-        completed = subprocess.run(command, capture_output=True, text=True, timeout=60, check=False)
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=120, check=False)
         if completed.returncode != 0 or not raw_png.is_file():
             detail = (completed.stderr or completed.stdout or "unknown browser failure").strip()[-800:]
             raise RuntimeError(f"Lieflat SVG rasterization failed: {detail}")

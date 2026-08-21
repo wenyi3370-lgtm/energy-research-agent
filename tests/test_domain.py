@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from pydantic import ValidationError
 
 from enterprise_energy_research.domain.enums import ProductDashboardDecision, StatementType
 from enterprise_energy_research.domain.ids import RunSequence
 from enterprise_energy_research.domain.models import ProductDetection, Solution
-from enterprise_energy_research.graph.build import GraphDependencyError, build_langgraph
 
 
 class DomainTests(unittest.TestCase):
@@ -43,12 +43,15 @@ class DomainTests(unittest.TestCase):
             )
 
     def test_langgraph_is_an_explicit_optional_dependency(self) -> None:
-        nodes = {name: (lambda state: state) for name in {
-            "preflight", "input_normalizer", "company_resolver", "classifier",
-            "research_planner", "validate", "freeze", "artifact_plan",
-        }}
-        with self.assertRaises(GraphDependencyError):
-            build_langgraph(nodes)
+        # langgraph must be declared ONLY under optional dependencies — never
+        # in the base install. This checks the declaration itself, so it holds
+        # whether or not langgraph happens to be installed in the test env.
+        text = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+        parts = text.split("[project.optional-dependencies]")
+        self.assertEqual(len(parts), 2, "pyproject must declare optional dependencies")
+        self.assertNotIn("langgraph", parts[0], "langgraph must not be a base dependency")
+        self.assertIn("langgraph", parts[1], "langgraph must be an explicit optional dependency")
+        self.assertNotIn("langgraph", text.split("[tool.setuptools]")[0].split("[project.optional-dependencies]")[0])
 
 
 if __name__ == "__main__":
