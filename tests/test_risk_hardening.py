@@ -124,12 +124,26 @@ class RiskHardeningTests(unittest.TestCase):
     def test_browser_executable_finds_playwright_managed_chromium(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            chrome = root / "chromium-1187" / "chrome-win" / "chrome.exe"
-            chrome.parent.mkdir(parents=True)
-            chrome.write_bytes(b"MZ-fake-chrome")
+            # legacy layout
+            legacy = root / "chromium-1187" / "chrome-win" / "chrome.exe"
+            legacy.parent.mkdir(parents=True)
+            legacy.write_bytes(b"MZ-fake-chrome")
             with mock.patch.dict(os.environ, {"PLAYWRIGHT_BROWSERS_PATH": temp}, clear=False):
                 found = DiagramDesignAdapter._browser_executable()
-            self.assertEqual(found, str(chrome))
+            self.assertEqual(found, str(legacy))
+
+    def test_browser_executable_finds_modern_playwright_64bit_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            modern = root / "chromium-1223" / "chrome-win64" / "chrome.exe"
+            modern.parent.mkdir(parents=True)
+            modern.write_bytes(b"MZ-fake-chrome")
+            headless = root / "chromium_headless_shell-1223" / "chrome-headless-shell-win64" / "chrome-headless-shell.exe"
+            headless.parent.mkdir(parents=True)
+            headless.write_bytes(b"MZ-fake-shell")
+            with mock.patch.dict(os.environ, {"PLAYWRIGHT_BROWSERS_PATH": temp}, clear=False):
+                found = DiagramDesignAdapter._browser_executable()
+            self.assertIn(found, {str(modern), str(headless)})
 
     def test_word_publisher_degrades_to_table_without_any_browser(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

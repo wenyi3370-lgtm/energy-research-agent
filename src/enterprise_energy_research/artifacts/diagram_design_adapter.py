@@ -1154,16 +1154,21 @@ class DiagramDesignAdapter:
             chromium_dirs = sorted(root.glob("chromium*"), reverse=True)
             for directory in chromium_dirs:
                 for relative in (
+                    # modern playwright layout (1.5x+): 64-bit dirs
+                    "chrome-win64/chrome.exe", "chrome-linux64/chrome",
+                    "chrome-mac-x64/Chromium.app/Contents/MacOS/Chromium",
+                    # legacy playwright layout
                     "chrome-win/chrome.exe", "chrome-linux/chrome",
                     "chrome-mac/Chromium.app/Contents/MacOS/Chromium",
-                    "chromium_headless_shell-*/chrome-win/headless_shell.exe",
-                    "chromium_headless_shell-*/chrome-linux/headless_shell",
                 ):
                     candidate = directory / relative
                     if candidate.is_file():
                         return str(candidate)
             for directory in sorted(root.glob("chromium_headless_shell*"), reverse=True):
                 for relative in (
+                    "chrome-headless-shell-win64/chrome-headless-shell.exe",
+                    "chrome-headless-shell-linux64/chrome-headless-shell",
+                    "chrome-headless-shell-mac-x64/chrome-headless-shell",
                     "chrome-win/headless_shell.exe", "chrome-linux/headless_shell",
                 ):
                     candidate = directory / relative
