@@ -1052,7 +1052,9 @@ class DiagramDesignAdapter:
             f".fig-header h1{{margin:0 0 4px 0;font-family:{font_serif};font-weight:600;font-size:22px;color:#1B1F26;}}\n"
             f".fig-header p{{margin:0;font-family:{font_sans};font-size:13px;color:#4A5568;}}\n"
             "figure{margin:0;padding:8px;}\n"
-            "figure svg{width:100%;height:auto;display:block;}\n"
+            # native-size rendering: the exported PNG must be exactly
+            # viewBox × device_scale_factor (diagram-design export.md)
+            "figure svg{width:auto;height:auto;max-width:100%;display:block;}\n"
             f".fig-source{{padding:4px 8px 16px 8px;font-family:{font_sans};font-size:11px;color:#7A8399;}}\n"
             "</style>\n</head>\n<body>\n"
             f'<header class="fig-header"><h1>{title}</h1><p>{subtitle}</p></header>\n'

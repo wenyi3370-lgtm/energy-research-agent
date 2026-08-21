@@ -27,6 +27,10 @@ database = ["SQLAlchemy>=2.0,<3", "alembic>=1.13,<2", "psycopg[binary]>=3.1,<4"]
 api = ["fastapi>=0.110,<1", "uvicorn>=0.29,<1", "httpx>=0.27,<1"]
 test = ["pytest>=8,<9", "pytest-asyncio>=0.23,<1", "jsonschema>=4.23,<5"]
 render = ["PyMuPDF>=1.24,<2"]
+# playwright 1.60.x pairs with chromium revision 1223 (already present in the
+# local ms-playwright cache); used as the primary browser-rasterization path
+# for figure PNGs (fallback: Chrome/Edge headless, no playwright needed)
+visual = ["playwright==1.60.0"]
 full = [
   "langgraph>=0.2,<2",
   "litellm>=1.40,<2",
@@ -39,6 +43,7 @@ full = [
   "pytest>=8,<9",
   "pytest-asyncio>=0.23,<1",
   "PyMuPDF>=1.24,<2",
+  "playwright==1.60.0",
 ]
 
 [project.scripts]
