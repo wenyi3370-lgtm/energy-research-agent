@@ -72,11 +72,13 @@ BROWSER_DEPTH_TOPICS = {
 class ResearchPlanner:
     def build(self, run_id: str, entity_id: str, canonical_name: str, complexity: EnterpriseComplexity, budget: dict[str, int], *, only_topics: list[str] | None = None) -> ResearchPlan:
         sequence = RunSequence()
-        # image_evidence is planned FIRST so it always receives a query slot:
-        # routing an image goal to Kimi is mandatory (P0-15), and a query
-        # budget must never silently drop the image pipeline.
-        families = [topic for topic in GOAL_FAMILIES if topic[0] == "image_evidence"] + [
-            topic for topic in GOAL_FAMILIES if topic[0] != "image_evidence"
+        # Browser-reserved goals are planned FIRST so they always receive a
+        # query slot: image discovery (P0-15) and product-catalog traversal
+        # (P0-17) are mandatory Kimi jobs, and a query budget must never
+        # silently starve them (live runs showed products getting 0 queries).
+        browser_first = {"image_evidence", "products", "product_series", "product_models", "product_parameters"}
+        families = [topic for topic in GOAL_FAMILIES if topic[0] in browser_first] + [
+            topic for topic in GOAL_FAMILIES if topic[0] not in browser_first
         ]
         if only_topics is not None:
             allowed = set(only_topics)
