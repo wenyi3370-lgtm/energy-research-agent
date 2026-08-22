@@ -38,6 +38,10 @@ from enterprise_energy_research.artifacts.visuals import VisualSpec, write_visua
 from enterprise_energy_research.domain.enums import ArtifactType
 from enterprise_energy_research.domain.models import ArtifactBinding, FrozenResearchBundle
 from enterprise_energy_research.research.synthesis import ResearchSynthesizer
+from enterprise_energy_research.validation.consulting_narrative import (
+    ConsultingNarrativeValidator, PublicationVisibleTextValidator, TOCValidator,
+    VisualSemanticValidator, write_consulting_validation,
+)
 
 
 class FrozenWordPublisher:
@@ -83,9 +87,21 @@ class FrozenWordPublisher:
         figures = asset_root / "figures"
         adapter = DiagramDesignAdapter()
         qa = new_qa_report(bundle.run_manifest.run_id, bundle.freeze.freeze_id, binding.artifact_id)
+        narrative_validation = ConsultingNarrativeValidator().validate(narrative)
+        write_consulting_validation(narrative_validation, asset_root / "consulting_narrative_validation.json")
+        for check in narrative_validation.checks:
+            if check.status == "FAIL":
+                qa.record_finding(QAFinding(
+                    code=check.code, severity="error", message=check.message,
+                ))
 
         render_results: dict[str, VisualRenderResult] = {}
         for spec in narrative.visuals:
+            for semantic_error in VisualSemanticValidator().validate(spec, bundle):
+                qa.record_finding(QAFinding(
+                    code="visual_semantic_violation", severity="error", message=semantic_error,
+                    record_ids=[spec.visual_id],
+                ))
             result = adapter.build_visual(spec, figures, destination="both", png_scale=3)
             render_results[spec.visual_id] = result
             outcome = "rendered" if result.status == "rendered" else result.status
@@ -130,6 +146,9 @@ class FrozenWordPublisher:
             bundle, binding, output_path, entity, synthesis, narrative,
             render_results, publication_images, asset_root,
         )
+        visible_validator = PublicationVisibleTextValidator()
+        for message in [*visible_validator.validate_text(visible_validator.extract_docx(output_path)), *TOCValidator().validate(output_path)]:
+            qa.record_finding(QAFinding(code="word_visible_text_or_toc", severity="error", message=message))
         write_qa_report(qa, asset_root / "publication_qa_report.json")
 
         digest = hashlib.sha256(output_path.read_bytes()).hexdigest()
@@ -193,8 +212,8 @@ class FrozenWordPublisher:
         styles = document.styles
         for name, size, color, before, after, cjk_font in [
             ("Normal", wp["body_size_pt"], "1B1F26", 0, 6, body_cjk),
-            ("Heading 1", wp["heading_1_size_pt"], navy_hex, 18, 10, "Microsoft YaHei"),
-            ("Heading 2", wp["heading_2_size_pt"], navy_hex, 14, 7, body_cjk),
+            ("Heading 1", wp["heading_1_size_pt"], navy_hex, 18, 12, "Microsoft YaHei"),
+            ("Heading 2", wp["heading_2_size_pt"], navy_hex, 14, 7, "FangSong"),
             ("Heading 3", wp["heading_3_size_pt"], navy_hex, 10, 5, body_cjk),
         ]:
             style = styles[name]
@@ -215,6 +234,14 @@ class FrozenWordPublisher:
                 style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             elif name == "Heading 1":
                 style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                style.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+                style.paragraph_format.line_spacing = Pt(30)
+
+        # Make TOC/page fields refresh when Word or LibreOffice opens the file.
+        settings = document.settings.element
+        update_fields = OxmlElement("w:updateFields")
+        update_fields.set(qn("w:val"), "true")
+        settings.append(update_fields)
 
         header = section.header.paragraphs[0]
         header.text = "企业产业与能源合作智能调研"
@@ -282,21 +309,19 @@ class FrozenWordPublisher:
         self._field(toc, 'TOC \\o "1-3" \\h \\z \\u')
         document.add_page_break()
 
-        document.add_heading("决策问题", level=1)
-        for index, question in enumerate(narrative.decision_questions, start=1):
-            document.add_paragraph(f"问题 {index}：{question}")
-        document.add_page_break()
-
         # ── narrative-driven chapters ──
         for index, chapter in enumerate(narrative.chapters, start=1):
             document.add_heading(f"{index}. {chapter.title}", level=1)
-            if chapter.thesis and chapter.thesis.strip():
-                thesis = document.add_paragraph(chapter.thesis)
-                thesis.paragraph_format.first_line_indent = Pt(0)
-                for run in thesis.runs:
+            if chapter.assertion_title.strip():
+                document.add_heading(chapter.assertion_title, level=2)
+            if chapter.executive_takeaway.strip():
+                takeaway = document.add_paragraph(chapter.executive_takeaway)
+                takeaway.paragraph_format.first_line_indent = Pt(0)
+                takeaway.paragraph_format.left_indent = Pt(10)
+                for run in takeaway.runs:
                     run.bold = True
                     run.font.color.rgb = RGBColor.from_string(navy_hex)
-            for paragraph in chapter.content:
+            for paragraph in [*chapter.context_paragraphs, *chapter.analysis_paragraphs]:
                 document.add_paragraph(paragraph)
             if chapter.table_rows:
                 self._add_structured_table(document, chapter.table_rows, f"表 {index}-1 {chapter.title}")
@@ -313,6 +338,11 @@ class FrozenWordPublisher:
                     continue
                 image_counter += 1
                 self._add_evidence_image(document, publication, asset_root, f"{index}-P{image_counter}", figure_width)
+            self._add_statement_list(document, "业务含义", chapter.implications)
+            self._add_statement_list(document, "建议", chapter.recommendations)
+            self._add_statement_list(document, "反向证据", chapter.counter_evidence)
+            self._add_statement_list(document, "局限与待确认", chapter.limitations)
+            self._add_statement_list(document, "行动项", chapter.action_items)
 
         # ── appendices ──
         document.add_page_break()
@@ -323,8 +353,7 @@ class FrozenWordPublisher:
             "不进行行业均值替代。"
         )
         document.add_heading("附录 B：来源清单", level=1)
-        for source in bundle.sources:
-            document.add_paragraph(f"{source.source_title or source.source_domain}｜{source.canonical_url}")
+        self._add_structured_table(document, narrative.appendices.source_ledger, "表 B-1 来源清单")
         document.add_heading("附录 C：图片来源", level=1)
         if publication_images:
             for publication in publication_images.values():
@@ -332,11 +361,10 @@ class FrozenWordPublisher:
         else:
             document.add_paragraph("本次研究未包含满足核验标准的实体图片。")
         document.add_heading("附录 D：待尽调事项", level=1)
-        for gap in bundle.gaps:
-            if gap.importance == "minor":
-                continue
-            document.add_heading(gap.field_name, level=2)
-            document.add_paragraph(gap.next_action)
+        for item in narrative.appendices.due_diligence:
+            document.add_heading(item.item, level=2)
+            document.add_paragraph(item.why_it_matters)
+            document.add_paragraph(f"建议材料：{'、'.join(item.requested_materials)}；获取时点：{item.timing}；是否阻断决策：{'是' if item.decision_blocker else '否'}")
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         document.save(output_path)
@@ -355,13 +383,6 @@ class FrozenWordPublisher:
         from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
         from docx.shared import Cm, Pt, RGBColor
 
-        lead = document.add_paragraph(
-            f"结论：{spec.business_thesis} 对应问题：{spec.decision_question}（见图 {figure_no}）。"
-        )
-        lead.paragraph_format.keep_with_next = True
-        lead.paragraph_format.first_line_indent = Pt(0)
-        for run in lead.runs:
-            run.bold = True
         if result.png_path is not None and result.png_path.is_file():
             cls._insert_picture(document, result.png_path, width)
         elif spec.items:
@@ -384,6 +405,28 @@ class FrozenWordPublisher:
         for run in source.runs:
             run.font.size = Pt(9)
             run.font.color.rgb = RGBColor(74, 85, 104)
+        so_what = document.add_paragraph(f"So What：{spec.business_thesis}")
+        so_what.paragraph_format.first_line_indent = Pt(0)
+        so_what.paragraph_format.space_after = Pt(10)
+        for run in so_what.runs:
+            run.bold = True
+            run.font.color.rgb = RGBColor(27, 54, 93)
+
+    @staticmethod
+    def _add_statement_list(document, label: str, items: list[str]) -> None:
+        if not items:
+            return
+        from docx.shared import Pt
+
+        heading = document.add_paragraph(label)
+        heading.paragraph_format.first_line_indent = Pt(0)
+        heading.paragraph_format.space_before = Pt(8)
+        heading.paragraph_format.space_after = Pt(3)
+        for run in heading.runs:
+            run.bold = True
+        for item in items:
+            paragraph = document.add_paragraph(item, style="List Bullet")
+            paragraph.paragraph_format.space_after = Pt(3)
 
     @classmethod
     def _add_evidence_image(cls, document, image: PublicationImage, asset_root: Path, figure_no: str, width) -> None:
@@ -468,7 +511,7 @@ class FrozenWordPublisher:
 
         tc = theme_colors()
         navy_hex = tc["navy"].lstrip("#")
-        pale_hex = tc["canvas"].lstrip("#")
+        pale_hex = "D9E2EC"
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
         tbl_pr = table._tbl.tblPr
         existing = tbl_pr.find(qn("w:tblBorders"))
@@ -529,7 +572,9 @@ class FrozenWordPublisher:
         separate = OxmlElement("w:fldChar")
         separate.set(qn("w:fldCharType"), "separate")
         text = OxmlElement("w:t")
-        text.text = "更新域以显示"
+        # Keep the initial field result empty: production refreshes it through
+        # LibreOffice, while an unrefreshed draft must never expose a placeholder.
+        text.text = ""
         end = OxmlElement("w:fldChar")
         end.set(qn("w:fldCharType"), "end")
         for node in (begin, instr, separate, text, end):

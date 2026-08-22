@@ -81,7 +81,7 @@ def visual_regression_verdicts() -> dict:
     from enterprise_energy_research.artifacts import html as html_module
     from enterprise_energy_research.artifacts.visual_policy import colors, word_policy
     # P0 diagram-design baseline (was the Lieflat-era hash before the refactor).
-    frozen_css = "b6006cc8915c91199575fc937cb4483ffb9b6d46e72363e16b7dd293aef99167"
+    frozen_css = "25da81c9742e16fc5567ab7a2bc4cf33334095be28ab0921d0ee890cb2ca7fb2"
     css_ok = hashlib.sha256(html_module.CSS.encode("utf-8")).hexdigest() == frozen_css
     frozen_colors = {
         "black": "#1B1F26", "canvas": "#F7F8FA", "cobalt": "#2D5A8A",

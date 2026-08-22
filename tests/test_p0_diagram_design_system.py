@@ -265,7 +265,8 @@ class P0VisualSystemTests(unittest.TestCase):
             narrative = NarrativeBuilder().build(bundle)
             ids = {chapter.chapter_id for chapter in narrative.chapters}
             self.assertIn("executive_summary", ids)
-            self.assertIn("sources", ids)
+            self.assertNotIn("sources", ids)
+            self.assertTrue(narrative.appendices.source_ledger)
             # no verified structured edges, no verified products in small_simple
             small, _ = _load_bundle(temp, "small_simple.json")
             small_narrative = NarrativeBuilder().build(small)
@@ -290,7 +291,7 @@ class P0VisualSystemTests(unittest.TestCase):
             narrative = NarrativeBuilder().build(bundle)
             products_chapter = narrative.chapter("products")
             self.assertIsNotNone(products_chapter)
-            names = [row["name"] for row in products_chapter.table_rows]
+            names = [row["名称"] for row in products_chapter.table_rows]
             self.assertIn(bundle.products[0].name, names)
 
     def test_16_org_structure_uses_only_verified_structured_edges(self) -> None:

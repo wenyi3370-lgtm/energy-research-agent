@@ -38,6 +38,7 @@ class VisualProposal(BaseModel):
     decision_question: str
     business_thesis: str
     semantic_pattern: SemanticPattern = "none"
+    semantic_domain: str = "strategy"
     title: str
     subtitle: str | None = None
     data_binding: str | None = None
@@ -364,6 +365,7 @@ def proposal_to_spec(proposal: VisualProposal, visual_type: VisualType) -> Visua
         business_thesis=proposal.business_thesis,
         visual_type=visual_type,
         semantic_pattern=proposal.semantic_pattern,
+        semantic_domain=proposal.semantic_domain,  # type: ignore[arg-type]
         title=proposal.title,
         subtitle=proposal.subtitle,
         data_binding=proposal.data_binding,

@@ -16,12 +16,14 @@ pipeline trace (P0-12/13).
 from __future__ import annotations
 
 import json
+import threading
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from enterprise_energy_research.adapters.base import SearchAdapter, SearchRequest, SearchResultEnvelope
+from enterprise_energy_research.adapters.base import SearchAdapter, SearchHit, SearchRequest, SearchResultEnvelope
 from enterprise_energy_research.analysis.energy import EnergyAnalyst
 from enterprise_energy_research.analysis.solutions import SolutionEngine
 from enterprise_energy_research.domain.enums import EnterpriseComplexity, RunStatus, SourceLevel, VerificationStatus
@@ -53,6 +55,11 @@ from enterprise_energy_research.research.normalizer import EvidenceNormalizer, N
 from enterprise_energy_research.research.pipeline_trace import GapReasonClassifier, GoalPipelineTrace
 from enterprise_energy_research.research.planner import GOAL_FAMILIES, ResearchPlanner
 from enterprise_energy_research.research.product_detector import ProductDetector
+from enterprise_energy_research.research.product_detail_frontier import (
+    BoundedBrowserWorkerPool,
+    KimiProductDetailBrowser,
+    ProductDetailFrontier,
+)
 from enterprise_energy_research.research.resolver import CompanyResolver
 from enterprise_energy_research.research.source_grader import SourceGrader
 from enterprise_energy_research.research.synthesis import ResearchSynthesizer, write_synthesis
@@ -126,6 +133,7 @@ class AdaptiveResearchRunner:
         extraction_workers: int = 4,
         fulltext_pages_per_query: int = 4,
         max_product_detail_pages: int = 12,
+        browser_workers: int = 3,
     ) -> None:
         self.adapters = adapters
         self.gateway = gateway
@@ -141,6 +149,9 @@ class AdaptiveResearchRunner:
         self.extraction_workers = extraction_workers
         self.fulltext_pages_per_query = fulltext_pages_per_query
         self.max_product_detail_pages = max_product_detail_pages
+        if not 1 <= browser_workers <= 4:
+            raise ValueError("browser_workers must be between 1 and 4")
+        self.browser_workers = browser_workers
         self._pending_image_candidates: list = []
         # Official domains learned from resolution; later rounds prioritize
         # official pages for deep browsing (product catalog quality).
@@ -214,7 +225,10 @@ class AdaptiveResearchRunner:
             # Product detail pages: parameter tables and real product photos
             # live one level below the product center — follow the product
             # card links on the pages we already opened (P0-17 enumeration).
-            envelopes = self._product_detail_pass(envelopes, telemetry)
+            envelopes = self._product_detail_pass(
+                envelopes, telemetry,
+                queue_path=output_dir / "02_research_quality" / "product_detail_queue.sqlite3",
+            )
             # Kimi WebBridge is reserved for IMAGE discovery on real pages.
             self._image_pass(envelopes, telemetry)
             # Parallel structured extraction across pages (network-bound).
@@ -566,15 +580,15 @@ class AdaptiveResearchRunner:
         self,
         envelopes: list[SearchResultEnvelope],
         telemetry: KimiUsageTelemetry,
+        *,
+        queue_path: Path | None = None,
     ) -> list[SearchResultEnvelope]:
-        """Follow product-card links one level down to real detail pages.
+        """Run detail URLs through a persistent, normalized browser frontier.
 
-        Parameter tables and real product photos live on detail pages below
-        the product center (one more navigation).  Each product page we
-        already opened contributes up to ``product_detail_links_per_page``
-        same-site links (bounded globally by ``max_product_detail_pages``),
-        opened via Kimi on the real browser, snapshot-extracted and fed back
-        into the SAME envelope list so extraction picks up parameters.
+        The queue is shared across R1/R2/R3, so successfully fetched URLs are
+        not repeated and interrupted RUNNING rows are recovered on restart.
+        Kimi's current-tab commands are lifecycle-locked while the generic
+        pool still enforces the configured (<=4) page ceiling.
         """
         kimi = self.adapters.get("kimi_webbridge")
         if kimi is None:
@@ -586,50 +600,90 @@ class AdaptiveResearchRunner:
         ]
         if not candidate_pages:
             return envelopes
-        extended: list[SearchResultEnvelope] = list(envelopes)
-        visited: set[str] = set()
-        opened = 0
+        if queue_path is None:
+            # Backward-compatible unit-test path. Production always supplies
+            # a run-owned queue path above.
+            import tempfile
+            queue_path = Path(tempfile.mkdtemp(prefix="eer-product-frontier-")) / "queue.sqlite3"
+        queue = ProductDetailFrontier(queue_path)
         for envelope in candidate_pages:
-            if opened >= self.max_product_detail_pages:
-                break
-            try:
-                payload = kimi.evaluate(self.PRODUCT_LINKS_JS)
-            except Exception:  # noqa: BLE001 - one page failure never sinks the round
-                continue
-            links = (payload or {}).get("links") or []
-            for link in links:
-                if opened >= self.max_product_detail_pages:
-                    break
-                url = str(link.get("url") or "")
-                if not url or url in visited:
+            for hit in envelope.hits:
+                source_page = str(hit.final_url or hit.requested_url or "")
+                if not source_page:
                     continue
-                visited.add(url)
                 try:
-                    deep = kimi.search(SearchRequest(
-                        query_id=envelope.query_id,
-                        query=url,
-                        entity_id="PENDING-ENTITY",
-                        purpose=envelope.purpose or "",
-                        requires_browser=True,
-                        metadata={"url": url, "target_page": True},
-                    ))
+                    if hasattr(kimi, "_command"):
+                        kimi._command("find_tab", {"url": source_page, "active": False})
+                    payload = kimi.evaluate(self.PRODUCT_LINKS_JS)
                 except Exception:  # noqa: BLE001
                     continue
-                if not deep.hits:
-                    continue
-                deep = deep.model_copy(update={
-                    "topic": envelope.topic, "purpose": envelope.purpose,
-                    "collection_round": envelope.collection_round,
+                context = {
+                    "query_id": envelope.query_id, "topic": envelope.topic,
+                    "purpose": envelope.purpose, "collection_round": envelope.collection_round,
                     "round_goal": envelope.round_goal, "trigger": envelope.trigger,
                     "target_gap_ids": envelope.target_gap_ids,
                     "target_conflict_ids": envelope.target_conflict_ids,
                     "target_claim_ids": envelope.target_claim_ids,
                     "canonical_company_name": envelope.canonical_company_name,
                     "expected_fields": envelope.expected_fields,
-                })
-                extended.append(deep)
-                telemetry.kimi_product_pages += 1
-                opened += 1
+                }
+                for link in (payload or {}).get("links") or []:
+                    url = str(link.get("url") or "")
+                    if not url:
+                        continue
+                    try:
+                        queue.enqueue(url, source_page=source_page, checkpoint=context)
+                    except ValueError:
+                        continue
+
+        shared_lifecycle_lock = threading.RLock()
+        pool = BoundedBrowserWorkerPool(
+            queue,
+            lambda: KimiProductDetailBrowser(kimi, shared_lifecycle_lock),
+            max_workers=self.browser_workers,
+        )
+        results = pool.run(limit=self.max_product_detail_pages)
+        extended: list[SearchResultEnvelope] = list(envelopes)
+        for result in results:
+            context = result.task.checkpoint
+            extended.append(SearchResultEnvelope(
+                adapter="kimi_webbridge",
+                query_id=str(context.get("query_id") or "PRODUCT-DETAIL"),
+                status="ok" if result.text else "partial",
+                hits=[SearchHit(
+                    requested_url=result.task.url,
+                    final_url=result.final_url,
+                    title=result.title,
+                    text=result.text,
+                    status="ok" if result.text else "partial",
+                    retrieved_at=datetime.now(timezone.utc).isoformat(),
+                    metadata={
+                        "target_page": True,
+                        "product_detail": True,
+                        "normalized_url": result.task.normalized_url,
+                        "queue_task_id": result.task.task_id,
+                        "discovered_images": result.discovered_images,
+                    },
+                )],
+                topic=context.get("topic"), purpose=context.get("purpose"),
+                collection_round=context.get("collection_round"), round_goal=context.get("round_goal"),
+                trigger=context.get("trigger"), target_gap_ids=context.get("target_gap_ids") or [],
+                target_conflict_ids=context.get("target_conflict_ids") or [],
+                target_claim_ids=context.get("target_claim_ids") or [],
+                canonical_company_name=context.get("canonical_company_name"),
+                expected_fields=context.get("expected_fields") or [],
+            ))
+            telemetry.kimi_product_pages += 1
+        # Internal validation evidence; never published as narrative text.
+        metrics_path = queue_path.with_name("product_detail_browser_metrics.json")
+        metrics_path.write_text(json.dumps({
+            "configured_max_workers": pool.metrics.configured_max_workers,
+            "max_active_pages": pool.metrics.max_active_pages,
+            "opened_pages": pool.metrics.opened_pages,
+            "closed_pages": pool.metrics.closed_pages,
+            "succeeded": pool.metrics.succeeded,
+            "failed": pool.metrics.failed,
+        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return extended
 
     PRODUCT_LINKS_JS = r"""

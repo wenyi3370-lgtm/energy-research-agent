@@ -86,6 +86,7 @@ class VisualSpec(BaseModel):
     business_thesis: str
     visual_type: VisualType = "table"
     semantic_pattern: SemanticPattern = "none"
+    semantic_domain: Literal["financial", "manufacturing", "product", "energy", "strategy", "risk"] = "strategy"
     title: str
     subtitle: str | None = None
     data_binding: str | None = None

@@ -217,3 +217,15 @@ Release only when:
 - artifacts match the current freeze and manifest;
 - rendering is usable;
 - warnings, if any, are disclosed and do not invalidate executive conclusions.
+
+## 8. P0 consulting and browser validators
+
+- `ConsultingNarrativeValidator`: runs the 20 decision-narrative checks, including evidence-adjusted executive/body length, conclusion-first depth, opportunity completeness, duplicate removal and cross-render consistency.
+- `VisualSemanticValidator`: validates visual claim fields against the declared semantic domain; manufacturing capacity cannot enter an energy visual.
+- `PublicationVisibleTextValidator`: scans rendered/visible Word and HTML text for raw enums, snake_case fields and database headers.
+- `SourceOwnershipValidator`: rejects a body source chapter and requires `appendices.source_ledger`.
+- `TOCValidator`: requires TOC field plus `updateFields`, and rejects visible placeholder text after the LibreOffice refresh/fallback cycle.
+- `WordLengthValidator`: returns `insufficient analytical evidence` when the scoped body gate is unmet; it never permits padding.
+- `BrowserExecutionValidator`: enforces a 1–4 worker ceiling, zero active pages at completion and opened/closed lifecycle equality.
+
+The recorded regression suite maps TEST 1–24 in `tests/test_p0_second_round.py`. Formal release additionally requires a real-company regeneration, DOCX → LibreOffice → PDF → per-page PNG inspection, and HTML renders at 1366×768, 1920×1080 and 390×844.

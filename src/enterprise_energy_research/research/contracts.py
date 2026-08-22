@@ -23,7 +23,7 @@ class GoalExtractionContract(BaseModel):
 FINANCIAL_FIELDS = [
     "revenue", "profit", "gross_profit", "gross_margin", "operating_profit",
     "total_assets", "total_liabilities", "operating_cash_flow", "investment",
-    "capex", "reporting_period", "currency", "scope", "yoy",
+    "capex", "rnd_expense", "rnd_expense_ratio", "reporting_period", "currency", "scope", "yoy",
 ]
 FACTORY_FIELDS = [
     "factory_name", "operator", "address", "city", "province", "products",

@@ -207,3 +207,19 @@ enterprise-energy-research/
 | Packaging | uv or pip-tools | Reproducible locked dependencies |
 
 Prefer mature libraries, but isolate them behind ports where output fidelity or provider availability may change.
+
+## 11. P0 decision-publication architecture
+
+The production path is now:
+
+```text
+Research Planning → Research Frontier → ProductDetailFrontier
+→ URL normalization/deduplication → SQLite persistent queue
+→ bounded browser worker pool (1–4 pages, per-task finally close)
+→ Research Evidence → DecisionSynthesisEngine → DecisionFinding
+→ OpportunityAssessmentEngine → ResearchNarrative/StoryModule
+→ Publication Terminology → diagram-design → Word + unified HTML
+→ narrative/semantic/visible-text/TOC/render QA
+```
+
+The crawler boundary ends after discovery, extraction, provenance and checkpoint persistence. It cannot create opportunities, management judgments or publication prose. `DecisionFinding` is the only evidence-to-analysis transition; `OpportunityAssessment` owns canonicalization, evidence merging, ranking, prerequisites, actions and Go / No-Go gates. `ResearchNarrative` is the single shared publication middle layer for Word and HTML, and `appendices.source_ledger` is the only owner of the complete source list.
