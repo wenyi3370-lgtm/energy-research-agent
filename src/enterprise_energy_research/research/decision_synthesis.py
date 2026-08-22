@@ -303,21 +303,22 @@ class DecisionSynthesisEngine:
     def _manufacturing_finding(self, bundle: FrozenResearchBundle, analysis: ResearchAnalysis) -> DecisionFinding | None:
         if not bundle.factories:
             return None
+        site_count = analysis.factory_site_count or len(bundle.factories)
         regions = analysis.region_distribution
         region_text = "、".join(f"{region} {count} 处" for region, count in list(regions.items())[:6])
         claim_ids = [claim.claim_id for claim in bundle.claims if claim.verification_status == VerificationStatus.VERIFIED and claim.field_name in MANUFACTURING_FIELDS]
         source_ids = [claim.source_id for claim in bundle.claims if claim.claim_id in claim_ids]
         return DecisionFinding(
             finding_id="DF-MANUFACTURING", decision_question="生产布局如何影响合作切入顺序？",
-            conclusion=f"已核验生产基地 {len(bundle.factories)} 处" + (f"，主要分布在{region_text}" if region_text else ""),
+            conclusion=f"已核验生产基地 {site_count} 处" + (f"，主要分布在{region_text}" if region_text else ""),
             supporting_claim_ids=claim_ids, supporting_source_ids=list(dict.fromkeys(source_ids)),
-            fact_summary=f"已核验生产基地 {len(bundle.factories)} 处。",
+            fact_summary=f"公开资料识别生产基地 {site_count} 处（按地域去重口径）。",
             analysis=(f"基地地域分布为{region_text}。" if region_text else "基地名录已入附录。")
                     + "制造布局可用于筛选首批接触基地；产能口径反映制造输出，与企业自身用电规模是两类指标。",
             business_implication="首批基地应按业务相关性、数据可得性与决策链路筛选。",
             recommendation="选择一处资料完整、场景明确的基地做预可研，再决定是否复制。",
             limitations=["公开基地名录可能不是法定完整清单，完整名录见附录。"],
-            confidence=min(0.9, 0.55 + 0.04 * len(bundle.factories)),
+            confidence=min(0.9, 0.55 + 0.04 * site_count),
             statement_type=DecisionStatementType.ANALYTICAL_INFERENCE if claim_ids else DecisionStatementType.TO_BE_CONFIRMED,
             semantic_domain="manufacturing",
         )
@@ -424,7 +425,9 @@ class DecisionSynthesisEngine:
             + (f"，成立于{founded}" if founded else "")
             + (f"，总部位于{profile.headquarters}" if profile and profile.headquarters else "")
             + ("，覆盖" + "、".join(segments) + "等板块" if segments else "")
-            + f"。本报告基于公开渠道已核验事实，对公司经营、产品、制造布局与能源相关能力作客观研究，再回答与委托方的合作价值与切入方式。"
+            + f"。本报告基于公开渠道已核验事实，对公司经营、产品、制造布局与能源相关能力作客观研究，"
+            "再回答与委托方的合作价值与切入方式；研究范围覆盖集团口径与主要经营实体，"
+            "全篇事实均标注期间、范围与来源，分析与建议部分与事实部分明确区分。"
         )
 
         # 2. 关键经营事实（真实数据）
@@ -435,6 +438,22 @@ class DecisionSynthesisEngine:
         if profit is not None:
             last = profit.points[-1]
             facts.append(f"归母净利润 {last.value_display}{last.unit or ''}（{last.period}）")
+        margin_insight = next((item for item in analysis.insights if item.insight_id == "INS-NET-MARGIN"), None)
+        if margin_insight is not None:
+            facts.append(margin_insight.findings[0].rstrip("。"))
+        cash_flow = analysis.trend("operating_cash_flow")
+        if cash_flow is not None:
+            facts.append(f"经营活动现金流 {cash_flow.points[-1].value_display}{cash_flow.points[-1].unit or ''}（{cash_flow.points[-1].period}）")
+        assets = analysis.trend("total_assets")
+        if assets is not None:
+            facts.append(f"总资产 {assets.points[-1].value_display}{assets.points[-1].unit or ''}（{assets.points[-1].period}）")
+        sales = analysis.trend("battery_sales_volume")
+        if sales is not None:
+            facts.append(f"动力电池销量 {sales.points[-1].value_display}{sales.points[-1].unit or ''}（{sales.points[-1].period}）")
+        if analysis.zero_carbon_metrics:
+            facts.append("零碳披露" + "；".join(
+                f"{item.label} {item.value_display}{item.unit or ''}" for item in analysis.zero_carbon_metrics[:2]
+            ))
         position = next((item for item in analysis.kpis if item.label == "市场地位"), None)
         if position is not None:
             facts.append(f"市场地位：{position.value}")
@@ -452,7 +471,8 @@ class DecisionSynthesisEngine:
             "核心依据：" + ("；".join(facts) if facts else "已核验公开披露覆盖企业身份、业务与产品制造能力") + "。"
             + ((revenue.statement + "。") if revenue is not None and revenue.year_count >= 3 else "")
             + "这些数据构成判断合作资源基础的客观依据，经营规模反映资源投入能力，产品与基地反映交付能力；"
-            "对应证据在后续章节逐项展开并配有图表。"
+            "对应证据在后续章节逐项展开并配有图表。跨期可比性方面，年度数据以公开年报与定期报告口径为准，"
+            "不同披露来源的币种与合并范围差异在相应章节注明。"
         )
 
         # 3. 产业与技术能力（2-4点）
@@ -469,10 +489,20 @@ class DecisionSynthesisEngine:
             capabilities.append(energy_finding.conclusion)
         if rnd_insight is not None:
             capabilities.append(rnd_insight.findings[0])
+        if position is not None:
+            capabilities.append(f"市场地位：{position.value}")
         third = (
             "产业与技术能力方面，" + ("；".join(capabilities) + "。" if capabilities else "现有公开资料对产业技术能力的披露有限。")
             + f"优先切入：{priority_summary}"
         )
+        if analysis.energy_product_metrics:
+            third += "能源相关能力方面，公司披露" + "、".join(
+                f"{item.label} {item.value_display}{item.unit or ''}" for item in analysis.energy_product_metrics[:3]
+            ) + "等产品/项目能力，属于合作范围证据而非企业用能数据。"
+        if analysis.zero_carbon_metrics:
+            third += "零碳披露方面，" + "；".join(
+                f"{item.label} {item.value_display}{item.unit or ''}" for item in analysis.zero_carbon_metrics[:2]
+            ) + "，构成绿电与零碳合作议题的事实起点。"
 
         # 4. 主要机会与限制
         blockers = [item.item for item in requirements if item.decision_blocker]
@@ -481,12 +511,16 @@ class DecisionSynthesisEngine:
             if blockers else "限制条件：关键前置资料整体可控，具体口径需在预可研中复核。"
         )
         risk_text = ("主要风险还包括" + "；".join(risks[:3]) + "。") if risks else ""
-        fourth = limitation + risk_text + "缺少基地级电量和负荷时，不估算削峰或自消纳收益；缺少配电和权属条件时，不承诺可实施容量。"
+        fourth = (
+            limitation + risk_text + "缺少基地级电量和负荷时，不估算削峰或自消纳收益；缺少配电和权属条件时，不承诺可实施容量。"
+            + "机会与限制共同决定资源配置：资源投入随证据成熟度逐步增加，避免在关键事实缺失时过早承诺容量、收益或工期。"
+        )
 
         # 5. 最终建议
         fifth = (
             "行动建议：未来 30 天完成对接主体确认、资料清单发放与优先场景选择；"
             "60 天完成现场踏勘、数据清洗与技术接口验证；90 天提交预可研结论并召开 Go / No-Go 评审。"
+            "评审材料覆盖价值来源、技术约束、责任主体、投资边界、关键风险与退出条件六个方面；"
             "只有当关键资料齐套、技术边界可控、责任主体明确且价值测算通过敏感性检验时，才进入方案设计或报价阶段，"
             "同时明确返回补数或停止投入的触发条件。"
         )

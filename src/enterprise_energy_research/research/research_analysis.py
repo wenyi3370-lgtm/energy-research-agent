@@ -50,6 +50,9 @@ FLOW_METRICS = {
     "battery_production_capacity": "电池产能",
     "storage_capacity": "储能规模",
     "pv_capacity": "光伏装机容量",
+    "battery_sales_volume": "动力电池销量",
+    "total_assets": "总资产",
+    "gross_profit": "毛利润",
 }
 PP_METRICS = {
     "gross_margin": "毛利率",
@@ -57,6 +60,7 @@ PP_METRICS = {
     "rnd_expense_ratio": "研发费用率",
     "market_share": "市场份额",
     "renewable_share": "可再生能源占比",
+    "green_electricity_usage_ratio": "绿电使用比例",
 }
 SEGMENT_FIELDS = {
     "battery_revenue": "动力电池业务",
@@ -69,6 +73,16 @@ SEGMENT_FIELDS = {
 }
 
 YEAR_RE = re.compile(r"(?:19|20)\d{2}")
+
+# Storage-unit scale factors: every series point is normalized to the base
+# unit (元) so 千元/万元/亿元 claims can never produce a false -100% trend.
+UNIT_SCALE = {"元": 1.0, "千元": 1e3, "万元": 1e4, "亿元": 1e8}
+
+# Factory site dedupe: same physical site often appears as
+# "福建省宁德市…" vs "福建宁德…" across pages.
+PROVINCE_RE = re.compile(r"([\u4e00-\u9fff]{2,10}?(?:省|自治区|特别行政区))")
+CITY_RE = re.compile(r"([\u4e00-\u9fff]{2,10}?(?:市|州|地区))")
+OVERSEAS_RE = re.compile(r"(德国|匈牙利|印尼|印度尼西亚|泰国|越南|美国|西班牙|墨西哥|日本|韩国|波兰|荷兰|比利时)")
 
 
 class ResearchMetric(BaseModel):
@@ -151,11 +165,22 @@ class ResearchAnalysis(BaseModel):
     domestic_factory_count: int = 0
     own_energy_metrics: list[ResearchMetric] = Field(default_factory=list)
     energy_product_metrics: list[ResearchMetric] = Field(default_factory=list)
+    zero_carbon_metrics: list[ResearchMetric] = Field(default_factory=list)
+    zero_carbon_goals: list[str] = Field(default_factory=list)
+    factory_site_count: int = 0
     filtered_claim_count: int = 0
     junk_claim_count: int = 0
 
     def trend(self, field_name: str) -> ResearchTrend | None:
         return next((item for item in self.trends if item.field_name == field_name), None)
+
+
+# Fields whose natural unit is NOT currency (capacity etc.): a wrong "元"
+# unit from extraction must never leak into the display.
+NON_CURRENCY_FIELDS = {
+    "capacity", "production_capacity", "battery_production_capacity",
+    "storage_capacity", "pv_capacity", "storage_power", "battery_sales_volume",
+}
 
 
 class ResearchAnalysisEngine:
@@ -220,12 +245,11 @@ class ResearchAnalysisEngine:
         if not rev.value:
             return
         margin = round(prof.value / rev.value * 100, 2)
-        fmt = PublicationNumberFormatter()
         insight = ResearchInsight(
             insight_id="INS-NET-MARGIN", topic="financial", title="盈利能力",
             findings=[f"{period} 年按公开披露口径计算的净利率约为 {margin}%，"
-                      f"即归母净利润 {fmt.format(prof.value, prof.unit).display_value}{fmt.format(prof.value, prof.unit).display_unit} "
-                      f"对应营业收入 {fmt.format(rev.value, rev.unit).display_value}{fmt.format(rev.value, rev.unit).display_unit}。"],
+                      f"即归母净利润 {prof.value_display}{prof.unit or ''} "
+                      f"对应营业收入 {rev.value_display}{rev.unit or ''}。"],
             consulting_note="净利率水平反映盈利质量，是判断对方持续投入研发与联合项目能力的重要参考。",
             source_ids=self._uniq([*rev.source_ids, *prof.source_ids]),
             claim_ids=self._uniq([*rev.claim_ids, *prof.claim_ids]),
@@ -308,28 +332,36 @@ class ResearchAnalysisEngine:
     def _factory_regions(self, analysis: ResearchAnalysis, bundle: FrozenResearchBundle) -> None:
         if not bundle.factories:
             return
-        region_re = re.compile(r"([\u4e00-\u9fff]{2,10}?(?:省|市|自治区|特别行政区))")
-        overseas_re = re.compile(r"(德国|匈牙利|印尼|印度尼西亚|泰国|越南|美国|西班牙|墨西哥|日本|韩国|波兰|荷兰|比利时)")
         distribution: Counter[str] = Counter()
+        sites: set[str] = set()
         for factory in bundle.factories:
             address = factory.address or ""
-            overseas = overseas_re.search(address)
+            overseas = OVERSEAS_RE.search(address)
             if overseas:
+                site_key = f"overseas:{overseas.group(1)}"
                 distribution[overseas.group(1)] += 1
                 analysis.overseas_factory_count += 1
+                sites.add(site_key)
                 continue
-            match = region_re.search(address)
+            match = PROVINCE_RE.search(address)
+            city_match = CITY_RE.search(address)
+            site_key = f"{match.group(1) if match else ''}|{city_match.group(1) if city_match else address}"
             if match:
                 distribution[match.group(1)] += 1
                 analysis.domestic_factory_count += 1
+                sites.add(site_key)
             else:
                 distribution["地区待核验"] += 1
+                sites.add(f"unknown:{address}")
+        # Site-level counts are the honest metric: page records often repeat
+        # the same physical base under near-identical names.
+        analysis.factory_site_count = len(sites)
         analysis.region_distribution = dict(distribution.most_common())
         if analysis.region_distribution:
             top_regions = "、".join(f"{region} {count} 处" for region, count in list(analysis.region_distribution.items())[:5])
             analysis.insights.append(ResearchInsight(
                 insight_id="INS-REGIONS", topic="manufacturing", title="生产基地地域分布",
-                findings=[f"已核验生产基地 {len(bundle.factories)} 处，主要分布为{top_regions}。"
+                findings=[f"公开资料识别生产基地 {analysis.factory_site_count} 处（按地域去重口径），主要分布为{top_regions}。"
                           + (f"其中海外基地 {analysis.overseas_factory_count} 处，国内基地 {analysis.domestic_factory_count} 处。" if analysis.overseas_factory_count else "")],
                 consulting_note="基地分布反映产能组织的区域重心与海外交付能力，可作为合作切入与复制路径的参考。",
             ))
@@ -374,6 +406,37 @@ class ResearchAnalysisEngine:
                 unit=formatted.display_unit, period=self._period_of(best), scope=best.scope,
                 source_ids=[best.source_id], claim_ids=[best.claim_id],
             ))
+        # Zero-carbon facts: numeric metrics and goal statements, kept
+        # separate from energy-product capability.
+        zero_carbon_labels = {
+            "green_electricity_usage_ratio": "绿电使用比例",
+            "carbon_reduction": "碳减排量",
+            "carbon_intensity": "碳排放强度",
+        }
+        for field_name in sorted(zero_carbon_labels):
+            claims = by_field.get(field_name, [])
+            if not claims:
+                continue
+            best = self._best(claims)
+            value = parse_number(best.value)
+            if value is None:
+                continue
+            formatted = PublicationNumberFormatter().format(best.value, best.unit)
+            display_value = formatted.display_value
+            # Percent values extracted as "26.60%" with unit "%" must not
+            # render as "26.60%%".
+            if str(display_value).endswith("%") and formatted.display_unit == "%":
+                display_value = str(display_value)[:-1]
+            analysis.zero_carbon_metrics.append(ResearchMetric(
+                label=zero_carbon_labels[field_name], field_name=field_name, value=value,
+                value_display=display_value,
+                unit=formatted.display_unit, period=self._period_of(best), scope=best.scope,
+                source_ids=[best.source_id], claim_ids=[best.claim_id],
+            ))
+        for claim in by_field.get("carbon_neutrality_goal", []):
+            text = str(claim.value).strip()
+            if text and text not in analysis.zero_carbon_goals:
+                analysis.zero_carbon_goals.append(text)
         if analysis.own_energy_metrics:
             analysis.insights.append(ResearchInsight(
                 insight_id="INS-ENERGY-OWN", topic="energy", title="企业自身能源数据",
@@ -384,6 +447,18 @@ class ResearchAnalysisEngine:
                 insight_id="INS-ENERGY-CAPABILITY", topic="energy", title="能源产品与项目能力",
                 findings=["公司披露" + "、".join(item.label for item in analysis.energy_product_metrics) + "等能源产品/项目能力。"],
                 consulting_note="能源产品能力说明企业会做什么，与企业自身的用能规模是两类信息，应分别评估。",
+            ))
+        if analysis.zero_carbon_metrics or analysis.zero_carbon_goals:
+            parts = [
+                f"{item.label} {item.value_display}{item.unit or ''}" + (f"（{item.period}）" if item.period else "")
+                for item in analysis.zero_carbon_metrics
+            ]
+            if analysis.zero_carbon_goals:
+                parts.append(f"零碳目标：{'；'.join(analysis.zero_carbon_goals)}")
+            analysis.insights.append(ResearchInsight(
+                insight_id="INS-ZERO-CARBON", topic="energy", title="零碳与绿电",
+                findings=["零碳方面，公开披露显示" + "；".join(parts) + "。"],
+                consulting_note="绿电与零碳数据是能源合作（绿电采购、零碳工厂、储能配套）的真实事实基础。",
             ))
 
     def _kpis(self, analysis: ResearchAnalysis, bundle: FrozenResearchBundle, by_field: dict[str, list[Claim]]) -> None:
@@ -411,7 +486,7 @@ class ResearchAnalysisEngine:
                                              value=str(len({item.category or "未分类" for item in bundle.products if item.verification_status == VerificationStatus.VERIFIED})),
                                              unit="个"))
         if bundle.factories:
-            analysis.kpis.append(ResearchKpi(label="已核验生产基地", value=str(len(bundle.factories)), unit="处"))
+            analysis.kpis.append(ResearchKpi(label="已核验生产基地", value=str(analysis.factory_site_count or len(bundle.factories)), unit="处"))
         position = by_field.get("market_share") or by_field.get("industry_position")
         if position:
             best = self._best(position)
@@ -455,6 +530,13 @@ class ResearchAnalysisEngine:
             value = parse_number(claim.value)
             if value is None:
                 continue
+            # Annual series use FULL-YEAR claims only: a half-year report
+            # (period_end 06-30) must never be averaged into an annual line.
+            if claim.period_start and claim.period_end and (
+                (claim.period_start.month, claim.period_start.day) != (1, 1)
+                or (claim.period_end.month, claim.period_end.day) != (12, 31)
+            ):
+                continue
             period = self._period_of(claim) or self._year_from_text(claim)
             if not period:
                 continue
@@ -466,13 +548,25 @@ class ResearchAnalysisEngine:
         fmt = PublicationNumberFormatter()
         for year in sorted(by_period):
             claim = by_period[year]
-            value = parse_number(claim.value)
-            assert value is not None
-            formatted = fmt.format(claim.value, claim.unit)
+            raw_value = parse_number(claim.value)
+            assert raw_value is not None
+            if field_name in NON_CURRENCY_FIELDS:
+                # Capacity/energy-power series keep their raw magnitude; a
+                # wrong currency unit from extraction is dropped, not shown.
+                unit = claim.unit if (claim.unit or "").strip() not in UNIT_SCALE else None
+                value = raw_value
+                value_display = fmt.format(raw_value, unit).display_value
+            else:
+                # Normalize the storage unit (千元/万元/亿元 -> 元) so annual
+                # points are comparable across mixed-unit disclosures.
+                value = raw_value * UNIT_SCALE.get((claim.unit or "").strip(), 1.0)
+                formatted = fmt.format(value, "元")
+                value_display = formatted.display_value
+                unit = formatted.display_unit
             points.append(ResearchMetric(
                 label=label, field_name=field_name, value=value,
-                value_display=formatted.display_value,
-                unit=formatted.display_unit, period=year, scope=claim.scope,
+                value_display=value_display,
+                unit=unit, period=year, scope=claim.scope,
                 source_ids=[claim.source_id], claim_ids=[claim.claim_id],
                 period_from_text=not (claim.period_start or claim.period_end or claim.as_of_date),
             ))

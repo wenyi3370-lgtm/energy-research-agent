@@ -108,14 +108,14 @@ class OpportunityAssessmentEngine:
                 opportunity_name=primary.opportunity,
                 target_scenario=target_scenario,
                 strategic_rationale=(
-                    f"该方向由 {len(claim_ids)} 条已核验事实和 {len(source_ids)} 个来源共同触发，"
-                    "其成立前提是已披露能力能够映射到明确场景，并通过现场数据验证项目价值。"
+                    f"该方向由 {len(claim_ids)} 条已核验事实和 {len(source_ids)} 个来源触发，"
+                    f"事实基础为：{primary.proposed_solution}"
                 ),
                 evidence_basis=primary.proposed_solution,
                 supporting_claim_ids=claim_ids, supporting_source_ids=source_ids,
                 target_need=self._target_need(primary),
                 our_value_proposition=(
-                    "提供场景诊断、数据边界梳理、技术适配与预可研，把公开能力转化为可审计的项目判断。"
+                    f"围绕{primary.opportunity}提供场景诊断、数据边界梳理、技术适配与预可研服务。"
                 ),
                 entry_point=entry,
                 strategic_fit=strategic_fit,
@@ -126,10 +126,10 @@ class OpportunityAssessmentEngine:
                 key_prerequisites=prerequisites,
                 key_risks=risks or ["数据口径不一致", "责任边界未确认"],
                 first_30_day_action=f"由联合项目组对接{entry}，确认场景、资料清单和一处优先验证对象。",
-                day_60_action="完成资料清洗、现场核验、技术适配与初步价值测算，并形成问题闭环清单。",
-                day_90_milestone="提交预可研结论和 Go / No-Go 评审材料，决定进入方案设计、继续补数或停止。",
+                day_60_action=f"完成{primary.opportunity}场景的资料清洗、现场核验、技术适配与初步价值测算，并形成问题闭环清单。",
+                day_90_milestone=f"提交{primary.opportunity}的预可研结论和 Go / No-Go 评审材料，决定进入方案设计、继续补数或停止。",
                 owner="联合项目组",
-                success_kpi="关键资料齐套率 100%，完成一处场景预可研并形成书面决策结论",
+                success_kpi=f"关键资料齐套率 100%，完成{primary.opportunity}一处场景预可研并形成书面决策结论",
                 go_no_go_gate=(
                     "关键数据完整、技术接口可行、责任主体明确且价值测算通过敏感性检验后方可 Go；"
                     "任何一项不满足则 No-Go 或返回补数。"

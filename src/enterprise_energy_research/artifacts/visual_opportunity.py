@@ -85,6 +85,8 @@ class VisualOpportunityPlanner:
         proposals: list[VisualProposal] = []
         index = 0
         for trend in self.analysis.trends:
+            if trend.field_name in {"capacity", "production_capacity", "battery_production_capacity", "storage_capacity", "pv_capacity"}:
+                continue  # capacity belongs to the factories chapter
             index += 1
             proposal = self._trend_proposal(
                 "operations", index, f"{trend.label}趋势",

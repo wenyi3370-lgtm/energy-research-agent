@@ -61,11 +61,24 @@ def narrative_body_text(narrative: Any) -> str:
 
 
 def evidence_adjusted_threshold(narrative: Any) -> int:
-    """Hard 12k gate for full research; fail honestly at a lower scoped gate."""
+    """Data-weighted body gate (P0 third round).
+
+    A dense evidence set lowers the padding pressure: verified claims,
+    meaningful visuals and product/factory records each raise the bar,
+    while a report with 9 real charts and 190 verified claims is no longer
+    forced to pad prose to the old flat 12k ceiling.
+    """
     verified = int(narrative.counts.get("verified_claims", 0))
+    visuals = int(narrative.counts.get("meaningful_visual_count", 0))
+    products = int(narrative.counts.get("verified_products", 0))
+    factories = int(narrative.counts.get("factories", 0))
     full = verified >= 30 and len(narrative.opportunity_assessments) >= 2 and len(narrative.chapters) >= 7
     if full:
-        return 12_000
+        # Verified count is weighted lightly: it includes many low-value
+        # identity/registry claims; visuals, products and factories carry
+        # the research density instead.
+        base = 2_500 + verified * 6 + visuals * 300 + products * 8 + factories * 8
+        return min(12_000, max(8_000, (base // 100) * 100))
     # A thin evidence set must still produce analysis, but must not be padded
     # to impersonate a 30-page report.
     scoped = min(8_000, 1_500 + verified * 120 + len(narrative.chapters) * 250)

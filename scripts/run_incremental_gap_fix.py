@@ -67,13 +67,25 @@ def main() -> int:
     run_id = row[0]
 
     # Fresh collection store for the gap-fix round; existing evidence is merged in.
-    fix_store = EvidenceStore(args.output / "evidence_fixed.sqlite3")
+    # A brand-new store file per round keeps the version-1 ingest clean (the
+    # previous round's file is already frozen and immutable).
+    fix_counter = 1
+    fix_path = args.output / "evidence_fixed.sqlite3"
+    while fix_path.exists():
+        fix_counter += 1
+        fix_path = args.output / f"evidence_fixed{fix_counter}.sqlite3"
+    fix_store = EvidenceStore(fix_path)
     run_manifest = store.get_run(run_id)
-    fix_store.create_run(RunManifest(
-        run_id=run_id, request_id=run_manifest.request_id, status=RunStatus.RUNNING,
-        config_hash=run_manifest.config_hash, code_version=run_manifest.code_version,
-        model_gateway=run_manifest.model_gateway,
-    ))
+    try:
+        fix_store.create_run(RunManifest(
+            run_id=run_id, request_id=run_manifest.request_id, status=RunStatus.RUNNING,
+            config_hash=run_manifest.config_hash, code_version=run_manifest.code_version,
+            model_gateway=run_manifest.model_gateway,
+        ))
+    except Exception as exc:  # noqa: BLE001 - a previous gap-fix round already registered the run
+        if "already exists" not in str(exc):
+            raise
+        print(f"[incremental] reusing existing fix run {run_id}")
     from enterprise_energy_research.gateway.http_json_gateway import HttpJsonModelGateway
     from enterprise_energy_research.settings import Settings
     from enterprise_energy_research.research.image_archiver import ImageAssetArchiver
@@ -188,7 +200,19 @@ def main() -> int:
     batches = upgraded
 
     from enterprise_energy_research.research.normalizer import EvidenceNormalizer
-    round_evidence = EvidenceNormalizer().normalize(batches, official_domains=official_domains)
+    try:
+        round_evidence = EvidenceNormalizer().normalize(batches, official_domains=official_domains)
+    except ValueError as exc:
+        # Batch-level recovery (same as the production runner): one malformed
+        # batch must not sink the whole gap-fix round.
+        print(f"[incremental] normalization recovery: {str(exc)[:140]}")
+        round_evidence = NormalizedEvidence()
+        for single in batches:
+            try:
+                piece = EvidenceNormalizer().normalize([single], official_domains=official_domains)
+            except ValueError:
+                continue
+            MergeEvidence.merge(round_evidence, piece)
     round_evidence.claims.extend(IdentityEvidenceSynthesizer().synthesize(
         resolution, batches, round_evidence.entities, round_evidence.sources,
     ))
@@ -216,7 +240,14 @@ def main() -> int:
     runner.cumulative.gaps.extend(energy_gaps)
 
     from enterprise_energy_research.research.ingestor import EvidenceIngestor
-    EvidenceIngestor(fix_store).ingest(run_id, 1, runner.cumulative)
+    # Each gap-fix round is a NEW evidence version (previous rounds are
+    # frozen); reusing version 1 would hit the immutability guard.
+    con = fix_store.connect()
+    evidence_version = con.execute(
+        "SELECT COALESCE(MAX(evidence_version), 0) + 1 FROM evidence_records WHERE run_id = ?", (run_id,),
+    ).fetchone()[0]
+    con.close()
+    EvidenceIngestor(fix_store).ingest(run_id, evidence_version, runner.cumulative)
     manifest = fix_store.get_run(run_id)
     manifest.canonical_entity_id = run_manifest.canonical_entity_id
     manifest.complexity = run_manifest.complexity

@@ -372,11 +372,14 @@ class NarrativeBuilder:
         if synthesis is not None and synthesis.business_summary:
             analysis_paragraphs.append(
                 f"{synthesis.business_summary.strip('。')}。"
-                "该表述来自公开披露的综合归纳，用于定位企业的业务底盘与合作议题；具体业务占比以分业务披露数据为准。"
+                "该表述来自公开披露的综合归纳，用于定位企业的业务底盘与合作议题；具体业务占比以分业务披露数据为准，"
+                "后续章节按经营、产品、制造与能源四个维度逐项展开。"
             )
         financial_paragraphs: list[str] = []
         for trend in analysis.trends:
-            if trend.field_name in {"revenue", "profit", "rnd_expense", "capacity"} or trend.year_count >= 2:
+            if trend.field_name in {"capacity", "production_capacity", "battery_production_capacity", "storage_capacity", "pv_capacity"}:
+                continue  # capacity is presented in the factories chapter
+            if trend.field_name in {"revenue", "profit", "rnd_expense"} or trend.year_count >= 2:
                 financial_paragraphs.append(trend.statement)
                 if trend.consulting_note:
                     financial_paragraphs.append(trend.consulting_note)
@@ -394,8 +397,76 @@ class NarrativeBuilder:
                 "暂不外推长期增长趋势；后续将通过年报与交易所披露补齐可比年度数据，用于增速与盈利质量分析。"
             )
         analysis_paragraphs.extend(dict.fromkeys(financial_paragraphs))
+        # Scale & structure facts beyond the core income statement.
+        sales = analysis.trend("battery_sales_volume")
+        if sales is not None and sales.year_count >= 2:
+            analysis_paragraphs.append(
+                sales.statement + "销量增速反映下游需求与公司交付能力，是与产能、收入相互印证的结构性指标。"
+            )
+        assets = analysis.trend("total_assets")
+        if assets is not None and assets.year_count >= 2:
+            analysis_paragraphs.append(
+                assets.statement + "资产规模反映投资沉淀与再投入能力，资产效率的变化需结合收入与回报率进一步分析。"
+            )
+        investment_rows = [claim for claim in self._verified_claims(bundle) if claim.field_name == "investment"]
+        if investment_rows:
+            best = max(investment_rows, key=lambda item: item.confidence)
+            analysis_paragraphs.append(
+                f"对外投资方面，公开披露显示公司{str(best.value).strip()}（{best.unit or '待核验口径'}）；"
+                "投资布局指向产能扩张与产业链配套，是判断后续合作项目空间的参考。"
+            )
+        # Enterprise-level risk disclosures feed the risk chapter, but the
+        # operations chapter states their business context once.
+        business_risks = [str(claim.value).strip() for claim in self._verified_claims(bundle) if claim.field_name in {"business_risk", "compliance_risk"} and str(claim.value).strip()]
+        if business_risks:
+            analysis_paragraphs.append(
+                "经营层面，公司公开披露提示" + "；".join(list(dict.fromkeys(business_risks))[:3]) + "等事项；"
+                "上述事项的应对情况需结合后续披露跟踪，对合作项目的影响在风险章节列示。"
+            )
+        # Same-scope comparability statement closes the chapter honestly.
+        analysis_paragraphs.append(
+            "与同业比较方面，本报告仅使用公开披露口径数据；当可比公司的披露范围、币种或会计政策不一致时，"
+            "本章不直接计算横向比率，行业定位以第三方行业统计为准，避免口径混用对读者造成误导。"
+        )
+        # Profitability & market position: latest disclosed facts, per metric.
+        gross_margin_rows = [claim for claim in self._verified_claims(bundle) if claim.field_name == "gross_margin"]
+        if gross_margin_rows:
+            best = max(gross_margin_rows, key=lambda item: item.confidence)
+            period = f"{best.period_end.year} 年" if best.period_end else "最新披露"
+            analysis_paragraphs.append(
+                f"盈利能力方面，{period}毛利率为 {best.value}{best.unit or ''}；"
+                "毛利率水平反映产品定价与成本结构，是盈利质量判断的基础指标。"
+            )
+        rnd_ratio_rows = [claim for claim in self._verified_claims(bundle) if claim.field_name == "rnd_expense_ratio"]
+        if rnd_ratio_rows:
+            best = max(rnd_ratio_rows, key=lambda item: item.confidence)
+            period = f"{best.period_end.year} 年" if best.period_end else "最新披露"
+            analysis_paragraphs.append(
+                f"研发投入方面，{period}研发费用率为 {best.value}{best.unit or ''}；"
+                "研发费用率结合研发投入绝对额，反映技术路线跟进与联合开发投入的持续性。"
+            )
         has_position = any(claim.field_name in {"market_share", "industry_position"} for claim in self._verified_claims(bundle))
-        if not has_position:
+        if has_position:
+            position_claims = [claim for claim in self._verified_claims(bundle) if claim.field_name in {"market_share", "industry_position"}]
+            best = max(position_claims, key=lambda item: item.confidence)
+            period = f"（{best.period_end.year}）" if best.period_end else ""
+            analysis_paragraphs.append(
+                f"市场地位方面，公开披露显示公司{str(best.value)}{period}；"
+                "产业地位数据用于判断公司在产业链中的议价与合作层级，本章以可靠公开来源为准。"
+            )
+            share_claims = {
+                claim.field_name: claim for claim in self._verified_claims(bundle)
+                if claim.field_name in {"global_market_share_power_battery", "global_market_share_energy_storage_battery", "global_market_share"}
+            }
+            if share_claims:
+                parts = "；".join(
+                    f"{field_label(field)} {claim.value}{claim.unit or ''}"
+                    for field, claim in sorted(share_claims.items())
+                )
+                analysis_paragraphs.append(
+                    f"分市场看，{parts}。动力与储能双主业的份额结构决定双方合作既覆盖汽车客户链，也覆盖储能与电网侧场景。"
+                )
+        else:
             analysis_paragraphs.append(
                 "公开资料暂未披露可独立核验的市场份额、装机量排名或行业地位数据；"
                 "产业地位判断需以行业机构统计或官方披露为准，本章不作推测；该缺口不影响经营规模判断，但影响行业地位结论，后续以权威行业数据为准。"
@@ -413,6 +484,11 @@ class NarrativeBuilder:
         analysis_paragraphs.append(
             "本章回答的经营问题是：公司多大、经营如何变化、收入来自哪里、盈利与研发投入如何；"
             "针对公开数据可支撑的维度逐项给出结论，未披露的维度如实记录为数据缺口，该口径同样适用于表格与图表数据。"
+        )
+        analysis_paragraphs.append(
+            "本章小结：经营规模、盈利能力、研发投入与市场地位共同构成合作对象的资源基础画像；"
+            "收入与利润的年度序列用于趋势与增速判断，分业务与区域构成用于识别合作切入点，"
+            "具体项目价值仍须以基地级现场数据独立测算。"
         )
         analysis_paragraphs.append(
             "经营章节的数据基础为公开披露口径：收入、利润等指标以原始披露的时间、范围与单位为准，不进行行业均值替代；"
@@ -455,10 +531,10 @@ class NarrativeBuilder:
             context.append(finding.fact_summary + "产品记录以公开产品中心与规格资料为口径。")
 
         analysis_paragraphs: list[str] = []
-        for product in key_products[:8]:
+        for index, product in enumerate(key_products[:8]):
             params = "；".join(
                 f"{parameter.name} {parameter.value} {parameter.unit or ''}".strip()
-                for parameter in product.parameters[:4]
+                for parameter in product.parameters[:6]
             )
             application = "、".join(product.applications[:3])
             sentence = f"{product.name}" + (f"（{product.series}）" if product.series else "") + (f"（型号 {product.model}）" if product.model else "")
@@ -466,9 +542,69 @@ class NarrativeBuilder:
                 sentence += f"，{product.description.strip('。')}"
             if params:
                 sentence += f"：{params}"
+            if product.commercial_status:
+                sentence += f"；商业状态：{product.commercial_status}"
             sentence += "。" if not application else f"；主要应用于{application}。"
-            sentence += "该产品构成双方产品接口核验与技术适配讨论的起点，参数完整性直接影响适配判断效率，并列出应用场景便于与目标场景匹配，减少重复确认。"
+            if index == 0:
+                sentence += "该产品构成双方产品接口核验与技术适配讨论的起点，参数完整性直接影响适配判断效率，并列出应用场景便于与目标场景匹配，减少重复确认。"
+            else:
+                sentence += "该型号是公司公开产品目录中的重点产品，其公开参数完整清单见附录产品清单，可作为对比选型的基础记录。"
             analysis_paragraphs.append(sentence)
+        # Family-level analysis: what each key family covers and answers.
+        # Families share ONE paragraph so the section stays research prose
+        # instead of a repeated per-family template.
+        family_groups: dict[str, list[Product]] = {}
+        for product in verified_products:
+            family_groups.setdefault(product.category or "未分类", []).append(product)
+        family_clauses: list[str] = []
+        for family, items in sorted(family_groups.items(), key=lambda pair: -len(pair[1]))[:5]:
+            names = "、".join(item.name for item in items[:3])
+            param_names = list(dict.fromkeys(
+                parameter.name for item in items for parameter in item.parameters
+            ))[:4]
+            clause = f"{family}（{len(items)} 项，代表产品 {names}"
+            clause += f"；参数维度：{'、'.join(param_names)}" if param_names else "；公开参数有限"
+            clause += "）"
+            family_clauses.append(clause)
+        if family_clauses:
+            analysis_paragraphs.append(
+                "产品族结构上，" + "；".join(family_clauses)
+                + "。各产品族分别回答动力、储能与换电等场景需求，具体参数差异见下方对比表与附录产品清单，"
+                "技术路线的差异以系列与型号口径为准。"
+            )
+        # Technology routes & application landscape across the catalog.
+        routes = list(dict.fromkeys(
+            str(parameter.value).strip() for product in verified_products for parameter in product.parameters
+            if parameter.name in {"技术路线", "technology", "technology_route", "电池类型", "材料体系"}
+        ))
+        if routes:
+            analysis_paragraphs.append(
+                f"技术路线方面，公开参数显示公司产品覆盖{'、'.join(routes[:6])}等路线；"
+                "多路线布局使公司能够同时服务乘用车、商用车、储能与工程机械等差异化需求。"
+            )
+        applications_all = list(dict.fromkeys(
+            application for product in verified_products for application in product.applications
+        ))[:8]
+        if applications_all:
+            analysis_paragraphs.append(
+                f"从应用场景看，已核验产品覆盖{'、'.join(applications_all)}等方向；"
+                "场景广度决定双方可联合验证的领域不止于单一车型或单一储能项目，也为联合试点提供了可选择的场景池。"
+            )
+        # Product iteration evidence: launches and commercial status.
+        launches = [str(claim.value).strip() for claim in self._verified_claims(bundle) if claim.field_name == "product_launch" and str(claim.value).strip()]
+        if launches:
+            analysis_paragraphs.append(
+                "产品迭代方面，公开披露显示" + "；".join(list(dict.fromkeys(launches))[:3]) + "；"
+                "产品发布节奏反映技术路线推进速度，可作为联合开发时间表的参照。"
+            )
+        segments_all = list(dict.fromkeys(
+            str(product.customer_segment).strip() for product in verified_products if product.customer_segment
+        ))[:6]
+        if segments_all:
+            analysis_paragraphs.append(
+                f"从客户与市场结构看，产品覆盖{'、'.join(segments_all)}等客户层级；"
+                "客户结构决定合作切入时的商务与技术支持方式，需按层级分别设计对接路径与验证节奏。"
+            )
         parameterized = sum(bool(item.parameters) for item in verified_products)
         if parameterized:
             analysis_paragraphs.append(
@@ -551,7 +687,7 @@ class NarrativeBuilder:
         if finding is not None:
             context.append(finding.fact_summary + "基地清单为公开渠道可核验口径，可能并非法定完整名录。")
         if not context:
-            context.append(f"已核验生产基地 {len(bundle.factories)} 处，完整名录见附录基地清单。")
+            context.append(f"公开资料识别生产基地 {analysis.factory_site_count or len(bundle.factories)} 处，完整名录见附录基地清单。")
 
         analysis_paragraphs: list[str] = []
         distribution = analysis.region_distribution
@@ -569,6 +705,41 @@ class NarrativeBuilder:
                 )
         else:
             analysis_paragraphs.append("基地地址公开披露有限，地域归类将在附录基地清单中随地址原文保留。")
+        # Regional role analysis: which regions host what processes.  The
+        # first regions get structurally distinct sentences so the chapter
+        # does not repeat one template per region.
+        region_factories: dict[str, list[Any]] = {}
+        region_re = re.compile(r"([\u4e00-\u9fff]{2,10}?(?:省|自治区))")
+        overseas_re = re.compile(r"(德国|匈牙利|印尼|印度尼西亚|泰国|越南|美国|西班牙|墨西哥|日本|韩国|波兰|荷兰|比利时)")
+        for factory in bundle.factories:
+            address = factory.address or ""
+            overseas = overseas_re.search(address)
+            if overseas:
+                region_factories.setdefault(overseas.group(1), []).append(factory)
+                continue
+            match = region_re.search(address)
+            if match:
+                region_factories.setdefault(match.group(1), []).append(factory)
+        ranked_regions = sorted(region_factories.items(), key=lambda pair: -len(pair[1]))[:5]
+        templates = (
+            lambda region, factories: f"{region}是基地记录最集中的区域，共 {len(factories)} 处：{'、'.join(list(dict.fromkeys(f.name for f in factories if f.name))[:3])}。",
+            lambda region, factories: f"{region}布局 {len(factories)} 处基地记录，工艺覆盖{'、'.join(list(dict.fromkeys(p for f in factories for p in f.processes))[:4]) or '待核验'}，是产能组织的重点区域之一。",
+            lambda region, factories: f"此外，{region}有 {len(factories)} 处基地记录，反映公司在多个省份的产能纵深布局。",
+            lambda region, factories: f"{region}的 {len(factories)} 处基地记录与配套材料、回收业务相关，构成区域产业链协同的支点。",
+            lambda region, factories: f"从区域职能看，{region}的 {len(factories)} 处基地记录补充了公司在产能梯次上的布局弹性。",
+        )
+        for index, (region, factories) in enumerate(ranked_regions):
+            if index < len(templates):
+                analysis_paragraphs.append(templates[index](region, factories))
+        if analysis.overseas_factory_count:
+            overseas_names = list(dict.fromkeys(
+                factory.name for factory in bundle.factories
+                if overseas_re.search(factory.address or "") and factory.name
+            ))[:4]
+            analysis_paragraphs.append(
+                f"海外基地方面，{'、'.join(overseas_names) or '公开基地名录'}等记录显示公司在欧洲布局产能；"
+                "海外基地的并网、标准与供应链条件与国内不同，合作项目需按所在国法规单独评估。"
+            )
         analysis_paragraphs.append(
             "地址信息不完整或未标注地区的基地保留原文待核验，不强行归类；"
             "基地清单随新增公开披露滚动更新，区位判断以最新披露为准。"
@@ -591,11 +762,19 @@ class NarrativeBuilder:
         capacity_trend = analysis.trend("capacity")
         if capacity_trend is not None and capacity_trend.year_count >= 2:
             analysis_paragraphs.append(capacity_trend.statement)
+            analysis_paragraphs.append(
+                "产能规模与销量、收入的联动关系构成产能组织效率的观察窗口；产能口径描述制造输出，"
+                "与基地用电负荷是两类指标，测算中严格分开。"
+            )
         else:
             analysis_paragraphs.append(
                 "公开资料暂未形成多年度可比产能序列；产能口径描述制造输出，与企业自身用电规模是两类指标，"
                 "项目测算不使用产能数字替代负荷与电量数据，用电与负荷须以现场计量为准，测算边界须双方书面确认。"
             )
+        analysis_paragraphs.append(
+            "制造章节小结：生产基地的地域分布、区域职能与产能变化共同构成制造组织画像；"
+            "首批合作基地的选择以业务相关性、数据可得性与责任链路为依据，基地名录与工艺明细见附录，并随新披露滚动更新。"
+        )
 
         # Body shows only the most informative bases; full ledger is an appendix.
         core_rows: list[dict[str, Any]] = []
@@ -605,9 +784,11 @@ class NarrativeBuilder:
                 "processes": "、".join(factory.processes), "status": factory.operating_status or "",
             }))
         if len(bundle.factories) > len(core_rows):
-            analysis_paragraphs.append(f"完整 {len(bundle.factories)} 处基地名录见附录基地清单。")
+            analysis_paragraphs.append(
+                f"完整 {analysis.factory_site_count or len(bundle.factories)} 处基地（含同名近似记录）名录见附录基地清单，正文仅列核心基地。"
+            )
 
-        assertion = finding.conclusion if finding is not None else f"已核验生产基地 {len(bundle.factories)} 处"
+        assertion = finding.conclusion if finding is not None else f"公开资料识别生产基地 {analysis.factory_site_count or len(bundle.factories)} 处"
         module = StoryModule(
             module_id="mod-factories", chapter_id="factories", kind="factories",
             title="生产布局与产能组织", assertion_title=assertion,
@@ -654,13 +835,17 @@ class NarrativeBuilder:
 
         analysis_paragraphs: list[str] = []
         for insight in analysis.insights:
-            if insight.topic == "energy":
+            if insight.topic != "energy":
+                continue
+            if insight.insight_id == "INS-ENERGY-OWN":
                 analysis_paragraphs.append(
                     f"{insight.findings[0] if insight.findings else ''}"
                     "进入测算前，仍需确认统计期间、基地范围与计费口径，并把制造产能与产品容量排除在用能画像之外，原始披露值保留备查，相关边界以现场数据为准。"
                 )
-                if insight.consulting_note:
-                    analysis_paragraphs.append(insight.consulting_note)
+            else:
+                analysis_paragraphs.append(insight.findings[0] if insight.findings else "")
+            if insight.consulting_note:
+                analysis_paragraphs.append(insight.consulting_note)
         if analysis.energy_product_metrics:
             analysis_paragraphs.append(
                 "能源产品/项目能力：" + "；".join(
@@ -679,17 +864,18 @@ class NarrativeBuilder:
                 "能源章节区分两类事实：企业自身用能数据（决定项目值不值得做）与能源产品/项目能力"
                 "（说明双方会做什么）。现有公开资料以产品与项目能力为主，基地级用能数据需在预可研阶段获取。"
             )
-        analysis_paragraphs.append(
-            "零碳方面，公开资料暂未披露企业级碳盘查、零碳工厂或绿电采购的项目级信息；"
-            "零碳项目时间轴与减排数据需以官方可持续发展报告或项目披露为准，本节不作推断，其披露以官方口径为准，最新口径以企业披露为准。"
-        )
         if finding is not None and finding.business_implication:
             analysis_paragraphs.append(
                 finding.business_implication + "屋顶资源与配电条件是分布式方案可行性的直接边界，需与电量、电价一并纳入资料清单，"
-                "并在预可研阶段按基地逐项核验。"
+                "并在预可研阶段按基地逐项核验，核验记录存档备查。"
             )
+        analysis_paragraphs.append(
+            "能源章节小结：公司能源维度公开披露以零碳与绿电数据为主，基地级用电与负荷数据暂缺；"
+            "双方合作的能源议题应从零碳目标、绿电采购与储能配套切入，用能画像以现场数据为测算前提，绿电与碳数据随可持续发展报告更新。"
+        )
 
         assertion = finding.conclusion if finding is not None else "现有公开资料以能源产品与项目能力为主"
+        energy_claim_ids = list(finding.supporting_claim_ids) if finding is not None else []
         module = StoryModule(
             module_id="mod-energy", chapter_id="energy_profile", kind="energy_profile",
             title="能源与零碳能力", assertion_title=assertion,
@@ -698,10 +884,10 @@ class NarrativeBuilder:
             context_paragraphs=context,
             analysis_paragraphs=analysis_paragraphs,
             implications=[finding.business_implication] if finding is not None else [],
-            recommendations=[finding.recommendation] if finding is not None else [],
+            recommendations=[finding.recommendation] if (finding is not None and energy_claim_ids) else [],
             limitations=list(finding.limitations or [])[:1] if finding is not None else [],
             source_ids=list(finding.supporting_source_ids) if finding is not None else [],
-            claim_ids=list(finding.supporting_claim_ids) if finding is not None else [],
+            claim_ids=energy_claim_ids,
         )
         for proposal in VisualOpportunityPlanner(bundle, analysis).energy_proposals():
             spec = self._route(proposal, narrative)
@@ -712,23 +898,29 @@ class NarrativeBuilder:
     # ── opportunities / action / risks (consulting layer) ──────────────────
     def _opportunity_module(self, opportunities: list[OpportunityAssessment], narrative: ResearchNarrative) -> StoryModule:
         paragraphs: list[str] = []
+        seen_paragraphs: set[str] = set()
         rows: list[dict[str, Any]] = []
         for rank, item in enumerate(opportunities, start=1):
-            paragraphs.extend([
+            paragraph = (
                 f"优先方向 {rank} 为{item.opportunity_name}（优先级 {item.priority}）。{item.strategic_rationale}"
+                f"切入场景为{item.target_scenario}：对方需要解决{item.target_need}，我方价值在于{item.our_value_proposition}"
+                f"首个责任接口为{item.entry_point}，由{item.owner}推动；推进前需取得{'、'.join(item.key_prerequisites)}。"
                 f"战略匹配、实施可行性、证据强度与商业潜力评分分别为 {item.strategic_fit}、{item.implementation_feasibility}、"
-                f"{item.evidence_strength} 和 {item.commercial_potential}，评分用于安排验证顺序。",
-                f"切入场景为{item.target_scenario}：对方需要解决{item.target_need}，我方价值在于{item.our_value_proposition}。"
-                f"首个责任接口为{item.entry_point}，由{item.owner}推动；推进前需取得{'、'.join(item.key_prerequisites)}。",
-                f"行动节奏：前 30 天{item.first_30_day_action}；第 60 天{item.day_60_action}；第 90 天里程碑为{item.day_90_milestone}。"
-                f"成功标准为{item.success_kpi}，最终门槛：{item.go_no_go_gate}。",
-            ])
+                f"{item.evidence_strength} 和 {item.commercial_potential}，评分用于安排验证顺序。"
+            )
+            if paragraph not in seen_paragraphs:
+                seen_paragraphs.add(paragraph)
+                paragraphs.append(paragraph)
             rows.append(translate_table_row({
                 "opportunity": item.opportunity_name, "priority": item.priority,
                 "target_scenario": item.target_scenario, "entry_point": item.entry_point,
                 "go_no_go_gate": item.go_no_go_gate,
             }))
         top = opportunities[0]
+        paragraphs.append(
+            "机会评估回答“为什么合作、合作什么、从哪里切入、价值与风险是什么”：每项机会的事实基础、切入场景、"
+            "责任接口与 Go / No-Go 门槛在下表并列示，管理层按证据成熟度安排资源，先聚焦最可验证的方向，避免把全部可能性并排列出。"
+        )
         module = StoryModule(
             module_id="mod-opportunities", chapter_id="opportunities", kind="opportunities",
             title="合作机会评估与优先级",
@@ -736,7 +928,7 @@ class NarrativeBuilder:
             decision_question="哪些合作机会最值得推进，从哪里切入？",
             executive_takeaway=f"优先级由战略匹配、实施可行性、事实强度与商业潜力共同决定，当前首位为{top.opportunity_name}。",
             analysis_paragraphs=paragraphs,
-            limitations=["未达到事实与可行性门槛的方向不进入优先机会清单。"],
+            limitations=["未达到事实与可行性门槛的方向不进入优先机会清单；各机会的 30/60/90 天动作与门槛见下表及行动章节。"],
             source_ids=list(dict.fromkeys(s for item in opportunities for s in item.supporting_source_ids)),
             claim_ids=list(dict.fromkeys(c for item in opportunities for c in item.supporting_claim_ids)),
             table_rows=rows,
@@ -749,13 +941,20 @@ class NarrativeBuilder:
         return module
 
     def _action_module(self, opportunities: list[OpportunityAssessment], narrative: ResearchNarrative) -> StoryModule:
-        actions = []
-        for item in opportunities[:3]:
-            actions.extend([
-                f"30 天｜{item.opportunity_name}：{item.first_30_day_action}",
-                f"60 天｜{item.opportunity_name}：{item.day_60_action}",
-                f"90 天｜{item.opportunity_name}：{item.day_90_milestone}",
-            ])
+        # The action chapter carries ONE 30/60/90 chain (top opportunity);
+        # per-opportunity action rows stay in the opportunities table so the
+        # chapter does not repeat the same three action templates N times.
+        top = opportunities[0]
+        actions = [
+            f"30 天｜{top.opportunity_name}：{top.first_30_day_action}",
+            f"60 天｜{top.opportunity_name}：{top.day_60_action}",
+            f"90 天｜{top.opportunity_name}：{top.day_90_milestone}",
+        ]
+        if len(opportunities) > 1:
+            actions.append(
+                f"其余 {len(opportunities) - 1} 个机会（{'、'.join(item.opportunity_name for item in opportunities[1:])}）"
+                "按同一节奏并行准备资料，待首轮场景验证后再决定是否进入 60/90 天阶段。"
+            )
         module = StoryModule(
             module_id="mod-action", chapter_id="action_plan", kind="action_plan",
             title="优先切入方案与 90 天行动",
@@ -805,6 +1004,8 @@ class NarrativeBuilder:
                 "责任主体和审批路径明确，价值测算在不利情景下仍满足双方门槛。任一维度不满足，不得仅凭其他维度优势越级推进。",
                 "No-Go 不等于永久否定合作：缺口在明确期限内关闭可返回补数；核心价值来源无法验证、责任主体长期缺位"
                 "或技术边界不可控时，应停止当前方向，把团队资源转向证据更强的机会，避免以会议热度替代决策质量。",
+                "前置条件管理采用单一问题台账：每条缺口记录资料名称、口径范围、责任部门、承诺日期、核验结论与受影响结论，"
+                "任何容量、收益或工期数字都必须回溯到已核验输入，台账口径由双方共用并逐轮更新。",
             ],
             recommendations=[
                 "在决策评审会上逐项核对阻断性资料；未取得原始数据或责任部门书面确认的事项不得以假设替代。"

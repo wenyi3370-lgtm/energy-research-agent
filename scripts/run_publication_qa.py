@@ -31,7 +31,13 @@ def find_soffice() -> Path:
         Path("C:/Program Files (x86)/LibreOffice/program/soffice.exe"),
     ]
     for candidate in candidates:
-        if candidate and candidate.is_file():
+        if candidate is None:
+            continue
+        # Windows resolves the bare name through PATHEXT and can hand us the
+        # soffice.COM shim; the real binary is the .exe next to it.
+        if candidate.suffix.lower() == ".com" and candidate.with_suffix(".exe").is_file():
+            candidate = candidate.with_suffix(".exe")
+        if candidate.is_file():
             return candidate
     raise FileNotFoundError("LibreOffice was not found")
 
@@ -52,6 +58,77 @@ def refresh_docx(path: Path, soffice: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="eer-lo-refresh-") as temp:
         refreshed = convert(path, Path(temp), "docx", soffice)
         shutil.copy2(refreshed, path)
+
+
+def _lo_profile_dir() -> Path | None:
+    """LibreOffice user profile (for the headless TOC-update macro)."""
+    import os
+    candidates = [
+        Path(os.environ.get("APPDATA", "")) / "LibreOffice" / "4" / "user",
+        Path.home() / "AppData" / "Roaming" / "LibreOffice" / "4" / "user",
+        Path.home() / ".config" / "libreoffice" / "4" / "user",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def update_toc_via_macro(docx: Path, soffice: Path) -> bool:
+    """Let LibreOffice update the TOC field with REAL page numbers.
+
+    The PDF text in this environment is not extractable (embedded CJK fonts
+    lack ToUnicode maps), so page numbers cannot be recovered from the PDF.
+    LibreOffice itself knows the pagination: a headless Basic macro opens
+    the document, updates the document indexes (TOC 1/2/3 styles, which we
+    defined LEFT-aligned with dot leaders) and stores it back.
+    """
+    profile = _lo_profile_dir()
+    if profile is None:
+        return False
+    library_dir = profile / "basic" / "Standard"
+    library_dir.mkdir(parents=True, exist_ok=True)
+    macro = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<!DOCTYPE script:module PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "module.dtd">\n'
+        '<script:module xmlns:script="http://openoffice.org/2000/script" script:name="Module1" script:language="StarBasic">\n'
+        'Sub UpdateTOC()\n'
+        '  Dim oDesktop, oDoc, oArgs(0) As New com.sun.star.beans.PropertyValue\n'
+        '  oDesktop = createUnoService("com.sun.star.frame.Desktop")\n'
+        '  oArgs(0).Name = "Hidden" : oArgs(0).Value = True\n'
+        f'  oDoc = oDesktop.loadComponentFromURL(ConvertToURL("{docx.as_posix()}"), "_blank", 0, oArgs())\n'
+        '  oDoc.refresh()\n'
+        '  Dim i As Integer\n'
+        '  For i = 0 To oDoc.getDocumentIndexes().getCount() - 1\n'
+        '    oDoc.getDocumentIndexes().getByIndex(i).update()\n'
+        '  Next i\n'
+        '  oDoc.store()\n'
+        '  oDoc.close(False)\n'
+        'End Sub\n'
+        '</script:module>\n'
+    )
+    (library_dir / "Module1.xba").write_text(macro, encoding="utf-8")
+    (library_dir / "script.xlb").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<!DOCTYPE library:library PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "library.dtd">\n'
+        '<library:library xmlns:library="http://openoffice.org/2000/library" library:name="Standard" library:readonly="false" library:passwordprotected="false">\n'
+        '<library:element library:name="Module1"/>\n'
+        '</library:library>\n',
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [
+            str(soffice), "--headless", "--norestore", "--invisible",
+            "vnd.sun.star.script:Standard.Module1.UpdateTOC?language=Basic&location=application",
+        ],
+        capture_output=True, text=True, timeout=180,
+    )
+    if completed.returncode:
+        return False
+    # A successful update materializes TOC text paragraphs into the docx.
+    with zipfile.ZipFile(docx) as archive:
+        xml = archive.read("word/document.xml").decode("utf-8", errors="ignore")
+    return "TOC" in xml and len(re.findall(r"Contents \d|TOC\d", xml)) > 0
 
 
 def docx_heading_text(path: Path) -> list[str]:
@@ -143,10 +220,11 @@ def _toc_entry_paragraph(level: int, heading: str, page: int, *, first: bool, la
     text.set(XML_SPACE, "preserve")
     text.text = heading
     ElementTree.SubElement(run, W + "tab")
-    page_run = ElementTree.SubElement(paragraph, W + "r")
-    page_text = ElementTree.SubElement(page_run, W + "t")
-    page_text.set(XML_SPACE, "preserve")
-    page_text.text = str(page)
+    if page > 0:
+        page_run = ElementTree.SubElement(paragraph, W + "r")
+        page_text = ElementTree.SubElement(page_run, W + "t")
+        page_text.set(XML_SPACE, "preserve")
+        page_text.text = str(page)
     if last:
         run = ElementTree.SubElement(paragraph, W + "r")
         end = ElementTree.SubElement(run, W + "fldChar")
@@ -215,6 +293,17 @@ def inject_static_toc_result(path: Path, entries: list[tuple[str, int] | tuple[s
             start = index
             break
     if start is None:
+        # LibreOffice's docx roundtrip may drop an EMPTY TOC field result
+        # paragraph.  Insert the entries right after the 目录 heading so the
+        # final document always carries a real, populated TOC field.
+        for index, paragraph in enumerate(body_children):
+            if paragraph.tag != W + "p":
+                continue
+            text_value = "".join(node.text or "" for node in paragraph.findall(f".//{W}t")).strip()
+            if text_value == "目录":
+                start = index + 1
+                break
+    if start is None:
         raise RuntimeError("TOC field paragraph not found")
     # A previous injection may span several paragraphs: remove from the
     # first entry through the paragraph carrying the field end.
@@ -257,6 +346,10 @@ def inject_static_toc_result(path: Path, entries: list[tuple[str, int] | tuple[s
 def render_pdf_and_png(docx: Path, output: Path, soffice: Path) -> tuple[Path, list[Path]]:
     pdf = convert(docx, output, "pdf", soffice)
     page_dir = output / "word_pages"
+    # Clean the raster dir: leftover PNGs from a previous cycle must never
+    # mix with this cycle's numbering.
+    if page_dir.exists():
+        shutil.rmtree(page_dir)
     page_dir.mkdir(parents=True, exist_ok=True)
     prefix = page_dir / "page"
     completed = subprocess.run(["pdftoppm", "-png", "-r", "144", str(pdf), str(prefix)], capture_output=True, text=True, timeout=300)
@@ -347,11 +440,22 @@ def main() -> int:
 
     # Cycle 1: refresh, render and inspect.
     refresh_docx(args.docx, soffice)
+    # Preferred path: LibreOffice updates the real TOC field (page numbers
+    # come from LO's own pagination — the PDF text is not extractable here).
+    try:
+        toc_macro_ok = update_toc_via_macro(args.docx, soffice)
+    except subprocess.TimeoutExpired:
+        toc_macro_ok = False
     pdf, pages = render_pdf_and_png(args.docx, output / "cycle-1", soffice)
     headings = docx_heading_levels(args.docx)
     entries = heading_page_map(pdf, headings)
     if entries:
         inject_static_toc_result(args.docx, entries)
+    elif not toc_macro_ok:
+        # Static fallback: one LEFT-aligned paragraph per entry with a real
+        # dot-leader tab.  Page numbers stay blank when the PDF text cannot
+        # be extracted and the macro did not run.
+        inject_static_toc_result(args.docx, [(heading, 0, level) for heading, level in headings])
 
     # Fix cycle: populate final TOC result, rerender and inspect every page.
     final_pdf, final_pages = render_pdf_and_png(args.docx, output / "cycle-2", soffice)
