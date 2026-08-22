@@ -227,6 +227,9 @@ class DeepResearchPayload(StrictModel):
 
     ``save_to_desktop``：完成后把 Word/HTML/Excel 复制到宿主机桌面
     （容器需挂载 /desktop，见 docker-compose.yml）。
+
+    ``notify_feishu``：完成后推送飞书（文本 + 成果文件），与主调查
+    流程一致；未配置 EER_FEISHU_* 时自动降级为不推送。
     """
 
     requirements: str = Field(min_length=2, max_length=4000)
@@ -235,6 +238,7 @@ class DeepResearchPayload(StrictModel):
     company: str | None = None
     include_images: bool = True
     save_to_desktop: bool = False
+    notify_feishu: bool = True
 
 
 class NaturalResearchRequest(StrictModel):

@@ -489,6 +489,8 @@ class ThirdRoundP0Tests(unittest.TestCase):
         payload = DeepResearchPayload(requirements="补充 2022 年利润", run_dir="build/live_acceptance/宁德时代-20260822-r3")
         self.assertEqual(payload.requested_by, "portal-user")
         self.assertTrue(payload.include_images)
+        self.assertFalse(payload.save_to_desktop)
+        self.assertTrue(payload.notify_feishu, "默认完成推送飞书（与主调查流程一致）")
         with self.assertRaises(Exception):
             DeepResearchPayload(requirements="")
 

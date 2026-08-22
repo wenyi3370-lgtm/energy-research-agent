@@ -129,13 +129,14 @@ class TestSubmitAndStatus(ApiTestCase):
         self.assertIn("/api/v1/intelligence/resume", html)
 
     def test_portal_exposes_continue_deep_research(self):
-        """门户提供「继续深度研究」入口（自然语言定位 + 需求 + 保存桌面）。"""
+        """门户提供「继续深度研究」入口（自然语言定位 + 需求 + 保存桌面/推送飞书）。"""
         html = self.client.get("/").text
         self.assertIn("继续深度研究", html)
         self.assertIn("/deep-research", html)
         self.assertIn("deepRequirements", html)
         self.assertIn("deepQuery", html)
         self.assertIn("deepDesktop", html)
+        self.assertIn("deepFeishu", html)
 
     def test_deep_research_lookup_by_natural_language(self):
         """任务定位：用公司名/产品关键词即可找到 run。"""

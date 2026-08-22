@@ -172,6 +172,7 @@ button:disabled{background:#9ca3af;cursor:not-allowed}
 <label>补充 / 修改需求（直接输入自然语言，分条写更精准）</label>
 <textarea id="deepRequirements" placeholder="例如：&#10;补充 2022 年与 2023 年的营业收入和归母净利润；&#10;增加产品图片；&#10;补充海外基地的产能数据"></textarea>
 <label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="deepDesktop" checked style="width:auto"> 完成后同时保存一份到桌面</label>
+<label style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" id="deepFeishu" checked style="width:auto"> 完成后推送飞书（文本 + Word/HTML/Excel 文件）</label>
 <button id="deepBtn">🔍 继续深度研究</button>
 <div id="deepStatus"></div>
 </div>
@@ -312,6 +313,7 @@ document.getElementById('deepBtn').onclick = async () => {
     const body = {
       requirements, requested_by: 'portal-user', include_images: true,
       save_to_desktop: document.getElementById('deepDesktop').checked,
+      notify_feishu: document.getElementById('deepFeishu').checked,
     };
     if (deepSelected.run_dir) body.run_dir = deepSelected.run_dir;
     await call('POST', '/api/v1/research/' + deepSelected.run_id + '/deep-research', body);
@@ -333,9 +335,12 @@ document.getElementById('deepBtn').onclick = async () => {
             const desktop = data.desktop_path
               ? '<br>📁 已保存到桌面：' + data.desktop_path + '（' + (data.desktop_files || []).join('、') + '）'
               : '';
+            const feishu = data.feishu_notified
+              ? '<br>📤 已推送飞书（文本 + Word/HTML/Excel）'
+              : (data.feishu_notified === false ? '<br>⚠️ 飞书推送未成功（检查 EER_FEISHU_* 配置）' : '');
             out.innerHTML = '<span class="ok">✅ 深度研究完成：' +
               '已验证事实 ' + data.verified_claims_before + ' → ' + data.verified_claims_after + '；' + img + '；' +
-              '新数据版本：' + (data.freeze_id || '（无新冻结）') + '<br>报告 / HTML / Excel 已重新生成。' + desktop + '</span>' +
+              '新数据版本：' + (data.freeze_id || '（无新冻结）') + '<br>报告 / HTML / Excel 已重新生成。' + desktop + feishu + '</span>' +
               '<div class="sub" style="margin-top:8px">检索了以下需求：<br>' + q + '</div>';
           }
         }
@@ -740,6 +745,32 @@ def create_app(
                                     copied.append(assets.name)
                         result["desktop_path"] = str(target)
                         result["desktop_files"] = copied
+                # Feishu: text summary + the regenerated artifacts, same as the
+                # main pipeline's PUBLISHED notification.  Failures are logged
+                # but never break the deep-research result.
+                if payload.notify_feishu and result.get("published"):
+                    try:
+                        notifier = service.notifier
+                        if notifier is not None:
+                            label = result.get("company") or company or run_id
+                            notifier.send_text(
+                                f"[深度研究完成] {label}\n"
+                                f"需求: {payload.requirements[:120]}\n"
+                                f"已验证事实 {result.get('verified_claims_before')} → {result.get('verified_claims_after')} · "
+                                f"新数据版本 {result.get('freeze_id') or '-'}\n"
+                                "更新后的 Word / HTML / Excel 已随本条消息发送，请查收。"
+                            )
+                            adapter = getattr(notifier, "adapter", None)
+                            send_file = getattr(adapter, "send_file", None)
+                            if send_file is not None:
+                                for name in ("enterprise_research.docx", "enterprise_research_dashboard.html", "enterprise_research.xlsx"):
+                                    path = run_dir / "artifacts" / name
+                                    if path.is_file():
+                                        send_file("", str(path))
+                            result["feishu_notified"] = True
+                    except Exception as exc:  # noqa: BLE001 - notification never breaks research
+                        logger.warning("deep research feishu notify failed: %s", exc)
+                        result["feishu_notified"] = False
         except Exception as exc:  # noqa: BLE001
             logger.exception("deep research failed run_id=%s", run_id)
             result = {
