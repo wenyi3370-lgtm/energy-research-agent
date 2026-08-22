@@ -218,9 +218,15 @@ class NaturalLanguagePrompt(StrictModel):
 class DeepResearchPayload(StrictModel):
     """继续深度研究：在已有报告上补充/修改，完善报告、HTML 与 Excel 数据。
 
+    ``requirements`` 直接使用自然语言（分条写更好）；系统按关键词路由
+    到财务/产品/基地/能源/图片等主题并定向检索。
+
     ``run_dir`` 可选：指向该 run 的产物目录（如
     ``build/live_acceptance/宁德时代-20260822-r3``）；缺省时在自动化
     workdir 与 live_acceptance 中按 run_id 自动定位最新的证据库。
+
+    ``save_to_desktop``：完成后把 Word/HTML/Excel 复制到宿主机桌面
+    （容器需挂载 /desktop，见 docker-compose.yml）。
     """
 
     requirements: str = Field(min_length=2, max_length=4000)
@@ -228,6 +234,7 @@ class DeepResearchPayload(StrictModel):
     run_dir: str | None = None
     company: str | None = None
     include_images: bool = True
+    save_to_desktop: bool = False
 
 
 class NaturalResearchRequest(StrictModel):

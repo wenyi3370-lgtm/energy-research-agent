@@ -24,6 +24,11 @@ services:
     environment:
       EER_AUTOMATION_DATABASE_URL: postgresql+psycopg://research:${POSTGRES_PASSWORD}@postgres:5432/research
       EER_AUTOMATION_WORKDIR: /data/automation_work
+      # 宿主机仓库挂载点：继续深度研究可在 /skill/build/live_acceptance 下
+      # 定位历史 live 调查的证据库与产物。
+      EER_SKILL_ROOT: /skill
+      # 宿主机桌面挂载点：save_to_desktop 时把 Word/HTML/Excel 复制到这里。
+      EER_DESKTOP_PATH: /desktop
       # Run mode: synthetic (default, zero-config) | orchestrating (real research)
       EER_AUTOMATION_EXECUTOR: orchestrating
       # LLM gateway for real extraction (至少配置一个 provider):
@@ -45,6 +50,14 @@ services:
       - "8000:8000"
     volumes:
       - research-data:/data/automation_work
+      # 宿主机仓库（源码只读 + live 调查产物可写）
+      - type: bind
+        source: .
+        target: /skill
+      # 宿主机桌面：deep-research 的「保存到桌面」
+      - type: bind
+        source: ${EER_DESKTOP_PATH:-~/Desktop}
+        target: /desktop
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 15s

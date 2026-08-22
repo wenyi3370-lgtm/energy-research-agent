@@ -31,7 +31,7 @@ from .contracts import (
     ReviewSubmission,
 )
 from .db import AutomationDatabase, DuplicateTaskError, RunNotFoundError, TaskRepository
-from .db.models import ResearchRunRow, UserFeedbackRow
+from .db.models import ResearchRunRow, ResearchTaskRow, UserFeedbackRow
 from .enums import ReviewDecision, TaskStatus
 from .executor import ExecutionOutcome, ResearchExecutor
 from .feishu.notifier import FeishuNotifier
@@ -532,6 +532,58 @@ class ResearchService:
             return [
                 ArtifactRef.model_validate(ref) for ref in (row.artifact_manifest or [])
             ]
+        finally:
+            session.close()
+
+    def lookup_tasks(self, query: str, limit: int = 8) -> list[dict]:
+        """按自然语言关键词定位任务（公司名/产品/主题），返回任务+最新 run。
+
+        用于门户「继续深度研究」的任务定位框：用户输入公司名或关键词，
+        返回可读的任务名称、run_id 与创建时间；也兼容直接粘贴 run_id。
+        """
+        from sqlalchemy import select
+
+        normalized = (query or "").strip()
+        if not normalized:
+            return []
+        session = self.db.session()
+        try:
+            rows = session.execute(
+                select(ResearchRunRow).order_by(ResearchRunRow.created_at.desc()).limit(limit * 4)
+            ).scalars().all()
+            matches: list[dict] = []
+            seen: set[str] = set()
+            for row in rows:
+                if row.run_id in seen:
+                    continue
+                seen.add(row.run_id)
+                task = session.get(ResearchTaskRow, row.task_id)
+                payload = (task.request_payload or {}) if task else {}
+                company = str(payload.get("company") or row.product or "")
+                topics = payload.get("topics") or []
+                haystack = " ".join(filter(None, [
+                    company, str(payload.get("product") or ""),
+                    str(payload.get("country") or ""), str(payload.get("region") or ""),
+                    *topics, row.run_id,
+                ])).lower()
+                if normalized.lower() not in haystack:
+                    continue
+                label_parts = [company]
+                if payload.get("product"):
+                    label_parts.append(str(payload["product"]))
+                if topics:
+                    label_parts.append("、".join(str(topic) for topic in topics[:3]))
+                matches.append({
+                    "run_id": row.run_id,
+                    "task_id": row.task_id,
+                    "label": " · ".join(label_parts) or row.run_id,
+                    "company": company,
+                    "status": row.status,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                })
+                if len(matches) >= limit:
+                    break
+            return matches
         finally:
             session.close()
 

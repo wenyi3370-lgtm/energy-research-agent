@@ -165,11 +165,13 @@ button:disabled{background:#9ca3af;cursor:not-allowed}
 <button id="prepareBtn">用以上参数准备任务</button>
 </div>
 <div class="card"><h2>③ 继续深度研究（完善报告 / HTML / Excel）</h2>
-<div class="sub" style="margin-bottom:6px">对已完成或进行中的调查，提出补充与修改需求：系统会定向检索新证据（必要时恢复官方产品图片），重新校验并重新生成 Word 报告、HTML 看板与 Excel 数据。</div>
-<label>Run ID（默认使用上方最近一次任务的 Run ID，可手动填写）</label><input id="deepRunId" placeholder="例如：RUN-01M0KD1Q1Q3ACPNW741XEVPV89">
-<label>补充 / 修改需求（例如：「补充 2022 年营业收入与利润」「增加产品图片」「补充海外基地产能」）</label>
-<textarea id="deepRequirements" placeholder="分条描述你希望报告补充或修改的内容…"></textarea>
-<label>产物目录（选填，例如 build/live_acceptance/宁德时代-20260822-r3；留空自动定位）</label><input id="deepRunDir" placeholder="留空自动定位">
+<div class="sub" style="margin-bottom:6px">对已完成或进行中的调查提出补充与修改需求：系统会定向检索新证据（必要时恢复官方产品图片），重新校验并重新生成 Word 报告、HTML 看板与 Excel 数据。</div>
+<label>任务定位（输入公司名或关键词自动匹配，如「宁德时代」；也可直接粘贴 RUN ID）</label>
+<input id="deepQuery" placeholder="例如：宁德时代 / 储能 / RUN-01M0…">
+<div id="deepMatches" style="margin-top:6px"></div>
+<label>补充 / 修改需求（直接输入自然语言，分条写更精准）</label>
+<textarea id="deepRequirements" placeholder="例如：&#10;补充 2022 年与 2023 年的营业收入和归母净利润；&#10;增加产品图片；&#10;补充海外基地的产能数据"></textarea>
+<label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="deepDesktop" checked style="width:auto"> 完成后同时保存一份到桌面</label>
 <button id="deepBtn">🔍 继续深度研究</button>
 <div id="deepStatus"></div>
 </div>
@@ -276,26 +278,48 @@ document.getElementById('intelBtn').onclick = async () => {
       : '<span class="ok">✅ 已触发：' + data.date + '（同日重复触发不会重复采集）</span>';
   } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
 };
-// —— 继续深度研究：提交需求 → 后台补检索 → 轮询结果 ——
+// —— 继续深度研究：自然语言定位任务 + 自然语言需求 → 后台补检索 → 轮询 ——
+let deepSelected = null; // {run_id, run_dir?}
+document.getElementById('deepQuery').addEventListener('input', async () => {
+  const q = document.getElementById('deepQuery').value.trim();
+  const box = document.getElementById('deepMatches');
+  deepSelected = null;
+  if (q.length < 2) { box.innerHTML = ''; return; }
+  if (/^RUN-/.test(q)) { deepSelected = {run_id: q}; box.innerHTML = '<span class="ok">✅ 直接使用 RUN ID：' + q + '</span>'; return; }
+  try {
+    const data = await call('GET', '/api/v1/research/lookup?q=' + encodeURIComponent(q), null);
+    const matches = data.matches || [];
+    if (!matches.length) { box.innerHTML = '<span class="warn">未找到匹配任务，请换个关键词（如公司名）</span>'; return; }
+    box.innerHTML = matches.map((m, i) => '<div class="match" data-i="' + i + '" style="padding:8px 10px;border:1px solid #d9e2ec;border-radius:8px;margin:6px 0;cursor:pointer">' +
+      '<b>' + (m.label || m.company || m.run_id).replace(/</g, '&lt;') + '</b><br><span style="color:#6B7280;font-size:12px">' + m.run_id + (m.status ? ' · ' + m.status : '') + (m.created_at ? ' · ' + m.created_at.slice(0, 10) : '') + '</span></div>').join('');
+    box.querySelectorAll('.match').forEach(el => el.onclick = () => {
+      const m = matches[Number(el.dataset.i)];
+      deepSelected = {run_id: m.run_id, run_dir: m.run_dir || null};
+      document.getElementById('deepQuery').value = m.label || m.company || m.run_id;
+      box.innerHTML = '<span class="ok">✅ 已选择：' + (m.label || m.run_id).replace(/</g, '&lt;') + '</span>';
+    });
+  } catch (e) { box.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
+});
 document.getElementById('deepBtn').onclick = async () => {
   const out = document.getElementById('deepStatus');
   const button = document.getElementById('deepBtn');
-  const runId = document.getElementById('deepRunId').value.trim() || currentRun;
   const requirements = document.getElementById('deepRequirements').value.trim();
-  if (!runId) { out.innerHTML = '<span class="warn">❌ 请填写 Run ID（或先在 ① 中准备任务）</span>'; return; }
-  if (requirements.length < 2) { out.innerHTML = '<span class="warn">❌ 请填写补充 / 修改需求</span>'; return; }
+  if (!deepSelected) { out.innerHTML = '<span class="warn">❌ 请先在上方输入公司名定位任务</span>'; return; }
+  if (requirements.length < 2) { out.innerHTML = '<span class="warn">❌ 请填写补充 / 修改需求（自然语言即可）</span>'; return; }
   button.disabled = true;
   out.innerHTML = '<span class="ok">🔍 深度研究已启动（定向检索 + 证据校验 + 重新生成报告/HTML/Excel），请稍候…</span>';
   try {
-    const body = {requirements, requested_by: 'portal-user', include_images: true};
-    const runDir = document.getElementById('deepRunDir').value.trim();
-    if (runDir) body.run_dir = runDir;
-    await call('POST', '/api/v1/research/' + runId + '/deep-research', body);
+    const body = {
+      requirements, requested_by: 'portal-user', include_images: true,
+      save_to_desktop: document.getElementById('deepDesktop').checked,
+    };
+    if (deepSelected.run_dir) body.run_dir = deepSelected.run_dir;
+    await call('POST', '/api/v1/research/' + deepSelected.run_id + '/deep-research', body);
     const started = Date.now();
     const timer = setInterval(async () => {
       if (Date.now() - started > 30 * 60 * 1000) { clearInterval(timer); out.innerHTML = '<span class="warn">⏱ 超过 30 分钟未完成，请稍后刷新本页查看结果</span>'; button.disabled = false; return; }
       try {
-        const data = await call('GET', '/api/v1/research/' + runId + '/deep-research', null);
+        const data = await call('GET', '/api/v1/research/' + deepSelected.run_id + '/deep-research', null);
         if (data.status !== 'running') {
           clearInterval(timer);
           button.disabled = false;
@@ -306,9 +330,12 @@ document.getElementById('deepBtn').onclick = async () => {
             const img = data.image_report && data.image_report.status
               ? ('图片：' + data.image_report.status + '（视觉核验通过 ' + (data.image_report.visual_verified || 0) + ' 张）')
               : '图片：未执行';
+            const desktop = data.desktop_path
+              ? '<br>📁 已保存到桌面：' + data.desktop_path + '（' + (data.desktop_files || []).join('、') + '）'
+              : '';
             out.innerHTML = '<span class="ok">✅ 深度研究完成：' +
               '已验证事实 ' + data.verified_claims_before + ' → ' + data.verified_claims_after + '；' + img + '；' +
-              '新数据版本：' + (data.freeze_id || '（无新冻结）') + '<br>报告 / HTML / Excel 已重新生成到产物目录。</span>' +
+              '新数据版本：' + (data.freeze_id || '（无新冻结）') + '<br>报告 / HTML / Excel 已重新生成。' + desktop + '</span>' +
               '<div class="sub" style="margin-top:8px">检索了以下需求：<br>' + q + '</div>';
           }
         }
@@ -450,6 +477,57 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
+def _scan_live_acceptance(query: str) -> list[dict]:
+    """Locate live-acceptance runs (build/live_acceptance/*) by company name.
+
+    The host repo is mounted at EER_SKILL_ROOT inside the container, so the
+    deep-research endpoint can continue historical live surveys the same way
+    it continues automation runs.
+    """
+    skill_root = Path(os.environ.get("EER_SKILL_ROOT", "/skill"))
+    base = skill_root / "build" / "live_acceptance"
+    if not base.is_dir() or not (query or "").strip():
+        return []
+    normalized = query.strip().lower()
+    matches: list[dict] = []
+    for run_dir in sorted(base.iterdir(), reverse=True):
+        summary_path = run_dir / "acceptance_summary.json"
+        if not summary_path.is_file():
+            continue
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        company = ""
+        profile = summary.get("C_company_profile") or {}
+        if isinstance(profile, dict):
+            company = str(profile.get("company_name") or "")
+        run_id = ""
+        manifest_path = run_dir / "01_evidence" / "run_manifest.json"
+        if manifest_path.is_file():
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                run_id = str(manifest.get("run_id") or "")
+            except (OSError, json.JSONDecodeError):
+                run_id = ""
+        has_evidence = any(run_dir.glob("evidence_fixed*.sqlite3"))
+        if not has_evidence:
+            continue
+        haystack = f"{company} {run_dir.name} {run_id}".lower()
+        if normalized not in haystack:
+            continue
+        matches.append({
+            "run_id": run_id,
+            "task_id": "",
+            "label": f"{company or run_dir.name}（live 调查）",
+            "company": company,
+            "status": summary.get("run_status") or "COMPLETED",
+            "created_at": None,
+            "run_dir": str(run_dir),
+        })
+    return matches
+
+
 def create_app(
     database_url: str | None = None,
     executor: ResearchExecutor | None = None,
@@ -531,6 +609,20 @@ def create_app(
             "status": str(result.status),
         }
 
+    # NOTE: 静态路径必须先于 /api/v1/research/{run_id} 注册，否则
+    # "lookup" 会被动态路由吞掉（FastAPI 按注册顺序匹配）。
+    @app.get("/api/v1/research/lookup")
+    def lookup_research(q: str = "") -> dict:
+        """按自然语言关键词（公司名/产品/主题）定位任务与 run。
+
+        同时扫描宿主机仓库的 build/live_acceptance（挂载于 EER_SKILL_ROOT），
+        因此历史 live 调查（如宁德时代）也能用公司名直接定位；live 调查
+        排在前面（它们是最近的深度研究成果）。
+        """
+        live = _scan_live_acceptance(q)
+        live.extend(service.lookup_tasks(q))
+        return {"query": q, "matches": live[:8]}
+
     @app.get("/api/v1/research/{run_id}")
     def get_status(run_id: str) -> ResearchResult:
         return service.get_status(run_id)
@@ -574,10 +666,20 @@ def create_app(
             "started_at": datetime.now(timezone.utc).isoformat(),
         }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         try:
-            search_roots = [project_root / "build" / "live_acceptance", service.workdir]
+            search_roots = [
+                Path(os.environ.get("EER_SKILL_ROOT", "/skill")) / "build" / "live_acceptance",
+                service.workdir,
+            ]
             store = None
             if payload.run_dir:
                 candidate = Path(payload.run_dir)
+                # Host paths (C:/.../<repo>/build/...) translate to the
+                # container mount (/skill/build/...) when present.
+                if not candidate.exists() and "enterprise-energy-research" in str(candidate):
+                    translated = str(candidate)
+                    translated = "/skill/" + translated.split("enterprise-energy-research", 1)[1].lstrip("\\/")
+                    if Path(translated).is_dir():
+                        candidate = Path(translated)
                 if candidate.is_dir():
                     fixed = sorted(candidate.glob("evidence_fixed*.sqlite3"))
                     store = EvidenceStore(fixed[-1]) if fixed else None
@@ -617,6 +719,27 @@ def create_app(
                     catalog_pages=catalog_pages,
                 )
                 result["requested_by"] = payload.requested_by
+                if payload.save_to_desktop and result.get("published"):
+                    desktop_root = Path(os.environ.get("EER_DESKTOP_PATH", "/desktop"))
+                    if desktop_root.is_dir():
+                        import shutil as _shutil
+                        label = re.sub(r"[^\w\u4e00-\u9fff\-]+", "-", (result.get("company") or company or run_id)).strip("-")[:40] or "research"
+                        target = desktop_root / f"{label}-{datetime.now():%Y%m%d-%H%M}"
+                        target.mkdir(parents=True, exist_ok=True)
+                        copied = []
+                        artifacts_dir = run_dir / "artifacts"
+                        if artifacts_dir.is_dir():
+                            for name in ("enterprise_research.docx", "enterprise_research_dashboard.html", "enterprise_research.xlsx"):
+                                source = artifacts_dir / name
+                                if source.is_file():
+                                    _shutil.copy2(source, target / name)
+                                    copied.append(name)
+                            for assets in artifacts_dir.glob("*_assets"):
+                                if assets.is_dir():
+                                    _shutil.copytree(assets, target / assets.name, dirs_exist_ok=True)
+                                    copied.append(assets.name)
+                        result["desktop_path"] = str(target)
+                        result["desktop_files"] = copied
         except Exception as exc:  # noqa: BLE001
             logger.exception("deep research failed run_id=%s", run_id)
             result = {
@@ -643,13 +766,17 @@ def create_app(
         candidates: list[Path] = []
         if (service.workdir / run_id / "deep_research_result.json").is_file():
             candidates.append(service.workdir / run_id / "deep_research_result.json")
-        for path in (project_root / "build" / "live_acceptance").glob(f"*/deep_research_result.json"):
-            try:
-                payload = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
+        skill_root = Path(os.environ.get("EER_SKILL_ROOT", "/skill"))
+        for base in (project_root / "build" / "live_acceptance", skill_root / "build" / "live_acceptance"):
+            if not base.is_dir():
                 continue
-            if payload.get("run_id") == run_id:
-                candidates.append(path)
+            for path in base.glob("*/deep_research_result.json"):
+                try:
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if payload.get("run_id") == run_id:
+                    candidates.append(path)
         if not candidates:
             raise HTTPException(status_code=404, detail="该 run 尚无深度研究记录")
         newest = max(candidates, key=lambda path: path.stat().st_mtime)

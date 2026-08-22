@@ -129,11 +129,22 @@ class TestSubmitAndStatus(ApiTestCase):
         self.assertIn("/api/v1/intelligence/resume", html)
 
     def test_portal_exposes_continue_deep_research(self):
-        """门户提供「继续深度研究」入口（补充/修改需求 → 重新生成制品）。"""
+        """门户提供「继续深度研究」入口（自然语言定位 + 需求 + 保存桌面）。"""
         html = self.client.get("/").text
         self.assertIn("继续深度研究", html)
         self.assertIn("/deep-research", html)
         self.assertIn("deepRequirements", html)
+        self.assertIn("deepQuery", html)
+        self.assertIn("deepDesktop", html)
+
+    def test_deep_research_lookup_by_natural_language(self):
+        """任务定位：用公司名/产品关键词即可找到 run。"""
+        body = self.submit(company="宁德时代新能源科技股份有限公司", product="动力电池", topics=["主营业务", "生产基地"])
+        run_id = body["run_id"]
+        found = self.client.get("/api/v1/research/lookup", params={"q": "宁德时代"}).json()
+        self.assertTrue(any(m["run_id"] == run_id for m in found["matches"]), found)
+        found_product = self.client.get("/api/v1/research/lookup", params={"q": "动力电池"}).json()
+        self.assertTrue(any(m["run_id"] == run_id for m in found_product["matches"]), found_product)
 
     def test_deep_research_endpoint_accepts_and_reports(self):
         """POST 深度研究返回 202；GET 返回 run_id 匹配的结果状态。"""
