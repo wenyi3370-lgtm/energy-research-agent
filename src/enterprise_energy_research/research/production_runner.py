@@ -879,8 +879,14 @@ class AdaptiveResearchRunner:
             for hit in envelope.hits:
                 if not hit.final_url or not str(hit.final_url).lower().startswith(("http://", "https://")):
                     continue
+                final_url = str(hit.final_url)
+                # PDF/office files are not navigable product/factory pages:
+                # the bridge cannot inspect their DOM, and pushing them into
+                # discovery only produces "navigation failed" noise.
+                if final_url.lower().split("?")[0].endswith((".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip")):
+                    continue
                 page = {
-                    "url": hit.final_url,
+                    "url": final_url,
                     "kind": kind,
                     "source_kind": "official_company",
                     "publisher": hit.title,

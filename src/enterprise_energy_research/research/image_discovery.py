@@ -177,8 +177,15 @@ class KimiImageDiscovery:
             try:
                 self.adapter.navigate_to(url, new_tab=True)
             except Exception as exc:  # noqa: BLE001 - surface as telemetry, never silently
+                message = str(exc)
+                hint = ""
+                if "No current window" in message or "No last-focused window" in message:
+                    hint = (
+                        "（环境问题：Kimi WebBridge 扩展宿主的浏览器没有任何窗口。"
+                        "请打开安装该扩展的浏览器窗口（如 Edge/Chrome）后重试。）"
+                    )
                 self.telemetry.image_discovery_status = "BLOCKED"
-                self.telemetry.reason = f"navigation failed for {url}: {type(exc).__name__}"
+                self.telemetry.reason = f"navigation failed for {url}: {type(exc).__name__}{hint}"
                 continue
             self.telemetry.kimi_pages_visited += 1
             self.telemetry.kimi_target_pages_visited += 1
