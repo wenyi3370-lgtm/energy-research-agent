@@ -405,6 +405,93 @@ class ThirdRoundP0Tests(unittest.TestCase):
         resolved = ProductImageResolver().resolve(self.bundle)
         self.assertIsInstance(resolved, dict)
 
+    # ── P0 third-round hardening lessons (image + financial pitfalls) ──────
+    def test_lesson_phone_regex_never_matches_large_integers(self):
+        """11-digit financial values (e.g. 12000000000 元) are NOT phones."""
+        from enterprise_energy_research.research.publication_relevance import PHONE_RE
+        self.assertIsNone(PHONE_RE.search("12000000000"))
+        self.assertIsNone(PHONE_RE.search("423701834000"))
+        self.assertIsNotNone(PHONE_RE.search("400-918-0889"))
+
+    def test_lesson_cross_year_claims_do_not_conflict(self):
+        """2022 revenue and 2023 revenue are different facts — never one conflict group."""
+        from enterprise_energy_research.research.claim_validator import ClaimValidator
+        source = self.bundle.claims[0]
+        rows = [
+            source.model_copy(update={
+                "claim_id": "CLAIM-REV-2022", "field_name": "revenue", "value": 328_593_988_000,
+                "unit": "元", "period_start": date(2022, 1, 1), "period_end": date(2022, 12, 31),
+                "verification_status": VerificationStatus.VERIFIED,
+                "raw_text": "2022 年营业收入 3285.94 亿元", "context_text": "2022 年度营业收入 3285.94 亿元",
+            }),
+            source.model_copy(update={
+                "claim_id": "CLAIM-REV-2023", "field_name": "revenue", "value": 400_917_045_000,
+                "unit": "元", "period_start": date(2023, 1, 1), "period_end": date(2023, 12, 31),
+                "verification_status": VerificationStatus.VERIFIED,
+                "raw_text": "2023 年营业收入 4009.17 亿元", "context_text": "2023 年度营业收入 4009.17 亿元",
+            }),
+        ]
+        validated, conflicts = ClaimValidator().validate(rows, self.bundle.sources)
+        self.assertEqual(conflicts, [], "cross-year revenue values must not conflict")
+        self.assertTrue(all(claim.verification_status == VerificationStatus.VERIFIED for claim in validated))
+
+    def test_lesson_future_period_is_not_an_annual_point(self):
+        """A future-dated full-year claim (mislabeled H1 figure) never plots."""
+        source = self.bundle.claims[0]
+        claims = [
+            source.model_copy(update={
+                "claim_id": "CLAIM-REV-2023", "field_name": "revenue", "value": 400_917_045_000,
+                "unit": "元", "period_start": date(2023, 1, 1), "period_end": date(2023, 12, 31),
+                "verification_status": VerificationStatus.VERIFIED,
+                "raw_text": "2023 年营业收入 4009.17 亿元", "context_text": "2023 年度营业收入 4009.17 亿元",
+            }),
+            source.model_copy(update={
+                "claim_id": "CLAIM-REV-2024", "field_name": "revenue", "value": 362_012_554_000,
+                "unit": "元", "period_start": date(2024, 1, 1), "period_end": date(2024, 12, 31),
+                "verification_status": VerificationStatus.VERIFIED,
+                "raw_text": "2024 年营业收入 3620.13 亿元", "context_text": "2024 年度营业收入 3620.13 亿元",
+            }),
+            source.model_copy(update={
+                "claim_id": "CLAIM-REV-2027", "field_name": "revenue", "value": 500_000_000_000,
+                "unit": "元", "period_start": date(2027, 1, 1), "period_end": date(2027, 12, 31),
+                "verification_status": VerificationStatus.VERIFIED,
+                "raw_text": "2027 年营业收入 5000 亿元", "context_text": "2027 年度营业收入 5000 亿元",
+            }),
+        ]
+        bundle = self.bundle.model_copy(update={"claims": [*self.bundle.claims, *claims]})
+        analysis = ResearchAnalysisEngine().analyze(bundle)
+        revenue = analysis.trend("revenue")
+        self.assertIsNotNone(revenue)
+        self.assertEqual(revenue.year_count, 2, "future-dated claims must not enter annual series")
+        self.assertEqual([point.period for point in revenue.points], ["2023", "2024"])
+
+    def test_lesson_vision_verdict_trailing_score(self):
+        """'3) 1.0' without the 置信度 word still parses as score 1.0."""
+        from enterprise_energy_research.research.vision import parse_vision_text
+        verdict = parse_vision_text(
+            "1) 产品\n2) 图中是一辆汽车的半透明三维效果图，车身底部展示了电池包。\n3) 1.0"
+        )
+        self.assertTrue(verdict.verified)
+        self.assertEqual(verdict.score, 1.0)
+        blank = parse_vision_text("1) 其他（图片为纯白空白）\n2) 无内容。\n3) 0")
+        self.assertFalse(blank.verified)
+
+    def test_lesson_requirement_queries_route_topics(self):
+        from enterprise_energy_research.research.planner import ResearchPlanner
+        queries = ResearchPlanner().requirement_queries("宁德时代", "补充2022年营业收入和利润；增加产品图片")
+        topics = {query.topic for query in queries}
+        self.assertIn("financials", topics)
+        self.assertIn("image_evidence", topics)
+        self.assertTrue(any("2022" in query.query for query in queries))
+
+    def test_lesson_deep_research_payload_contract(self):
+        from enterprise_energy_research.automation.contracts import DeepResearchPayload
+        payload = DeepResearchPayload(requirements="补充 2022 年利润", run_dir="build/live_acceptance/宁德时代-20260822-r3")
+        self.assertEqual(payload.requested_by, "portal-user")
+        self.assertTrue(payload.include_images)
+        with self.assertRaises(Exception):
+            DeepResearchPayload(requirements="")
+
     def test_supporting_visual_opportunity_planner_no_fake_charts(self):
         analysis = ResearchAnalysisEngine().analyze(self.rich_bundle)
         proposals = VisualOpportunityPlanner(self.rich_bundle, analysis).financial_proposals()

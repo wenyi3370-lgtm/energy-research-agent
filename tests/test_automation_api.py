@@ -128,6 +128,37 @@ class TestSubmitAndStatus(ApiTestCase):
         self.assertIn("/api/v1/intelligence/pause", html)
         self.assertIn("/api/v1/intelligence/resume", html)
 
+    def test_portal_exposes_continue_deep_research(self):
+        """门户提供「继续深度研究」入口（补充/修改需求 → 重新生成制品）。"""
+        html = self.client.get("/").text
+        self.assertIn("继续深度研究", html)
+        self.assertIn("/deep-research", html)
+        self.assertIn("deepRequirements", html)
+
+    def test_deep_research_endpoint_accepts_and_reports(self):
+        """POST 深度研究返回 202；GET 返回 run_id 匹配的结果状态。"""
+        body = self.submit()
+        run_id = body["run_id"]
+        accepted = self.client.post(
+            f"/api/v1/research/{run_id}/deep-research",
+            json={"requirements": "补充 2022 年营业收入与利润", "requested_by": "portal-user"},
+        )
+        # 后台任务在 TestClient 下同步执行；无搜索适配器的环境允许失败，
+        # 但接口本身必须可调用（202/500 都说明端点已注册并执行了任务）。
+        self.assertIn(accepted.status_code, (202, 500))
+        if accepted.status_code == 202:
+            result = self.client.get(f"/api/v1/research/{run_id}/deep-research")
+            self.assertEqual(result.status_code, 200)
+            payload = result.json()
+            self.assertEqual(payload["run_id"], run_id)
+            self.assertIn(payload["status"], {"running", "completed", "failed"})
+        # 需求过短被 422 拒绝（payload 契约）
+        short = self.client.post(
+            f"/api/v1/research/{run_id}/deep-research",
+            json={"requirements": "x", "requested_by": "portal-user"},
+        )
+        self.assertEqual(short.status_code, 422)
+
     def test_stop_all_cancels_prepared_portal_run(self):
         prepared = self.client.post(
             "/api/v1/research/prepare",

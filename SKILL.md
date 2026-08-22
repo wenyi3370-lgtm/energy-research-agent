@@ -77,6 +77,21 @@ Unless the user explicitly requests a concise report, Word is a 15,000–30,000 
 - The executive summary is data-first (what the company is, key financial facts, industry/technology capability, cooperation basis, opportunities/limits, final recommendation; 800–1500 CJK chars). Word TOC entries are one LEFT-aligned paragraph each with a real right dot-leader tab (TOC 1/2/3 styles, never Normal/JUSTIFY); "So What：" labels never render.
 - QA additions (`validation/publication_quality.py`): PublicationBoilerplateValidator (the self-referential phrase list must be zero), ParagraphSimilarityValidator (skeleton similarity > 0.80 -> boilerplate_duplicate), ResearchValueValidator (boilerplate_sentence_ratio < 15%, enterprise-specific ratio > 60%, meaningful_visual_count target, visual-density warning), ProductImageCoverageValidator. Regression contract: tests/test_p0_third_round.py (TEST 1–25).
 
+## Image & financial hardening lessons (P0 third round, regressions enforced)
+
+These pitfalls each cost a full debug cycle in production; the fixes below are in code AND pinned by `tests/test_p0_third_round.py` (`test_lesson_*`) — do not regress them:
+
+- **Image discovery silently EMPTY** — root cause was the Kimi WebBridge extension's host browser (Edge) running with NO window: `navigate` fails `extension_error: No current window` even though `health()` says available. Preflight: if `list_tabs` succeeds but `navigate_to` raises "No current window", open the extension host's browser window (find it via the extension id directory under Chrome/Edge `User Data/*/Extensions/<id>`). The discovery telemetry now embeds this actionable hint (`image_discovery.py`), and `recover_product_images` skips gracefully.
+- **PDF/office URLs are not pages** — never push `.pdf/.docx/...` hits into browser discovery; filter them (`production_runner._image_pass`, `deep_retry` NON_PAGE_SUFFIXES).
+- **Product photos only from official domains** — search-result/news pages can never bind product evidence; `recover_product_images` restricts discovery to entity websites + resolver-graded official sources, plus optional official catalog pages (`/ess/`, `/solution/...` for CATL).
+- **Archive path must match publication resolution** — the archiver writes `<run_dir>/assets/images/...`; publication resolves from artifact parents + run dir. Archiving anywhere else (e.g. `01_evidence/`) yields "no resolvable local_asset_ref" at publish time.
+- **Vision verdict parsing** — models answer `3) 1.0` without the word 置信度; the old parser scored every image 0. `vision.parse_vision_text` parses the FIRST class token + trailing score and is unit-tested.
+- **Financial series verification** — `ClaimValidator` groups conflicts by (entity, field, as_of, scope, **period**): cross-year revenue values are different facts, never one conflict group (period-aware grouping is tested).
+- **Multi-year data lives in official bulletin pages** — news articles grade SOURCE_D and never verify. The 新浪 `vCB_AllBulletinDetail` 公告页 (or 巨潮/cninfo filings) carries the 3-year 主要会计数据 table; the extractor's PERIOD RULE turns each row into one periodized claim.
+- **No future periods in annual series** — `ResearchAnalysisEngine._series` drops claims whose period_end is in the future and text-year claims for the current year without explicit full-year periods (mislabeled H1 figures).
+- **Unit normalization** — 千元/万元/亿元 scale to 元 inside `_series`; 11-digit integers are never phone numbers (`PHONE_RE` requires separators).
+- **Continue deep research** — `POST /api/v1/research/{run_id}/deep-research` runs `research/deep_retry.py`: user requirement clauses → `planner.requirement_queries` (longest-keyword topic routing) + coverage-gap queries + official-image recovery → revalidate → new freeze → republish Word/HTML/Excel. The portal button ③「继续深度研究」drives it.
+
 ## Decision synthesis and consulting narrative contract (P0)
 
 - Apply Pyramid Principle, Conclusion First and SCQA. Every substantive module follows `Facts → Interpretation → So What → Recommendation → Action`; the objective is to answer a management decision, not to display the database.

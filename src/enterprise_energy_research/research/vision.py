@@ -138,38 +138,45 @@ class GatewayVisionVerifier:
         except (KeyError, IndexError):
             return None
         text = str(content)
-        # Parse the model's actual answer format, which varies across
-        # providers:
-        #   1) 图中主体属于哪一类：产品 / 工厂 / 办公楼 / 设备 / 证书 / 项目现场 / 其他
-        #   2) 一句话客观描述...
-        #   3) 0 或 1.0（置信度）
-        # The category token is the FIRST occurrence of any class word; the
-        # score is the trailing number after "置信度" or at the end of the
-        # answer ("3) 1.0" / "3) 0").
-        category_match = re.search(r"(产品|工厂|办公楼|设备|证书|项目现场|其他)", text)
-        category = category_match.group(1) if category_match else "其他"
-        score = 0.0
-        score_match = re.search(r"置信度[：:]?\s*([0-9]+(?:\.[0-9]+)?)", text)
-        if score_match:
-            score = float(score_match.group(1))
-        else:
-            trailing = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*$", text.strip())
-            if trailing and re.search(r"3\)\s*[0-9]", text):
-                score = float(trailing.group(1))
-        if score > 1.0:
-            score = score / 100.0 if score <= 100.0 else score / 10.0
-        score = max(0.0, min(1.0, score))
-        # The vision model must BOTH classify the pixels as an entity scene
-        # AND give a confident binding score.
-        scene_classes = {"产品", "工厂", "办公楼", "设备", "证书", "项目现场"}
-        verified = category in scene_classes and score >= 0.6
-        return VisionVerdict(
-            verified=verified,
-            score=score,
-            description=text[:200],
-            entity_matched=verified,
-            rationale=text[:300],
-        )
+        return parse_vision_text(text)
+
+
+def parse_vision_text(text: str) -> VisionVerdict:
+    """Parse a vision model's free-text answer into a verdict.
+
+    Providers vary the answer format, e.g.:
+
+      1) 图中主体属于哪一类：产品 / 工厂 / 办公楼 / 设备 / 证书 / 项目现场 / 其他
+      2) 一句话客观描述...
+      3) 0 或 1.0（置信度，可能不带"置信度"字样，也可能写作 "3) 1.0"）
+
+    The category token is the FIRST occurrence of any class word; the score
+    is the number after "置信度" or the trailing number of a "3)" answer.
+    """
+    category_match = re.search(r"(产品|工厂|办公楼|设备|证书|项目现场|其他)", text)
+    category = category_match.group(1) if category_match else "其他"
+    score = 0.0
+    score_match = re.search(r"置信度[：:]?\s*([0-9]+(?:\.[0-9]+)?)", text)
+    if score_match:
+        score = float(score_match.group(1))
+    else:
+        trailing = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*$", text.strip())
+        if trailing and re.search(r"3\)\s*[0-9]", text):
+            score = float(trailing.group(1))
+    if score > 1.0:
+        score = score / 100.0 if score <= 100.0 else score / 10.0
+    score = max(0.0, min(1.0, score))
+    # The vision model must BOTH classify the pixels as an entity scene
+    # AND give a confident binding score.
+    scene_classes = {"产品", "工厂", "办公楼", "设备", "证书", "项目现场"}
+    verified = category in scene_classes and score >= 0.6
+    return VisionVerdict(
+        verified=verified,
+        score=score,
+        description=text[:200],
+        entity_matched=verified,
+        rationale=text[:300],
+    )
 
 
 def default_vision_verifier() -> VisionVerifier | None:

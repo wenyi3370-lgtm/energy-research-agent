@@ -375,7 +375,7 @@ class ResearchQuery(StrictModel):
     round_goal: Literal["coverage", "depth", "triangulation"] = "coverage"
     high_priority: bool = True
     raw_capture_required: bool = True
-    trigger: Literal["baseline", "official_discovery", "catalog_enumeration", "gap", "conflict", "triangulation", "coverage"] = "baseline"
+    trigger: Literal["baseline", "official_discovery", "catalog_enumeration", "gap", "conflict", "triangulation", "coverage", "user_requirement"] = "baseline"
     target_gap_ids: list[str] = Field(default_factory=list)
     target_conflict_ids: list[str] = Field(default_factory=list)
     target_claim_ids: list[str] = Field(default_factory=list)

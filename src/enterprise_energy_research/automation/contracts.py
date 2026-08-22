@@ -215,6 +215,21 @@ class NaturalLanguagePrompt(StrictModel):
     requested_by: str = Field(default="portal-user", min_length=1)
 
 
+class DeepResearchPayload(StrictModel):
+    """继续深度研究：在已有报告上补充/修改，完善报告、HTML 与 Excel 数据。
+
+    ``run_dir`` 可选：指向该 run 的产物目录（如
+    ``build/live_acceptance/宁德时代-20260822-r3``）；缺省时在自动化
+    workdir 与 live_acceptance 中按 run_id 自动定位最新的证据库。
+    """
+
+    requirements: str = Field(min_length=2, max_length=4000)
+    requested_by: str = Field(default="portal-user", min_length=1)
+    run_dir: str | None = None
+    company: str | None = None
+    include_images: bool = True
+
+
 class NaturalResearchRequest(StrictModel):
     """LLM 从自然语言解析出的调研参数（全部可选，由解析器兜底）。"""
 

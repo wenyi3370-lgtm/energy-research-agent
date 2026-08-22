@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from enterprise_energy_research.domain.enums import EnterpriseComplexity, SourceLevel
 from enterprise_energy_research.domain.ids import RunSequence, new_sortable_id
 from enterprise_energy_research.domain.models import ConflictGroup, DataGap, ResearchPlan, ResearchQuery
@@ -197,6 +199,54 @@ class ResearchPlanner:
                 max_results=10, requires_browser=family in BROWSER_DEPTH_TOPICS,
                 collection_round="R4", round_goal="coverage", high_priority=gap.severity != "low",
                 trigger="coverage",
+                canonical_company_name=canonical_name,
+                expected_fields=list(contract_for(family).expected_fields),
+            ))
+        return queries
+
+    # Keyword -> topic routing for USER-DRIVEN deep-research requirements.
+    # image_evidence sits FIRST so equal-length ties ("产品图片" → "图片")
+    # route to the image pipeline rather than the product catalog.
+    REQUIREMENT_TOPIC_KEYWORDS = (
+        ("image_evidence", ("图片", "照片", "实景", "logo")),
+        ("financials", ("财务", "收入", "营收", "利润", "净利", "毛利", "年报", "现金流", "分红", "业绩")),
+        ("products", ("产品", "参数", "型号", "规格", "技术", "认证")),
+        ("factories", ("基地", "工厂", "产能", "产线", "生产")),
+        ("energy_consumption", ("用电", "能耗", "负荷", "能源", "零碳", "光伏", "储能")),
+        ("subsidiaries", ("子公司", "股权", "集团", "控股")),
+        ("customers", ("客户", "订单", "供应", "合作方")),
+    )
+
+    def requirement_queries(self, canonical_name: str, requirements: str) -> list[ResearchQuery]:
+        """Turn a user's deep-research requirement text into targeted queries.
+
+        Each clause (split on ；;，,。\\n) becomes one search query.  Topics
+        route by keyword so extraction receives the right field contract.
+        """
+        clauses = [
+            clause.strip() for clause in re.split(r"[；;，,。\n]+", requirements or "")
+            if len(clause.strip()) >= 2
+        ]
+        queries: list[ResearchQuery] = []
+        for clause in clauses[:8]:
+            # Longest keyword wins; ties go to the earlier tuple entry
+            # (image_evidence first, so "产品图片" routes to images).
+            family = "financials"
+            best_length = 0
+            for topic, keywords in self.REQUIREMENT_TOPIC_KEYWORDS:
+                for keyword in keywords:
+                    if keyword in clause and len(keyword) > best_length:
+                        family = topic
+                        best_length = len(keyword)
+            queries.append(ResearchQuery(
+                query_id=new_sortable_id("QRY-REQ"), entity_id="UNKNOWN", topic=family,
+                query=f'"{canonical_name}" {clause} 官网 年报 公告 数据',
+                purpose=f"user-requested deep research: {clause}",
+                preferred_source_levels=[SourceLevel.SOURCE_A, SourceLevel.SOURCE_B],
+                adapter_preference="kimi_webbridge" if family in BROWSER_DEPTH_TOPICS else "anysearch",
+                max_results=10, requires_browser=family in BROWSER_DEPTH_TOPICS,
+                collection_round="R4", round_goal="coverage", high_priority=True,
+                trigger="user_requirement",
                 canonical_company_name=canonical_name,
                 expected_fields=list(contract_for(family).expected_fields),
             ))

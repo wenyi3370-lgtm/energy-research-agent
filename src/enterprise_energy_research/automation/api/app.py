@@ -20,21 +20,25 @@ per request (no secrets are ever logged).
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from importlib import metadata
 from pathlib import Path
 from typing import Any
 
-from fastapi import BackgroundTasks, FastAPI, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import text
 
+from enterprise_energy_research.evidence.store import EvidenceStore
+
 from ..contracts import (
+    DeepResearchPayload,
     FeedbackPayload,
     FeishuFormPayload,
     NaturalLanguagePrompt,
@@ -160,6 +164,15 @@ button:disabled{background:#9ca3af;cursor:not-allowed}
 <label>关注主题（逗号分隔）</label><textarea id="topics" placeholder="主营业务, 生产基地, 产品线"></textarea>
 <button id="prepareBtn">用以上参数准备任务</button>
 </div>
+<div class="card"><h2>③ 继续深度研究（完善报告 / HTML / Excel）</h2>
+<div class="sub" style="margin-bottom:6px">对已完成或进行中的调查，提出补充与修改需求：系统会定向检索新证据（必要时恢复官方产品图片），重新校验并重新生成 Word 报告、HTML 看板与 Excel 数据。</div>
+<label>Run ID（默认使用上方最近一次任务的 Run ID，可手动填写）</label><input id="deepRunId" placeholder="例如：RUN-01M0KD1Q1Q3ACPNW741XEVPV89">
+<label>补充 / 修改需求（例如：「补充 2022 年营业收入与利润」「增加产品图片」「补充海外基地产能」）</label>
+<textarea id="deepRequirements" placeholder="分条描述你希望报告补充或修改的内容…"></textarea>
+<label>产物目录（选填，例如 build/live_acceptance/宁德时代-20260822-r3；留空自动定位）</label><input id="deepRunDir" placeholder="留空自动定位">
+<button id="deepBtn">🔍 继续深度研究</button>
+<div id="deepStatus"></div>
+</div>
 <div class="card"><h2>调查结果</h2>
 <div class="sub">故障看门狗每小时检查一次：仅终止超过 120 分钟无进展的调查并通知飞书，不创建任务、不自动重试。</div>
 <div id="runStatus"></div>
@@ -262,6 +275,49 @@ document.getElementById('intelBtn').onclick = async () => {
       ? '<span class="warn">⏸ 推送已暂停，未采集（先点「恢复推送」）</span>'
       : '<span class="ok">✅ 已触发：' + data.date + '（同日重复触发不会重复采集）</span>';
   } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
+};
+// —— 继续深度研究：提交需求 → 后台补检索 → 轮询结果 ——
+document.getElementById('deepBtn').onclick = async () => {
+  const out = document.getElementById('deepStatus');
+  const button = document.getElementById('deepBtn');
+  const runId = document.getElementById('deepRunId').value.trim() || currentRun;
+  const requirements = document.getElementById('deepRequirements').value.trim();
+  if (!runId) { out.innerHTML = '<span class="warn">❌ 请填写 Run ID（或先在 ① 中准备任务）</span>'; return; }
+  if (requirements.length < 2) { out.innerHTML = '<span class="warn">❌ 请填写补充 / 修改需求</span>'; return; }
+  button.disabled = true;
+  out.innerHTML = '<span class="ok">🔍 深度研究已启动（定向检索 + 证据校验 + 重新生成报告/HTML/Excel），请稍候…</span>';
+  try {
+    const body = {requirements, requested_by: 'portal-user', include_images: true};
+    const runDir = document.getElementById('deepRunDir').value.trim();
+    if (runDir) body.run_dir = runDir;
+    await call('POST', '/api/v1/research/' + runId + '/deep-research', body);
+    const started = Date.now();
+    const timer = setInterval(async () => {
+      if (Date.now() - started > 30 * 60 * 1000) { clearInterval(timer); out.innerHTML = '<span class="warn">⏱ 超过 30 分钟未完成，请稍后刷新本页查看结果</span>'; button.disabled = false; return; }
+      try {
+        const data = await call('GET', '/api/v1/research/' + runId + '/deep-research', null);
+        if (data.status !== 'running') {
+          clearInterval(timer);
+          button.disabled = false;
+          if (data.status === 'failed') {
+            out.innerHTML = '<span class="warn">❌ 深度研究失败：' + (data.reason || '未知原因') + '</span>';
+          } else {
+            const q = (data.queries || []).map(x => '· ' + x.query).join('<br>');
+            const img = data.image_report && data.image_report.status
+              ? ('图片：' + data.image_report.status + '（视觉核验通过 ' + (data.image_report.visual_verified || 0) + ' 张）')
+              : '图片：未执行';
+            out.innerHTML = '<span class="ok">✅ 深度研究完成：' +
+              '已验证事实 ' + data.verified_claims_before + ' → ' + data.verified_claims_after + '；' + img + '；' +
+              '新数据版本：' + (data.freeze_id || '（无新冻结）') + '<br>报告 / HTML / Excel 已重新生成到产物目录。</span>' +
+              '<div class="sub" style="margin-top:8px">检索了以下需求：<br>' + q + '</div>';
+          }
+        }
+      } catch (e) { clearInterval(timer); button.disabled = false; out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
+    }, 5000);
+  } catch (e) {
+    button.disabled = false;
+    out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>';
+  }
 };
 // —— 一键停止：调查任务 ——
 document.getElementById('stopAllBtn').onclick = async () => {
@@ -501,6 +557,103 @@ def create_app(
     @app.post("/api/v1/research/{run_id}/feedback", status_code=201)
     def submit_feedback(run_id: str, feedback: FeedbackPayload) -> ResearchResult:
         """Requester feedback; the ROI summary consumes these rows (Phase 11)."""
+        return service.submit_feedback(run_id, feedback)
+
+    # -- 继续深度研究（P0 third round）：用户补充/修改需求 → 重新检索 → 重新 Freeze/发布 --
+    def _deep_research_status_file(run_dir: Path) -> Path:
+        return run_dir / "deep_research_result.json"
+
+    def _run_deep_research(run_id: str, payload: DeepResearchPayload, run_dir: Path) -> None:
+        from enterprise_energy_research.research.deep_retry import deep_retry, find_evidence_store
+
+        status_path = _deep_research_status_file(run_dir)
+        run_dir.mkdir(parents=True, exist_ok=True)
+        status_path.write_text(json.dumps({
+            "status": "running", "run_id": run_id, "requested_by": payload.requested_by,
+            "requirements": payload.requirements,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        try:
+            search_roots = [project_root / "build" / "live_acceptance", service.workdir]
+            store = None
+            if payload.run_dir:
+                candidate = Path(payload.run_dir)
+                if candidate.is_dir():
+                    fixed = sorted(candidate.glob("evidence_fixed*.sqlite3"))
+                    store = EvidenceStore(fixed[-1]) if fixed else None
+                    run_dir = candidate
+            if store is None:
+                store = find_evidence_store(run_id, search_roots)
+            if store is None:
+                result = {"status": "failed", "run_id": run_id, "reason": f"找不到 run {run_id} 的证据库（run_dir 或 workdir/live_acceptance 均无匹配）"}
+            else:
+                from enterprise_energy_research.adapters.anysearch import AnySearchCliAdapter
+                from enterprise_energy_research.adapters.kimi_webbridge import KimiWebBridgeSearchAdapter
+                from enterprise_energy_research.gateway.http_json_gateway import HttpJsonModelGateway
+                from enterprise_energy_research.research.image_archiver import ImageAssetArchiver
+                from enterprise_energy_research.settings import Settings
+                gateway = HttpJsonModelGateway(Settings())
+                archiver = ImageAssetArchiver()
+                catalog_pages = None
+                company = payload.company or ""
+                if "宁德时代" in company or "CATL" in company.upper():
+                    catalog_pages = [
+                        ("https://www.catl.com/ess/", "储能系统"),
+                        ("https://www.catl.com/solution/passengerEV/", "乘用车解决方案"),
+                        ("https://www.catl.com/solution/commercialEV/", "商业应用解决方案"),
+                        ("https://www.catl.com/solution/recycling/", "循环回收"),
+                    ]
+                result = deep_retry(
+                    store, run_dir,
+                    requirements=payload.requirements,
+                    company=company,
+                    adapters={
+                        "anysearch": AnySearchCliAdapter(),
+                        "kimi_webbridge": KimiWebBridgeSearchAdapter(session=f"deep-research-{run_id[-6:]}"),
+                    },
+                    gateway=gateway,
+                    fetcher=lambda url, referer: archiver._fetch_direct(url, referer)[0],
+                    include_images=payload.include_images,
+                    catalog_pages=catalog_pages,
+                )
+                result["requested_by"] = payload.requested_by
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("deep research failed run_id=%s", run_id)
+            result = {
+                "status": "failed", "run_id": run_id,
+                "reason": f"{type(exc).__name__}: {str(exc)[:300]}",
+                "requested_by": payload.requested_by,
+            }
+        status_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    @app.post("/api/v1/research/{run_id}/deep-research", status_code=202)
+    def deep_research(run_id: str, payload: DeepResearchPayload, background: BackgroundTasks) -> dict:
+        """继续深度研究：按用户补充/修改需求补充证据并重新发布 Word/HTML/Excel。"""
+        run_dir = Path(payload.run_dir) if payload.run_dir else (service.workdir / run_id)
+        background.add_task(_run_deep_research, run_id, payload, run_dir)
+        return {
+            "run_id": run_id,
+            "message": "深度研究已启动：将按需求补充检索、必要时恢复产品图片，并重新生成报告、HTML 与 Excel。",
+            "status": "running",
+        }
+
+    @app.get("/api/v1/research/{run_id}/deep-research")
+    def deep_research_status(run_id: str) -> dict:
+        """轮询继续深度研究的进度与结果。"""
+        candidates: list[Path] = []
+        if (service.workdir / run_id / "deep_research_result.json").is_file():
+            candidates.append(service.workdir / run_id / "deep_research_result.json")
+        for path in (project_root / "build" / "live_acceptance").glob(f"*/deep_research_result.json"):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if payload.get("run_id") == run_id:
+                candidates.append(path)
+        if not candidates:
+            raise HTTPException(status_code=404, detail="该 run 尚无深度研究记录")
+        newest = max(candidates, key=lambda path: path.stat().st_mtime)
+        return json.loads(newest.read_text(encoding="utf-8"))
         return service.submit_feedback(
             run_id,
             submitted_by=feedback.submitted_by,
