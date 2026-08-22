@@ -107,16 +107,21 @@ class ResearchDataCoverageValidator:
                 years = distinct_years(rows)
                 if len(years) >= min_years:
                     continue
+                # Year-specific annual-report targeting: the old generic
+                # "最近5年 年报" query returned current-year pages only.
+                retry_hint = (
+                    f"2022年年度报告 2023年年度报告 2024年年度报告 主要会计数据 {label} 上年同期 可比口径"
+                    if field_name in {"revenue", "profit"} and severity == "high"
+                    else f"最近{min_years + 2}年 年报 主要会计数据 {label} 分年度 可比口径"
+                    if severity != "low" else f"年报 {label} 期间"
+                )
                 gaps.append(CoverageGap(
                     gap_code=f"coverage-{field_name}", field_name=field_name,
                     description=f"缺少 {min_years} 个以上可比年度的{label}数据",
                     requirement=f"≥ {min_years} 个年度",
                     found=f"现有 {len(years)} 个年度（{','.join(sorted(years)) or '无明确期间'}）",
                     severity=severity,
-                    retry_hint=(
-                        f"最近{min_years + 2}年 年报 主要会计数据 {label} 分年度 可比口径"
-                        if severity != "low" else f"年报 {label} 期间"
-                    ),
+                    retry_hint=retry_hint,
                 ))
             segment_rows = [row for field in self.SEGMENT_FIELDS for row in by_field.get(field, [])]
             if len(segment_rows) < 2:

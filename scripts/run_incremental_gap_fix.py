@@ -46,12 +46,16 @@ def load_existing(store: EvidenceStore, run_id: str) -> NormalizedEvidence:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--evidence", type=Path, required=True)
-    parser.add_argument("--topics", nargs="+", required=True)
+    parser.add_argument("--topics", nargs="+", default=None)
+    parser.add_argument("--coverage", action="store_true",
+                        help="R4 targeted queries from the data-coverage audit (year-specific annual reports, product images)")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--company", default="宁德时代")
     parser.add_argument("--session", default="enterprise-incremental-fix")
     parser.add_argument("--max-pages", type=int, default=80)
     args = parser.parse_args()
+    if not args.topics and not args.coverage:
+        parser.error("--topics or --coverage is required")
 
     store = EvidenceStore(args.evidence)
     import sqlite3
@@ -102,22 +106,47 @@ def main() -> int:
     # Existing evidence first (stable IDs), then one gap-fix round.
     runner.cumulative = load_existing(store, run_id)
 
-    plan = __import__("enterprise_energy_research.research.planner", fromlist=["ResearchPlanner"]).ResearchPlanner().build(
-        run_id, "PENDING-ENTITY", args.company, EnterpriseComplexity.GROUP_LARGE,
-        {"max_queries": len(args.topics) * 3, "max_pages": args.max_pages},
-        only_topics=args.topics,
-    )
-    fix_queries = [q for q in plan.queries if q.topic in args.topics]
-    if not fix_queries:
-        print("no queries planned for topics:", args.topics)
-        return 1
-    print(f"[incremental] {len(fix_queries)} queries for {args.topics}")
+    planner = __import__("enterprise_energy_research.research.planner", fromlist=["ResearchPlanner"]).ResearchPlanner()
+    if args.coverage:
+        # R4: build TARGETED queries from the data-coverage audit (P0 third
+        # round): year-specific annual-report searches for missing financial
+        # series, official product pages for missing product images.
+        from enterprise_energy_research.research.data_coverage import ResearchDataCoverageValidator
+        audit = ResearchDataCoverageValidator().audit(
+            entity_name=args.company,
+            claims=runner.cumulative.claims,
+            products=runner.cumulative.products,
+            factories=runner.cumulative.factories,
+            images=runner.cumulative.images,
+            complexity=EnterpriseComplexity.GROUP_LARGE,
+            has_stock_code=True,
+        )
+        retry_gaps = [gap for gap in audit.gaps if gap.searchable and gap.severity in {"high", "medium"}]
+        if not retry_gaps:
+            print("[incremental] coverage audit: no searchable gaps")
+            return 0
+        print(f"[incremental] coverage gaps: {[gap.gap_code for gap in retry_gaps]}")
+        fix_queries = planner.coverage_queries(args.company, retry_gaps)[:8]
+        topics = sorted({query.topic for query in fix_queries})
+        print(f"[incremental] {len(fix_queries)} coverage queries for {topics}")
+    else:
+        plan = planner.build(
+            run_id, "PENDING-ENTITY", args.company, EnterpriseComplexity.GROUP_LARGE,
+            {"max_queries": len(args.topics) * 3, "max_pages": args.max_pages},
+            only_topics=args.topics,
+        )
+        fix_queries = [q for q in plan.queries if q.topic in args.topics]
+        topics = list(args.topics)
+        if not fix_queries:
+            print("no queries planned for topics:", args.topics)
+            return 1
+        print(f"[incremental] {len(fix_queries)} queries for {args.topics}")
 
     mini = ResearchPlan(
         plan_id=new_sortable_id("PLAN"), run_id=run_id,
         complexity=EnterpriseComplexity.GROUP_LARGE, queries=fix_queries,
         budget={"max_queries": len(fix_queries) + 1, "max_pages": args.max_pages},
-        completion_contract=args.topics,
+        completion_contract=topics,
         canonical_company_name=args.company,
     )
     from enterprise_energy_research.research.executor import SearchExecutor
