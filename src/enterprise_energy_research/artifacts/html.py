@@ -158,14 +158,15 @@ class FrozenHtmlPublisher:
         for product in bundle.products:
             if product.verification_status != VerificationStatus.VERIFIED:
                 continue
-            publication = prepared.get(product.image_id or "")
+            bound_image_id = narrative.product_images.get(product.product_id) or product.image_id
+            publication = prepared.get(bound_image_id or "")
             products.append({
                 "id": product.product_id, "name": product.name, "brand": product.brand, "model": product.model,
                 "family": product.category or "未分类", "series": product.series or "",
                 "description": product.description or "",
                 "applications": product.applications,
                 "parameters": [item.model_dump(mode="json") for item in product.parameters],
-                "imageId": product.image_id,
+                "imageId": bound_image_id,
                 "offlineAsset": self._data_uri(asset_root, publication.publication_path) if publication else None,
                 "imageSource": publication.source_page_url if publication else None,
                 "evidenceStatus": "已核验",
@@ -219,6 +220,7 @@ class FrozenHtmlPublisher:
                 if narrative.opportunity_assessments else "完成关键资料获取并形成是否继续投入的书面判断"
             ),
             "insights": list(narrative.executive_summary),
+            "kpis": narrative.kpis,
             "products": products,
             "sources": narrative.appendices.source_ledger,
             "meta": {
@@ -248,7 +250,7 @@ class FrozenHtmlPublisher:
         )
         return f'''<!doctype html><html lang="zh-CN" data-visual-system="diagram-design"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#1B365D"><link rel="icon" href="data:,"><title>{safe_title}｜企业产业与能源合作调研</title><style>{CSS}</style></head>
 <body><aside class="sidebar" aria-label="报告索引"><div class="brand"><strong>{safe_title}</strong><span>企业产业与能源合作调研</span></div><nav aria-label="章节导航">{nav}</nav></aside>
-<main><section class="hero decision-hero"><div><span class="eyebrow">BOARD DECISION DASHBOARD</span><h1>{safe_title}</h1><p>产业与能源合作调研 · 数据截止 {payload['meta']['researchDate']}</p><div class="judgement"><span>总体判断</span><b>{html.escape(payload.get('overallJudgement',''))}</b><p>{html.escape(payload.get('judgementRationale',''))}</p></div></div><div class="decision-stack"><article><span>优先切入方向</span><b>{html.escape(payload.get('topOpportunity',''))}</b></article><article><span>90 天决策里程碑</span><p>{html.escape(payload.get('ninetyDayAction',''))}</p></article></div></section>
+<main><section class="hero research-hero"><div class="hero-head"><span class="eyebrow">ENTERPRISE RESEARCH DASHBOARD</span><h1>{safe_title}</h1><p>企业研究 · 产业与能源合作 · 数据截止 {payload['meta']['researchDate']}</p></div><div class="kpi-grid" id="kpiGrid" aria-label="关键经营指标"></div><div class="hero-judgement"><div class="judgement"><span>总体判断</span><b>{html.escape(payload.get('overallJudgement',''))}</b><p>{html.escape(payload.get('judgementRationale',''))}</p></div><div class="decision-stack"><article><span>优先切入方向</span><b>{html.escape(payload.get('topOpportunity',''))}</b></article><article><span>90 天决策里程碑</span><p>{html.escape(payload.get('ninetyDayAction',''))}</p></article></div></div></section>
 <section class="workspace"><div class="chapters" id="chapters"></div></section>
 <section class="workspace sources"><header class="section-title"><h2>来源与方法</h2></header><div id="sourceList" class="ledger"></div></section>
 </main>
@@ -271,14 +273,22 @@ a{color:inherit;text-underline-offset:3px}
 .sidebar nav a:hover{background:rgba(255,255,255,0.08);color:var(--paper)}
 .sidebar nav b{font-size:10px;color:rgba(255,255,255,0.45);letter-spacing:.06em}
 main{margin-left:264px;max-width:1680px}
-.hero{min-height:300px;padding:72px clamp(28px,5vw,88px) 56px;background:var(--ink);color:var(--paper);display:flex;justify-content:space-between;align-items:end;gap:48px}
+.hero{min-height:300px;padding:64px clamp(28px,5vw,88px) 52px;background:var(--ink);color:var(--paper)}
+.hero-head{margin-bottom:26px}
 .eyebrow,.section-title span{font-size:10px;letter-spacing:.18em;font-weight:700;color:var(--muted);text-transform:uppercase}
 .hero .eyebrow{color:rgba(255,255,255,0.55)}
-.hero h1{max-width:820px;font-family:var(--serif);font-size:clamp(30px,4.5vw,52px);line-height:1.12;margin:16px 0 12px;font-weight:600}
+.hero h1{max-width:860px;font-family:var(--serif);font-size:clamp(30px,4.5vw,52px);line-height:1.12;margin:16px 0 12px;font-weight:600}
 .hero p{color:rgba(255,255,255,0.65);font-size:13px;line-height:1.7;margin:0}
-.judgement{margin-top:28px;max-width:820px;border-left:3px solid #88AADD;padding:4px 0 4px 18px}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin:0 0 26px}
+.kpi-card{border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);padding:14px 16px}
+.kpi-card span{display:block;color:rgba(255,255,255,.58);font-size:10.5px;letter-spacing:.08em;font-weight:700}
+.kpi-card b{display:block;margin-top:8px;font-family:var(--serif);font-size:24px;color:#fff;line-height:1.25}
+.kpi-card i{display:block;margin-top:5px;font-style:normal;font-size:11px;color:rgba(255,255,255,.55)}
+.hero-judgement{display:flex;justify-content:space-between;align-items:end;gap:48px}
+.judgement{max-width:820px;border-left:3px solid #88AADD;padding:4px 0 4px 18px}
 .judgement span,.decision-stack span{display:block;color:rgba(255,255,255,.58);font-size:10px;letter-spacing:.14em;font-weight:700}
 .judgement b{display:block;margin:7px 0 5px;font-family:var(--serif);font-size:23px;color:#fff}
+.judgement p{color:rgba(255,255,255,.78);line-height:1.75}
 .decision-stack{width:min(360px,34vw);display:grid;gap:12px}
 .decision-stack article{padding:17px 18px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06)}
 .decision-stack b,.decision-stack p{display:block;margin-top:8px!important;color:#fff!important;line-height:1.6}
@@ -334,7 +344,7 @@ main{margin-left:264px;max-width:1680px}
 .source-row b{font-weight:700}.source-row span{color:var(--soft)}
 .page-footer{padding:22px clamp(22px,5vw,76px) 40px;margin-left:264px;font-size:11.5px;color:var(--soft);line-height:1.8}
 @media(max-width:1100px){.sidebar{width:224px}main{margin-left:224px}.page-footer{margin-left:224px}.gallery,.product-grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:768px){.sidebar{position:sticky;top:0;width:100%;height:auto;padding:12px 16px}.sidebar nav{display:none}.brand{padding:0;border:0}.main,main{margin:0}.page-footer{margin-left:0}.hero{min-height:220px;padding:40px 20px 54px;display:block}.decision-stack{width:100%;margin-top:22px}.workspace{padding:36px 18px}.chapter{padding:24px 18px}.chapter .table-scroll table{min-width:680px}.gallery,.product-grid{grid-template-columns:1fr}.source-row{grid-template-columns:1fr}}
+@media(max-width:768px){.sidebar{position:sticky;top:0;width:100%;height:auto;padding:12px 16px}.sidebar nav{display:none}.brand{padding:0;border:0}.main,main{margin:0}.page-footer{margin-left:0}.hero{min-height:220px;padding:40px 20px 54px}.hero-judgement{display:block}.decision-stack{width:100%;margin-top:22px}.kpi-grid{grid-template-columns:repeat(2,1fr)}.workspace{padding:36px 18px}.chapter{padding:24px 18px}.chapter .table-scroll table{min-width:680px}.gallery,.product-grid{grid-template-columns:1fr}.source-row{grid-template-columns:1fr}}
 @media print{.sidebar{display:none}main{margin:0}.hero{color:var(--ink);background:var(--paper);border-bottom:2px solid var(--ink)}.workspace{break-inside:avoid}.page-footer{margin-left:0}}
 '''
 
@@ -347,8 +357,9 @@ function productBlock(products){return `<div class="filters"><input id="productS
 function renderProducts(){let rows=DATA.products;const q=$('productSearch').value.toLowerCase();rows=rows.filter(p=>JSON.stringify(p).toLowerCase().includes(q)&&(!$('categoryFilter').value||(p.family||'未分类')===$('categoryFilter').value));$('productGrid').innerHTML=rows.map(p=>`<article class="product-card">${p.offlineAsset?`<img src="${p.offlineAsset}" alt="${esc(p.name)}">`:`<div class="no-photo">产品图片待补充（不影响产品记录发布）</div>`}<div class="product-body"><h3>${esc(p.name)}</h3><p>${esc(p.description||'')}</p><div class="product-meta"><span>${esc(p.brand||'品牌待核验')}</span><span>${esc(p.model||'型号待核验')}</span><span>${esc(p.family)}</span>${p.series?`<span>${esc(p.series)}</span>`:''}</div>${p.parameters.length?`<div class="product-meta" style="margin-top:8px">${p.parameters.map(x=>`<span>${esc(x.name)}：${esc(x.value)} ${esc(x.unit||'')}</span>`).join('')}</div>`:''}<div class="product-actions"><button data-compare="${esc(p.id)}">${selected.includes(p.id)?'已加入':'加入对比'}</button></div></div></article>`).join('')||'<article class="chapter"><p>暂无满足核验门禁的产品记录。</p></article>';document.querySelectorAll('[data-compare]').forEach(b=>b.onclick=()=>{const id=b.dataset.compare;if(selected.includes(id))selected=selected.filter(x=>x!==id);else if(selected.length<4)selected.push(id);renderProducts();compare()})}
 function compare(){const rows=selected.map(id=>DATA.products.find(p=>p.id===id)).filter(Boolean);$('comparePanel').innerHTML=rows.length?`<table><thead><tr><th>字段</th>${rows.map(p=>`<th>${esc(p.name)}</th>`).join('')}</tr></thead><tbody><tr><td>产品族</td>${rows.map(p=>`<td>${esc(p.family)}</td>`).join('')}</tr><tr><td>型号</td>${rows.map(p=>`<td>${esc(p.model||'待核验')}</td>`).join('')}</tr><tr><td>参数</td>${rows.map(p=>`<td>${p.parameters.map(x=>`${esc(x.name)}：${esc(x.value)} ${esc(x.unit||'')}`).join('<br>')||'待核验'}</td>`).join('')}</tr></tbody></table>`:''}
 function listBlock(label,items){return items&&items.length?`<p class="block-label">${esc(label)}</p><ul>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
-function renderChapters(){$('chapters').innerHTML=DATA.chapters.map((c,index)=>{const extra=c.kind==='products'?productBlock(c):'';const prose=[...(c.context||[]),...(c.analysis||[])];return `<article class="chapter" id="${index+1}"><h2>${String(index+1).padStart(2,'0')} ${esc(c.title)}</h2><p class="assertion">${esc(c.assertionTitle)}</p>${c.executiveTakeaway?`<p class="takeaway">${esc(c.executiveTakeaway)}</p>`:''}<div class="content">${prose.map(p=>`<p>${esc(p)}</p>`).join('')}</div>${tableBlock(c.tables)}${c.visuals.map((v,i)=>figBlock(v,i+1)).join('')}${imageBlock(c.images)}${listBlock('业务含义',c.implications)}${listBlock('建议',c.recommendations)}${listBlock('反向证据',c.counterEvidence)}${listBlock('局限与待确认',c.limitations)}${listBlock('行动项',c.actions)}${c.implications&&c.implications.length?`<p class="so-what">So What：${esc(c.implications[0])}</p>`:''}${extra}</article>`}).join('');if(DATA.products.length){const cats=[...new Set(DATA.products.map(p=>p.family||'未分类'))];$('categoryFilter').innerHTML+=cats.sort().map(c=>`<option>${esc(c)}</option>`).join('');$('productSearch').oninput=renderProducts;$('categoryFilter').onchange=renderProducts;renderProducts()}document.querySelectorAll('[data-img]').forEach(el=>el.querySelector('img').onclick=()=>{const w=window.open('');w.document.write(`<img src="${el.dataset.img}" style="max-width:96vw;max-height:94vh;display:block;margin:auto"><p style="text-align:center;font-family:sans-serif">${el.dataset.cap}</p>`)});}
+function renderKpis(){$('kpiGrid').innerHTML=(DATA.kpis||[]).slice(0,6).map(k=>`<article class="kpi-card"><span>${esc(k.label)}</span><b>${esc(String(k.value??''))}${k.unit?`<small style="font-size:12px">${esc(k.unit)}</small>`:''}</b><i>${esc(k.period||k.scope||'公开披露口径')}</i></article>`).join('')}
+function renderChapters(){$('chapters').innerHTML=DATA.chapters.map((c,index)=>{const extra=c.kind==='products'?productBlock(c):'';const prose=[...(c.context||[]),...(c.analysis||[])];return `<article class="chapter" id="${index+1}"><h2>${String(index+1).padStart(2,'0')} ${esc(c.title)}</h2><p class="assertion">${esc(c.assertionTitle)}</p>${c.executiveTakeaway?`<p class="takeaway">${esc(c.executiveTakeaway)}</p>`:''}<div class="content">${prose.map(p=>`<p>${esc(p)}</p>`).join('')}</div>${tableBlock(c.tables)}${c.visuals.map((v,i)=>figBlock(v,i+1)).join('')}${imageBlock(c.images)}${listBlock('业务含义',c.implications)}${listBlock('建议',c.recommendations)}${listBlock('反向证据',c.counterEvidence)}${listBlock('局限与待确认',c.limitations)}${listBlock('行动项',c.actions)}${c.implications&&c.implications.length?`<p class="so-what">${esc(c.implications[0])}</p>`:''}${extra}</article>`}).join('');if(DATA.products.length){const cats=[...new Set(DATA.products.map(p=>p.family||'未分类'))];$('categoryFilter').innerHTML+=cats.sort().map(c=>`<option>${esc(c)}</option>`).join('');$('productSearch').oninput=renderProducts;$('categoryFilter').onchange=renderProducts;renderProducts()}document.querySelectorAll('[data-img]').forEach(el=>el.querySelector('img').onclick=()=>{const w=window.open('');w.document.write(`<img src="${el.dataset.img}" style="max-width:96vw;max-height:94vh;display:block;margin:auto"><p style="text-align:center;font-family:sans-serif">${el.dataset.cap}</p>`)});}
 const selected=[];
 function renderSources(){$('sourceList').innerHTML=DATA.sources.map(s=>`<article class="source-row"><div><b>${esc(s['来源名称'])}</b></div><div><span>${esc(s['来源类型'])}${s['发布日期']?` · ${esc(s['发布日期'])}`:''}</span></div><div><a href="${esc(s['网址'])}" target="_blank" rel="noreferrer">查看原始页面 ↗</a></div></article>`).join('')}
-renderChapters();renderSources();
+renderKpis();renderChapters();renderSources();
 '''

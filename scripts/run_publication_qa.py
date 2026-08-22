@@ -55,24 +55,35 @@ def refresh_docx(path: Path, soffice: Path) -> None:
 
 
 def docx_heading_text(path: Path) -> list[str]:
+    """Heading 1 texts in document order (compat helper)."""
+    return [text for text, level in docx_heading_levels(path) if level == 1]
+
+
+def docx_heading_levels(path: Path) -> list[tuple[str, int]]:
     with zipfile.ZipFile(path) as archive:
         root = ElementTree.fromstring(archive.read("word/document.xml"))
-    headings: list[str] = []
+    entries: list[tuple[str, int]] = []
+    style_levels = (
+        ("Heading1", 1), ("Heading 1", 1), ("1", 1),
+        ("Heading2", 2), ("Heading 2", 2), ("2", 2),
+        ("Heading3", 3), ("Heading 3", 3), ("3", 3),
+    )
     for paragraph in root.findall(f".//{W}body/{W}p"):
         instruction = "".join(node.text or "" for node in paragraph.findall(f".//{W}instrText"))
         if instruction.strip().startswith("TOC"):
             continue
         style = paragraph.find(f"./{W}pPr/{W}pStyle")
         value = style.get(W + "val") if style is not None else ""
-        if value not in {"Heading1", "1"}:
+        level = next((level for name, level in style_levels if value == name), None)
+        if level is None:
             continue
         text = "".join(node.text or "" for node in paragraph.findall(f".//{W}t")).strip()
         if text and text != "目录":
-            headings.append(text)
-    return headings
+            entries.append((text, level))
+    return entries
 
 
-def heading_page_map(pdf_path: Path, headings: list[str]) -> list[tuple[str, int]]:
+def heading_page_map(pdf_path: Path, headings: list[tuple[str, int]]) -> list[tuple[str, int, int]]:
     completed = subprocess.run(["pdftotext", "-layout", str(pdf_path), "-"], capture_output=True, timeout=120)
     try:
         decoded = completed.stdout.decode("utf-8")
@@ -81,77 +92,152 @@ def heading_page_map(pdf_path: Path, headings: list[str]) -> list[tuple[str, int
         decoded = completed.stdout.decode(encoding if encoding.lower() != "utf-8" else "gb18030", errors="replace")
     pages = decoded.split("\f")
     entries = []
-    for heading in headings:
+    for heading, level in headings:
         normalized = re.sub(r"\s+", "", heading)
         # A refreshed office document may already show a generated TOC.  The
         # first occurrence is then the TOC itself; the last occurrence is the
         # real body heading whose final page number must be published.
         matches = [index for index, text in enumerate(pages, start=1) if normalized in re.sub(r"\s+", "", text)]
         if matches:
-            entries.append((heading, matches[-1]))
+            entries.append((heading, matches[-1], level))
     return entries
 
 
-def inject_static_toc_result(path: Path, entries: list[tuple[str, int]]) -> None:
-    """Populate the existing TOC field result with final page numbers."""
+XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
+
+
+def _toc_entry_paragraph(level: int, heading: str, page: int, *, first: bool, last: bool):
+    """One TOC entry = ONE paragraph: LEFT alignment, right dot-leader tab.
+
+    The old implementation cached every entry into a single Normal-styled
+    paragraph separated by <w:br> plus hand-typed dots, so JUSTIFY
+    distributed the CJK glyphs ("执 行 摘 要 与 决 策 建 议").  Each entry
+    is now its own paragraph with explicit LEFT alignment and a real right
+    tab stop with a dot leader — no manual dots, no <br> separators.
+    """
+    paragraph = ElementTree.Element(W + "p")
+    ppr = ElementTree.SubElement(paragraph, W + "pPr")
+    style = ElementTree.SubElement(ppr, W + "pStyle")
+    style.set(W + "val", f"TOC{min(max(level, 1), 3)}")
+    jc = ElementTree.SubElement(ppr, W + "jc")
+    jc.set(W + "val", "left")
+    ind = ElementTree.SubElement(ppr, W + "ind")
+    ind.set(W + "left", str((level - 1) * 240))
+    ind.set(W + "firstLine", "0")
+    tabs = ElementTree.SubElement(ppr, W + "tabs")
+    tab = ElementTree.SubElement(tabs, W + "tab")
+    tab.set(W + "val", "right")
+    tab.set(W + "leader", "dot")
+    tab.set(W + "pos", "9000")
+    if first:
+        run = ElementTree.SubElement(paragraph, W + "r")
+        begin = ElementTree.SubElement(run, W + "fldChar")
+        begin.set(W + "fldCharType", "begin")
+        instruction = ElementTree.SubElement(run, W + "instrText")
+        instruction.set(XML_SPACE, "preserve")
+        instruction.text = 'TOC \\o "1-3" \\h \\z \\u'
+        separate = ElementTree.SubElement(run, W + "fldChar")
+        separate.set(W + "fldCharType", "separate")
+    run = ElementTree.SubElement(paragraph, W + "r")
+    text = ElementTree.SubElement(run, W + "t")
+    text.set(XML_SPACE, "preserve")
+    text.text = heading
+    ElementTree.SubElement(run, W + "tab")
+    page_run = ElementTree.SubElement(paragraph, W + "r")
+    page_text = ElementTree.SubElement(page_run, W + "t")
+    page_text.set(XML_SPACE, "preserve")
+    page_text.text = str(page)
+    if last:
+        run = ElementTree.SubElement(paragraph, W + "r")
+        end = ElementTree.SubElement(run, W + "fldChar")
+        end.set(W + "fldCharType", "end")
+    return paragraph
+
+
+def _ensure_toc_styles(members: dict) -> None:
+    """Register TOC1/2/3 paragraph styles with LEFT alignment.
+
+    Word/LibreOffice materialize a TOC field through the document's TOC
+    styles; without them the entries inherit Normal (JUSTIFY), which
+    distributes CJK characters.  Adding LEFT-aligned styles keeps every
+    path — static injection AND live field refresh — visually correct.
+    """
+    styles_root = ElementTree.fromstring(members["word/styles.xml"])
+    existing = {node.get(W + "styleId") for node in styles_root if node.tag == W + "style"}
+    for style_id, size in (("TOC1", "22"), ("TOC2", "21"), ("TOC3", "20")):
+        if style_id in existing:
+            continue
+        style = ElementTree.Element(W + "style")
+        style.set(W + "type", "paragraph")
+        style.set(W + "styleId", style_id)
+        name = ElementTree.SubElement(style, W + "name")
+        name.set(W + "val", f"toc {style_id[-1]}")
+        ppr = ElementTree.SubElement(style, W + "pPr")
+        jc = ElementTree.SubElement(ppr, W + "jc")
+        jc.set(W + "val", "left")
+        tabs = ElementTree.SubElement(ppr, W + "tabs")
+        tab = ElementTree.SubElement(tabs, W + "tab")
+        tab.set(W + "val", "right")
+        tab.set(W + "leader", "dot")
+        tab.set(W + "pos", "9000")
+        rpr = ElementTree.SubElement(style, W + "rPr")
+        sz = ElementTree.SubElement(rpr, W + "sz")
+        sz.set(W + "val", size)
+        styles_root.append(style)
+    members["word/styles.xml"] = ElementTree.tostring(styles_root, encoding="utf-8", xml_declaration=True)
+
+
+def inject_static_toc_result(path: Path, entries: list[tuple[str, int] | tuple[str, int, int]]) -> None:
+    """Populate the existing TOC field result with final page numbers.
+
+    Entries are (heading, page) or (heading, page, level).  Every entry is
+    a separate LEFT-aligned paragraph with a real right tab stop + dot
+    leader — never a <br>-joined Normal paragraph with manual dots.
+    """
+    normalized_entries: list[tuple[str, int, int]] = [
+        (heading, page, level) for heading, page, level in [
+            (entry[0], entry[1], entry[2] if len(entry) > 2 else 1) for entry in entries
+        ]
+    ]
     with zipfile.ZipFile(path) as archive:
         members = {name: archive.read(name) for name in archive.namelist()}
     root = ElementTree.fromstring(members["word/document.xml"])
-    target = None
-    for paragraph in root.findall(f".//{W}p"):
+    body = root.find(f".//{W}body")
+    if body is None:
+        raise RuntimeError("Word document body not found")
+    body_children = list(body)
+    start = None
+    for index, paragraph in enumerate(body_children):
+        if paragraph.tag != W + "p":
+            continue
         instructions = "".join(node.text or "" for node in paragraph.findall(f".//{W}instrText"))
         if instructions.strip().startswith("TOC"):
-            target = paragraph
+            start = index
             break
-    if target is None:
-        body = root.find(f".//{W}body")
-        if body is None:
-            raise RuntimeError("Word document body not found")
-        body_children = list(body)
-        for index, paragraph in enumerate(body_children):
-            if paragraph.tag != W + "p":
-                continue
-            text_value = "".join(node.text or "" for node in paragraph.findall(f".//{W}t")).strip()
-            if text_value == "目录":
-                # LibreOffice can remove an empty TOC result paragraph.  Add
-                # a dedicated paragraph after the title; never overwrite the
-                # first real chapter heading.
-                target = ElementTree.Element(W + "p")
-                body.insert(index + 1, target)
-                break
-        if target is None:
-            raise RuntimeError("TOC placement paragraph not found")
-    # LibreOffice is free to split a complex field across several runs.  Do
-    # not depend on its run boundaries: rebuild one canonical field/result in
-    # the already-located TOC paragraph.  This also makes repeated QA passes
-    # idempotent (the second pass replaces, rather than nests, static output).
-    ppr = target.find(f"./{W}pPr")
-    for child in list(target):
-        if child is not ppr:
-            target.remove(child)
-    run = ElementTree.SubElement(target, W + "r")
-    begin = ElementTree.SubElement(run, W + "fldChar")
-    begin.set(W + "fldCharType", "begin")
-    instruction = ElementTree.SubElement(run, W + "instrText")
-    instruction.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
-    instruction.text = 'TOC \\o "1-3" \\h \\z \\u'
-    separate = ElementTree.SubElement(run, W + "fldChar")
-    separate.set(W + "fldCharType", "separate")
-    insert_at = len(run)
-    for index, (heading, page) in enumerate(entries):
-        if index:
-            br = ElementTree.Element(W + "br")
-            run.insert(insert_at, br)
-            insert_at += 1
-        text = ElementTree.Element(W + "t")
-        text.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
-        text.text = f"{heading}  ······  {page}"
-        run.insert(insert_at, text)
-        insert_at += 1
-    end = ElementTree.Element(W + "fldChar")
-    end.set(W + "fldCharType", "end")
-    run.insert(insert_at, end)
+    if start is None:
+        raise RuntimeError("TOC field paragraph not found")
+    # A previous injection may span several paragraphs: remove from the
+    # first entry through the paragraph carrying the field end.
+    end = start
+    for index in range(start, len(body_children)):
+        if body_children[index].tag != W + "p":
+            continue
+        if any(
+            node.get(W + "fldCharType") == "end"
+            for node in body_children[index].findall(f".//{W}fldChar")
+        ):
+            end = index
+            break
+    for paragraph in body_children[start:end + 1]:
+        body.remove(paragraph)
+    paragraphs = [
+        _toc_entry_paragraph(level, heading, page, first=(index == 0), last=(index == len(normalized_entries) - 1))
+        for index, (heading, page, level) in enumerate(normalized_entries)
+    ]
+    for offset, paragraph in enumerate(paragraphs):
+        body.insert(start + offset, paragraph)
     members["word/document.xml"] = ElementTree.tostring(root, encoding="utf-8", xml_declaration=True)
+    _ensure_toc_styles(members)
     settings = ElementTree.fromstring(members["word/settings.xml"])
     if settings.find(f"./{W}updateFields") is None:
         update_fields = ElementTree.SubElement(settings, W + "updateFields")
@@ -262,7 +348,7 @@ def main() -> int:
     # Cycle 1: refresh, render and inspect.
     refresh_docx(args.docx, soffice)
     pdf, pages = render_pdf_and_png(args.docx, output / "cycle-1", soffice)
-    headings = docx_heading_text(args.docx)
+    headings = docx_heading_levels(args.docx)
     entries = heading_page_map(pdf, headings)
     if entries:
         inject_static_toc_result(args.docx, entries)

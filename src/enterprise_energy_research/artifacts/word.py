@@ -237,6 +237,27 @@ class FrozenWordPublisher:
                 style.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
                 style.paragraph_format.line_spacing = Pt(30)
 
+        # TOC 1/2/3 styles must exist with LEFT alignment.  Word/LibreOffice
+        # materialize the TOC field through these styles; without them the
+        # entries inherit Normal (JUSTIFY), which distributes CJK glyphs
+        # ("执 行 摘 要 与 决 策 建 议").  Each level gets a right tab stop
+        # with a dot leader at the content width.
+        from docx.enum.style import WD_STYLE_TYPE
+        from docx.enum.text import WD_TAB_ALIGNMENT, WD_TAB_LEADER
+        for toc_name, size in (("TOC 1", 11), ("TOC 2", 10.5), ("TOC 3", 10)):
+            try:
+                toc_style = styles.add_style(toc_name, WD_STYLE_TYPE.PARAGRAPH)
+            except ValueError:
+                toc_style = styles[toc_name]
+            toc_style.font.name = body_latin
+            toc_style._element.rPr.rFonts.set(qn("w:eastAsia"), body_cjk)
+            toc_style.font.size = Pt(size)
+            toc_style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            toc_style.paragraph_format.first_line_indent = Pt(0)
+            toc_style.paragraph_format.left_indent = Pt(0)
+            toc_style.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+            toc_style.paragraph_format.tab_stops.add_tab_stop(Cm(15.9), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
+
         # Make TOC/page fields refresh when Word or LibreOffice opens the file.
         settings = document.settings.element
         update_fields = OxmlElement("w:updateFields")
@@ -324,7 +345,12 @@ class FrozenWordPublisher:
             for paragraph in [*chapter.context_paragraphs, *chapter.analysis_paragraphs]:
                 document.add_paragraph(paragraph)
             if chapter.table_rows:
-                self._add_structured_table(document, chapter.table_rows, f"表 {index}-1 {chapter.title}")
+                shown_rows = chapter.table_rows
+                caption = f"表 {index}-1 {chapter.title}"
+                if chapter.chapter_id == "products" and len(shown_rows) > 8:
+                    shown_rows = shown_rows[:8]
+                    caption = f"表 {index}-1 重点产品（完整产品清单见附录 F）"
+                self._add_structured_table(document, shown_rows, caption)
             for figure_no, visual_id in enumerate(chapter.visual_ids, start=1):
                 result = render_results.get(visual_id)
                 spec = next((item for item in narrative.visuals if item.visual_id == visual_id), None)
@@ -365,6 +391,10 @@ class FrozenWordPublisher:
             document.add_heading(item.item, level=2)
             document.add_paragraph(item.why_it_matters)
             document.add_paragraph(f"建议材料：{'、'.join(item.requested_materials)}；获取时点：{item.timing}；是否阻断决策：{'是' if item.decision_blocker else '否'}")
+        document.add_heading("附录 E：生产基地清单", level=1)
+        self._add_structured_table(document, narrative.appendices.factory_ledger, "表 E-1 生产基地清单")
+        document.add_heading("附录 F：产品清单", level=1)
+        self._add_structured_table(document, narrative.appendices.product_ledger, "表 F-1 产品清单")
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         document.save(output_path)
@@ -405,11 +435,10 @@ class FrozenWordPublisher:
         for run in source.runs:
             run.font.size = Pt(9)
             run.font.color.rgb = RGBColor(74, 85, 104)
-        so_what = document.add_paragraph(f"So What：{spec.business_thesis}")
+        so_what = document.add_paragraph(spec.business_thesis)
         so_what.paragraph_format.first_line_indent = Pt(0)
         so_what.paragraph_format.space_after = Pt(10)
         for run in so_what.runs:
-            run.bold = True
             run.font.color.rgb = RGBColor(27, 54, 93)
 
     @staticmethod

@@ -329,6 +329,75 @@ class AdaptiveResearchRunner:
         else:
             diagnostics.append("no unresolved conflicts after R2; R3 triangulation round skipped")
 
+        # ---- R4 data-coverage retry (P0 third round) ------------------------
+        # Research value is judged by real data, not claim counts: a listed
+        # company needs multi-year financial series, segment revenue,
+        # market position and product parameters.  Missing high-value data
+        # triggers TARGETED retries (annual reports / exchange filings /
+        # official product pages) instead of being replaced with prose.
+        from enterprise_energy_research.research.data_coverage import ResearchDataCoverageValidator
+        coverage_validator = ResearchDataCoverageValidator()
+        has_stock_code = any(
+            claim.verification_status == VerificationStatus.VERIFIED and claim.field_name == "stock_code"
+            for claim in self.cumulative.claims
+        )
+        coverage_round = 0
+        while coverage_round < 2:
+            audit = coverage_validator.audit(
+                entity_name=raw_company_name,
+                claims=self.cumulative.claims,
+                products=self.cumulative.products,
+                factories=self.cumulative.factories,
+                images=self.cumulative.images,
+                complexity=complexity,
+                has_stock_code=has_stock_code,
+            )
+            retry_gaps = [gap for gap in audit.gaps if gap.searchable and gap.severity in {"high", "medium"}]
+            if not retry_gaps:
+                break
+            coverage_queries = planner.coverage_queries(raw_company_name, retry_gaps)[:6]
+            if not coverage_queries:
+                break
+            coverage_round += 1
+            snapshot_before = snapshot_now(f"R4-{coverage_round}-before")
+            envelopes, batches = execute_round(f"R4-{coverage_round}", coverage_queries, "coverage")
+            canonical_entity, gaps, conflicts, out_diags = self._process_round(
+                raw_company_name, batches, output_dir=output_dir, telemetry=telemetry, trace=trace,
+                canonical_entity=canonical_entity,
+            )
+            diagnostics.extend(out_diags)
+            pending_gaps, pending_conflicts = gaps, conflicts
+            snapshot_after = snapshot_now(f"R4-{coverage_round}-after")
+            delta = EvidenceDelta.compute(snapshot_before, snapshot_after)
+            deltas.append(delta)
+            rounds.append(RoundOutcome(
+                round=f"R4-{coverage_round}", trigger="coverage",
+                query_ids=[query.query_id for query in coverage_queries],
+                round_queries=[self._query_summary(query) for query in coverage_queries],
+                envelope_summaries=self._summarize(envelopes), batch_count=len(batches),
+                snapshot_before=snapshot_before.model_dump(mode="json"),
+                snapshot_after=snapshot_after.model_dump(mode="json"),
+                delta=delta.model_dump(mode="json"),
+                new_gap_ids=sorted(set(snapshot_after.gaps) - set(snapshot_before.gaps)),
+                new_conflict_ids=sorted(set(snapshot_after.conflicts) - set(snapshot_before.conflicts)),
+                diagnostics=list(out_diags),
+            ))
+        final_audit = coverage_validator.audit(
+            entity_name=raw_company_name,
+            claims=self.cumulative.claims,
+            products=self.cumulative.products,
+            factories=self.cumulative.factories,
+            images=self.cumulative.images,
+            complexity=complexity,
+            has_stock_code=has_stock_code,
+        )
+        audit_path = output_dir / "02_research_quality" / "data_coverage_audit.json"
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
+        audit_path.write_text(json.dumps(final_audit.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        remaining_high = [gap.gap_code for gap in final_audit.gaps if gap.severity == "high"]
+        if remaining_high:
+            diagnostics.append(f"missing_high_value_research_data: {', '.join(remaining_high)}")
+
         # ---- gates, synthesis, utilization, publication --------------------
         trace.stopping_stage()
         evidence = self.cumulative

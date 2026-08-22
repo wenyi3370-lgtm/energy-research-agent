@@ -371,11 +371,11 @@ class ResearchQuery(StrictModel):
     max_results: int = Field(default=5, ge=1, le=100)
     recursion_depth: int = Field(default=0, ge=0)
     requires_browser: bool = False
-    collection_round: Literal["R1", "R2", "R3"] = "R1"
+    collection_round: Literal["R1", "R2", "R3", "R4"] = "R1"
     round_goal: Literal["coverage", "depth", "triangulation"] = "coverage"
     high_priority: bool = True
     raw_capture_required: bool = True
-    trigger: Literal["baseline", "official_discovery", "catalog_enumeration", "gap", "conflict", "triangulation"] = "baseline"
+    trigger: Literal["baseline", "official_discovery", "catalog_enumeration", "gap", "conflict", "triangulation", "coverage"] = "baseline"
     target_gap_ids: list[str] = Field(default_factory=list)
     target_conflict_ids: list[str] = Field(default_factory=list)
     target_claim_ids: list[str] = Field(default_factory=list)
@@ -417,6 +417,10 @@ class ExtractedClaim(StrictModel):
     unit: str | None = None
     currency: str | None = None
     as_of_date: date | None = None
+    # Annual series fields (P0 third round): financial facts must carry the
+    # exact reporting period so trend analysis stays claim-bound and honest.
+    period_start: date | None = None
+    period_end: date | None = None
     scope: str | None = None
     qualifier: Literal["exact", "approximately", "at_least", "at_most", "range", "unknown"] = "unknown"
     locator: dict[str, Any] = Field(default_factory=dict)

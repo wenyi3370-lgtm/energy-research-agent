@@ -80,8 +80,9 @@ def visual_regression_verdicts() -> dict:
 
     from enterprise_energy_research.artifacts import html as html_module
     from enterprise_energy_research.artifacts.visual_policy import colors, word_policy
-    # P0 diagram-design baseline (was the Lieflat-era hash before the refactor).
-    frozen_css = "25da81c9742e16fc5567ab7a2bc4cf33334095be28ab0921d0ee890cb2ca7fb2"
+    # P0 third-round baseline: ENTERPRISE RESEARCH DASHBOARD hero (real KPI
+    # grid, judgement demoted to one module) instead of the decision hero.
+    frozen_css = "6c7716ab951c96d6b9326906613d7a3101f01fb217fc854e16f985117a3f3acd"
     css_ok = hashlib.sha256(html_module.CSS.encode("utf-8")).hexdigest() == frozen_css
     frozen_colors = {
         "black": "#1B1F26", "canvas": "#F7F8FA", "cobalt": "#2D5A8A",

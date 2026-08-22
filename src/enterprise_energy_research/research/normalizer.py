@@ -181,6 +181,8 @@ class EvidenceNormalizer:
                     unit=extracted.unit,
                     currency=extracted.currency,
                     as_of_date=extracted.as_of_date,
+                    period_start=extracted.period_start,
+                    period_end=extracted.period_end,
                     scope=extracted.scope,
                     qualifier=extracted.qualifier,
                     source_id=source_id,

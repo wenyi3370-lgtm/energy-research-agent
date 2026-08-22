@@ -172,6 +172,36 @@ class ResearchPlanner:
             ))
         return queries
 
+    def coverage_queries(self, canonical_name: str, gaps: list) -> list[ResearchQuery]:
+        """Generate R4 targeted searches for high-value DATA COVERAGE gaps.
+
+        Coverage gaps come from ResearchDataCoverageValidator (P0 third
+        round): e.g. a listed company with only one year of revenue needs
+        annual-report targeting, and a product-rich company with zero
+        product photos needs an image pass over official product pages.
+        """
+        queries: list[ResearchQuery] = []
+        for gap in gaps:
+            if not getattr(gap, "searchable", False):
+                continue
+            family = (
+                "image_evidence" if gap.gap_code == "coverage-product-images"
+                else self._family_for_field(gap.field_name)
+            )
+            queries.append(ResearchQuery(
+                query_id=new_sortable_id("QRY-COVERAGE"), entity_id="UNKNOWN", topic=family,
+                query=f'"{canonical_name}" {gap.retry_hint}',
+                purpose=f"R4 coverage retry for {gap.gap_code}: {gap.description}（现有：{gap.found}）",
+                preferred_source_levels=[SourceLevel.SOURCE_A, SourceLevel.SOURCE_B],
+                adapter_preference="kimi_webbridge" if family in BROWSER_DEPTH_TOPICS else "anysearch",
+                max_results=10, requires_browser=family in BROWSER_DEPTH_TOPICS,
+                collection_round="R4", round_goal="coverage", high_priority=gap.severity != "low",
+                trigger="coverage",
+                canonical_company_name=canonical_name,
+                expected_fields=list(contract_for(family).expected_fields),
+            ))
+        return queries
+
     @staticmethod
     def _family_for_field(field_name: str) -> str:
         normalized = field_name.lower()

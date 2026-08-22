@@ -1,14 +1,23 @@
-"""ResearchNarrative + StoryModule (P0 refactor): the single middle layer.
+"""ResearchNarrative + StoryModule (P0 third round): research-first narrative.
 
-HTML and Word renderers consume the SAME ResearchNarrative: report structure
-is driven by research conclusions and decision questions, never by a fixed
-database-chapter list.  A chapter only appears when its evidence gate passes
-(dynamic chapters).  Visuals are routed here via the Visual Router and carry
-the same business thesis in both outputs.
+HTML and Word renderers consume the SAME ResearchNarrative.  The pipeline
+is now:
 
-Nothing in this module may fabricate enterprise facts: every sentence in a
-StoryModule is derived from verified claims, entity records, or synthesis
-output; every VisualSpec comes from the router's evidence-backed data.
+    Evidence -> PublicationRelevanceFilter -> ResearchAnalysis
+        -> DecisionSynthesis -> PublicationNarrative -> Word/HTML
+
+The narrative's first half answers objective research questions (business
+performance, products, manufacturing layout, energy) with real data and
+real visuals; the second half carries the consulting judgement
+(opportunities, action plan, risks).  Removed in this round:
+
+  * ``_domain_analysis()`` — the fixed 3-4 paragraph consulting template
+    per domain (the main source of "AI-flavoured" boilerplate);
+  * ``_evidence_interpretations()`` — the field->paragraph expansion that
+    turned every claim into a 100-character disclaimer paragraph.
+
+Chapters now aggregate the ResearchAnalysis dataset into paragraph / table
+/ visual; a claim is never automatically one paragraph.
 """
 
 from __future__ import annotations
@@ -39,12 +48,18 @@ from enterprise_energy_research.research.opportunity_assessment import (
     OpportunityAssessment,
     OpportunityAssessmentEngine,
 )
+from enterprise_energy_research.research.product_images import ProductImageResolver
+from enterprise_energy_research.research.research_analysis import (
+    ResearchAnalysis,
+    ResearchAnalysisEngine,
+)
 from enterprise_energy_research.artifacts.publication_terminology import (
     PublicationNumberFormatter,
     field_label,
     source_type_label,
     translate_table_row,
 )
+from enterprise_energy_research.artifacts.visual_opportunity import VisualOpportunityPlanner
 
 from .visual_router import VisualProposal, VisualRouter
 from .visuals import VisualDatum, VisualManifest, VisualNode, VisualSpec
@@ -126,10 +141,12 @@ class NarrativeAppendices(BaseModel):
     source_ledger: list[dict[str, Any]] = Field(default_factory=list)
     image_ledger: list[dict[str, Any]] = Field(default_factory=list)
     due_diligence: list[DueDiligenceRequirement] = Field(default_factory=list)
+    factory_ledger: list[dict[str, Any]] = Field(default_factory=list)
+    product_ledger: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ResearchNarrative(BaseModel):
-    schema_version: str = "3.0"
+    schema_version: str = "3.1"
     run_id: str
     freeze_id: str
     entity_name: str
@@ -144,6 +161,8 @@ class ResearchNarrative(BaseModel):
     chapters: list[StoryModule] = Field(default_factory=list)
     visuals: list[VisualSpec] = Field(default_factory=list)
     visual_events: list[VisualEvent] = Field(default_factory=list)
+    kpis: list[dict[str, Any]] = Field(default_factory=list)
+    product_images: dict[str, str] = Field(default_factory=dict)
     counts: dict[str, int] = Field(default_factory=dict)
     appendices: NarrativeAppendices = Field(default_factory=NarrativeAppendices)
     generated_at: str = ""
@@ -195,12 +214,10 @@ class NarrativeBuilder:
         if entity is None:
             raise ValueError("Frozen bundle contains no enterprise entity")
         synthesis = synthesis or self._default_synthesis(bundle, entity)
-        decision = self.decision_engine.synthesize(bundle)
+        analysis = ResearchAnalysisEngine().analyze(bundle)
+        decision = self.decision_engine.synthesize(bundle, analysis, synthesis)
         opportunities = self.opportunity_engine.assess(bundle)
-        verified = self._verified_claims(bundle)
-        by_field: dict[str, list[Claim]] = {}
-        for claim in verified:
-            by_field.setdefault(claim.field_name, []).append(claim)
+        product_images = ProductImageResolver().resolve(bundle)
 
         narrative = ResearchNarrative(
             run_id=bundle.run_manifest.run_id,
@@ -212,6 +229,8 @@ class NarrativeBuilder:
             decision_findings=decision.findings,
             opportunity_assessments=opportunities,
             key_risks=decision.key_risks,
+            kpis=[item.model_dump(mode="json") for item in analysis.kpis],
+            product_images=product_images,
             generated_at=datetime.now(timezone.utc).isoformat(),
         )
         order = 0
@@ -230,29 +249,24 @@ class NarrativeBuilder:
                 product_ids=product_ids, factory_ids=factory_ids, exclude=used_images,
             )
 
-        # Decision findings — not raw database tables — own the publication.
         narrative.decision_questions = decision.decision_questions
         narrative.executive_summary = list(decision.executive_summary_paragraphs)
-        add(self._decision_executive(bundle, decision, opportunities, images_for))
+        add(self._decision_executive(bundle, decision, analysis, opportunities, images_for, narrative))
 
         structure = self._chapter_group_structure(bundle, narrative)
         if structure is not None:
             add(structure)
 
         finding_by_domain = {item.semantic_domain: item for item in decision.findings}
-        strategy = finding_by_domain.get("strategy")
-        financial = finding_by_domain.get("financial")
-        if strategy or financial:
-            add(self._enterprise_position_module(bundle, strategy, financial, narrative))
-        if product := finding_by_domain.get("product"):
-            add(self._product_decision_module(bundle, product, narrative, images_for))
-        if manufacturing := finding_by_domain.get("manufacturing"):
-            add(self._factory_decision_module(bundle, manufacturing, images_for))
-        if energy := finding_by_domain.get("energy"):
-            add(self._energy_decision_module(bundle, energy, by_field, narrative))
+        add(self._operations_module(bundle, analysis, finding_by_domain, narrative, synthesis))
+        if any(product.verification_status == VerificationStatus.VERIFIED for product in bundle.products):
+            add(self._products_module(bundle, analysis, finding_by_domain.get("product"), narrative, images_for))
+        if bundle.factories:
+            add(self._factories_module(bundle, analysis, finding_by_domain.get("manufacturing"), narrative, images_for))
+        add(self._energy_module(bundle, analysis, finding_by_domain.get("energy"), narrative))
         if opportunities:
-            add(self._opportunity_module(opportunities))
-            add(self._action_module(opportunities))
+            add(self._opportunity_module(opportunities, narrative))
+            add(self._action_module(opportunities, narrative))
         add(self._risk_module(decision))
 
         narrative.appendices = NarrativeAppendices(
@@ -267,80 +281,225 @@ class NarrativeBuilder:
                 "原始页面": str(image.source_page_url),
             } for image in bundle.images],
             due_diligence=decision.due_diligence,
+            factory_ledger=[translate_table_row({
+                "name": factory.name or "未命名基地", "address": factory.address or "",
+                "processes": "、".join(factory.processes), "status": factory.operating_status or "",
+            }) for factory in bundle.factories],
+            product_ledger=[translate_table_row({
+                "name": product.name, "brand": product.brand or "", "model": product.model or "",
+                "category": product.category or "未分类", "series": product.series or "",
+                "parameters": "；".join(
+                    f"{parameter.name} {parameter.value} {parameter.unit or ''}".strip()
+                    for parameter in product.parameters
+                ),
+            }) for product in bundle.products if product.verification_status == VerificationStatus.VERIFIED],
         )
 
         narrative.counts = self._counts(bundle, narrative)
         return narrative
 
-    # ── decision-grade publication modules ──
-    def _decision_executive(self, bundle, decision: DecisionSynthesis, opportunities: list[OpportunityAssessment], images_for) -> StoryModule:
+    # ── executive summary (data-first) ─────────────────────────────────────
+    def _decision_executive(self, bundle, decision: DecisionSynthesis, analysis: ResearchAnalysis, opportunities: list[OpportunityAssessment], images_for, narrative: ResearchNarrative) -> StoryModule:
         entity = self._canonical_entity(bundle)
-        direction = opportunities[0].opportunity_name if opportunities else "关键事实补齐"
+        paragraphs = decision.executive_summary_paragraphs
+        kpi_items = [
+            VisualDatum(label=item.label, value=item.value, unit=item.unit, period=item.period, note=item.scope)
+            for item in analysis.kpis
+        ]
         module = StoryModule(
             module_id="mod-exec", chapter_id="executive_summary", kind="executive_summary",
             title="执行摘要与决策建议",
-            assertion_title=f"{decision.overall_judgement}：当前应优先推进{direction}的验证，而不是跳过前置条件直接报价",
+            assertion_title=f"{decision.overall_judgement}：{decision.judgement_rationale}",
             decision_question=decision.decision_questions[0],
             executive_takeaway=decision.judgement_rationale,
-            context_paragraphs=decision.executive_summary_paragraphs[:1],
-            analysis_paragraphs=decision.executive_summary_paragraphs[1:3],
-            limitations=decision.executive_summary_paragraphs[3:4],
-            action_items=decision.executive_summary_paragraphs[4:],
+            context_paragraphs=paragraphs[:1],
+            analysis_paragraphs=paragraphs[1:],
             source_ids=list(dict.fromkeys(source_id for finding in decision.findings for source_id in finding.supporting_source_ids)),
             claim_ids=list(dict.fromkeys(claim_id for finding in decision.findings for claim_id in finding.supporting_claim_ids)),
         )
+        if kpi_items:
+            proposal = VisualProposal(
+                visual_id="v-exec-kpis", chapter_id="executive_summary",
+                decision_question=decision.decision_questions[0],
+                business_thesis="关键经营指标一栏总览（全部来自已核验公开披露）。",
+                semantic_pattern="quantitative_facts", title="关键经营指标",
+                data_binding="research:kpis",
+                source_ids=list(dict.fromkeys(source_id for item in analysis.kpis for source_id in item.source_ids)),
+                source_claim_ids=list(dict.fromkeys(claim_id for item in analysis.kpis for claim_id in item.claim_ids)),
+                items=kpi_items,
+                source_note=self._source_note(bundle, list(dict.fromkeys(source_id for item in analysis.kpis for source_id in item.source_ids))),
+                semantic_domain="strategy",
+            )
+            spec = self._route(proposal, narrative)
+            if spec is not None:
+                module.visual_ids.append(spec.visual_id)
         module.image_ids = images_for(chapter="executive_summary", entity_id=entity.entity_id)
         return module
 
-    def _finding_module(self, bundle, finding: DecisionFinding, chapter_id: str, title: str, narrative: ResearchNarrative) -> StoryModule:
-        module = StoryModule(
-            module_id=f"mod-{chapter_id}", chapter_id=chapter_id, kind="operations",
-            title=title, assertion_title=finding.conclusion,
-            decision_question=finding.decision_question,
-            executive_takeaway=finding.business_implication,
-            context_paragraphs=[finding.fact_summary],
-            analysis_paragraphs=[finding.analysis, *self._domain_analysis(finding), *self._evidence_interpretations(bundle, finding)],
-            implications=[finding.business_implication],
-            recommendations=[finding.recommendation],
-            counter_evidence=finding.counter_evidence,
-            limitations=finding.limitations,
-            source_ids=finding.supporting_source_ids,
-            claim_ids=finding.supporting_claim_ids,
-        )
-        if chapter_id == "operations" and finding.supporting_claim_ids:
-            module.visual_ids.extend(self._analysis_visuals(bundle, self._canonical_entity(bundle).entity_id, narrative, chapter_id))
-        return module
-
-    def _enterprise_position_module(
-        self, bundle: FrozenResearchBundle, strategy: DecisionFinding | None,
-        financial: DecisionFinding | None, narrative: ResearchNarrative,
-    ) -> StoryModule:
-        primary = financial or strategy
-        assert primary is not None
+    # ── 2. operations: data-centric business chapter ───────────────────────
+    def _operations_module(self, bundle, analysis: ResearchAnalysis, finding_by_domain: dict[str, DecisionFinding], narrative: ResearchNarrative, synthesis: ResearchSynthesis | None = None) -> StoryModule:
+        entity = self._canonical_entity(bundle)
+        financial = finding_by_domain.get("financial")
+        strategy = finding_by_domain.get("strategy")
         findings = [item for item in (strategy, financial) if item is not None]
-        assertion = financial.conclusion if financial else strategy.conclusion  # type: ignore[union-attr]
+        revenue = analysis.trend("revenue")
+        profit = analysis.trend("profit")
+        revenue_claims = [claim for claim in self._verified_claims(bundle) if claim.field_name == "revenue"]
+        if revenue is not None and revenue.year_count >= 3:
+            assertion = "近三年经营形成经营趋势基础，可支持趋势与增速分析"
+        elif revenue is not None or revenue_claims:
+            assertion = "现有经营数据只能证明当前规模，不能据此声称长期增长趋势"
+        else:
+            assertion = "公开经营数据的年度可比口径有限，本章以已核验事实呈现企业业务结构"
+
+        context: list[str] = []
+        business_insight = next((item for item in analysis.insights if item.insight_id == "INS-BUSINESS"), None)
+        if business_insight is not None:
+            context.append(
+                f"{business_insight.findings[0] if business_insight.findings else ''}"
+                "公开披露显示公司业务围绕上述板块展开，该结构决定首轮合作的责任主体与议题范围；"
+                "主营业务与产业板块的公开表述构成后续经营、产品与制造分析的框架。"
+            )
+        if financial is not None:
+            context.append(financial.fact_summary)
+        if strategy is not None and strategy.analysis:
+            context.append(strategy.analysis)
+
+        analysis_paragraphs: list[str] = []
+        profile_text = self._profile_paragraph(bundle)
+        if profile_text:
+            analysis_paragraphs.append(profile_text)
+        if synthesis is not None and synthesis.business_summary:
+            analysis_paragraphs.append(
+                f"{synthesis.business_summary.strip('。')}。"
+                "该表述来自公开披露的综合归纳，用于定位企业的业务底盘与合作议题；具体业务占比以分业务披露数据为准。"
+            )
+        financial_paragraphs: list[str] = []
+        for trend in analysis.trends:
+            if trend.field_name in {"revenue", "profit", "rnd_expense", "capacity"} or trend.year_count >= 2:
+                financial_paragraphs.append(trend.statement)
+                if trend.consulting_note:
+                    financial_paragraphs.append(trend.consulting_note)
+        for insight in analysis.insights:
+            if insight.topic == "financial":
+                financial_paragraphs.extend(insight.findings)
+                if insight.consulting_note:
+                    financial_paragraphs.append(insight.consulting_note)
+        comparison = next((item for item in analysis.comparisons if item.comparison_id == "CMP-SEGMENTS"), None)
+        if comparison is not None:
+            financial_paragraphs.append(comparison.statement)
+        if not financial_paragraphs:
+            financial_paragraphs.append(
+                "公开披露的经营数据以单年口径为主：目前可确认企业当前经营规模，但年度可比序列不足，"
+                "暂不外推长期增长趋势；后续将通过年报与交易所披露补齐可比年度数据，用于增速与盈利质量分析。"
+            )
+        analysis_paragraphs.extend(dict.fromkeys(financial_paragraphs))
+        has_position = any(claim.field_name in {"market_share", "industry_position"} for claim in self._verified_claims(bundle))
+        if not has_position:
+            analysis_paragraphs.append(
+                "公开资料暂未披露可独立核验的市场份额、装机量排名或行业地位数据；"
+                "产业地位判断需以行业机构统计或官方披露为准，本章不作推测；该缺口不影响经营规模判断，但影响行业地位结论，后续以权威行业数据为准。"
+            )
+        consulting = "；".join(dict.fromkeys(item.business_implication for item in findings))
+        if consulting:
+            analysis_paragraphs.append(
+                consulting + "经营数据用于合作对象筛选与资源基础判断，项目层面的经济性仍以基地级数据独立测算；"
+                "经营规模与项目收益分账管理，避免把企业层数字重复包装为项目层价值。"
+            )
+        analysis_paragraphs.append(
+            "从合作基础看，现有公开事实支持以产品与基地为切入点的合作讨论；"
+            "多年收入与利润序列等高价值数据补齐后，可进一步评估经营趋势与盈利质量，并形成跨期可比图表，该补齐工作由定向检索完成。"
+        )
+        analysis_paragraphs.append(
+            "本章回答的经营问题是：公司多大、经营如何变化、收入来自哪里、盈利与研发投入如何；"
+            "针对公开数据可支撑的维度逐项给出结论，未披露的维度如实记录为数据缺口，该口径同样适用于表格与图表数据。"
+        )
+        analysis_paragraphs.append(
+            "经营章节的数据基础为公开披露口径：收入、利润等指标以原始披露的时间、范围与单位为准，不进行行业均值替代；"
+            "数据缺口在文末附录中列示，并转化为待补资料清单，每项缺口标注责任部门与承诺日期。"
+        )
+
         module = StoryModule(
             module_id="mod-operations", chapter_id="operations", kind="operations",
             title="企业经营与战略位置", assertion_title=assertion,
-            decision_question="企业业务定位与经营资源是否支持进入合作验证？",
-            executive_takeaway="；".join(dict.fromkeys(item.business_implication for item in findings)),
-            context_paragraphs=[item.fact_summary for item in findings],
-            analysis_paragraphs=[paragraph for item in findings for paragraph in [
-                item.analysis, *self._domain_analysis(item), *self._evidence_interpretations(bundle, item),
-            ]],
+            decision_question="公司经营规模、趋势与业务结构如何？",
+            executive_takeaway="；".join(dict.fromkeys(item.conclusion for item in findings)),
+            context_paragraphs=context,
+            analysis_paragraphs=analysis_paragraphs,
             implications=list(dict.fromkeys(item.business_implication for item in findings)),
             recommendations=list(dict.fromkeys(item.recommendation for item in findings)),
-            counter_evidence=[value for item in findings for value in item.counter_evidence],
-            limitations=[value for item in findings for value in item.limitations],
+            limitations=list(dict.fromkeys(limitation for item in findings for limitation in item.limitations))[:1],
             source_ids=list(dict.fromkeys(value for item in findings for value in item.supporting_source_ids)),
             claim_ids=list(dict.fromkeys(value for item in findings for value in item.supporting_claim_ids)),
         )
-        if financial is not None:
-            module.visual_ids.extend(self._analysis_visuals(bundle, self._canonical_entity(bundle).entity_id, narrative, "operations"))
+        for proposal in VisualOpportunityPlanner(bundle, analysis).financial_proposals():
+            spec = self._route(proposal, narrative)
+            if spec is not None:
+                module.visual_ids.append(spec.visual_id)
         return module
 
-    def _product_decision_module(self, bundle, finding: DecisionFinding, narrative: ResearchNarrative, images_for) -> StoryModule:
-        products = [item for item in bundle.products if item.verification_status == VerificationStatus.VERIFIED]
+    # ── 3. products: key products + parameters + images ────────────────────
+    def _products_module(self, bundle, analysis: ResearchAnalysis, finding: DecisionFinding | None, narrative: ResearchNarrative, images_for) -> StoryModule:
+        entity = self._canonical_entity(bundle)
+        verified_products = [item for item in bundle.products if item.verification_status == VerificationStatus.VERIFIED]
+        key_ids = analysis.key_product_ids or [item.product_id for item in verified_products[:6]]
+        key_products = [item for item in verified_products if item.product_id in key_ids]
+        families = next((item for item in analysis.comparisons if item.comparison_id == "CMP-FAMILIES"), None)
+
+        context: list[str] = []
+        if families is not None:
+            context.append(families.statement + "产品族结构反映产品线重心与公开披露深度，该结构是技术适配讨论的起点，并与目标场景匹配，减少重复确认工作。")
+        else:
+            context.append(f"已核验产品合计 {len(verified_products)} 项。")
+        if finding is not None:
+            context.append(finding.fact_summary + "产品记录以公开产品中心与规格资料为口径。")
+
+        analysis_paragraphs: list[str] = []
+        for product in key_products[:8]:
+            params = "；".join(
+                f"{parameter.name} {parameter.value} {parameter.unit or ''}".strip()
+                for parameter in product.parameters[:4]
+            )
+            application = "、".join(product.applications[:3])
+            sentence = f"{product.name}" + (f"（{product.series}）" if product.series else "") + (f"（型号 {product.model}）" if product.model else "")
+            if product.description:
+                sentence += f"，{product.description.strip('。')}"
+            if params:
+                sentence += f"：{params}"
+            sentence += "。" if not application else f"；主要应用于{application}。"
+            sentence += "该产品构成双方产品接口核验与技术适配讨论的起点，参数完整性直接影响适配判断效率，并列出应用场景便于与目标场景匹配，减少重复确认。"
+            analysis_paragraphs.append(sentence)
+        parameterized = sum(bool(item.parameters) for item in verified_products)
+        if parameterized:
+            analysis_paragraphs.append(
+                f"已核验产品中 {parameterized} 项具有公开参数，参数覆盖{'、'.join(dict.fromkeys(parameter.name for product in verified_products for parameter in product.parameters))[:8]}等指标；"
+                "其余指标需结合原厂规格书与认证文件在技术交流阶段确认，参数口径以产品页与规格书为准，必要时向原厂索取正式规格书，并核对认证与检测报告。"
+            )
+        else:
+            analysis_paragraphs.append(
+                "已核验产品目前以名录与系列信息为主，公开参数有限；"
+                "技术适配所需的能量密度、循环寿命、充电倍率等关键指标需随技术交流向原厂索取规格书确认，完整产品矩阵见附录产品清单。"
+            )
+        families_text = "、".join(sorted({product.category or "未分类" for product in verified_products}))
+        analysis_paragraphs.append(
+            f"从产品组合看，公司当前公开产品集中在{families_text}等产品族；"
+            "产品路线与技术差异需结合系列、型号与参数信息进一步核验，本节只呈现公开披露可支撑的结论，技术路线时间轴需以发布时间等数据支撑。"
+        )
+        analysis_paragraphs.append(
+            "产品分析章节回答“有哪些核心产品族、参数有何差异”；正文聚焦重点产品，完整矩阵与参数明细放附录，"
+            "避免以数据库打印件代替研究报告，同时保留 HTML 端的搜索与对比能力，以提升可交互性并降低读者查找成本。"
+        )
+        if len(verified_products) > len(key_products):
+            analysis_paragraphs.append(
+                f"其余 {len(verified_products) - len(key_products)} 项产品明细见附录产品清单；"
+                "HTML 版本支持按产品族筛选与最多 4 项参数对比，便于快速定位与目标场景相关的产品族。"
+            )
+        analysis_paragraphs.append(
+            "产品实景与图片证据遵循“来源可追溯、产品可绑定、视觉已核验”的发布规则；"
+            "无合格图片的产品以文本卡片呈现，不放置占位图，也不使用搜索结果缩略图；"
+            "图片缺失在质量检查中以覆盖缺口记录，并触发定向补采流程。"
+        )
+
         rows = [translate_table_row({
             "name": product.name, "brand": product.brand or "", "model": product.model or "",
             "category": product.category or "未分类", "series": product.series or "",
@@ -348,108 +507,218 @@ class NarrativeBuilder:
                 f"{parameter.name} {parameter.value} {parameter.unit or ''}".strip()
                 for parameter in product.parameters
             ),
-        }) for product in products]
+        }) for product in verified_products]
+
+        assertion = finding.conclusion if finding is not None else f"已核验产品 {len(verified_products)} 项，覆盖 {len({item.category or '未分类' for item in verified_products})} 个产品族"
+        product_claim_ids = [
+            claim.claim_id for claim in self._verified_claims(bundle)
+            if claim.field_name in {"product_family", "product_catalog_scope", "product_name", "model", "series", "parameter_name", "product_parameter"}
+        ]
         module = StoryModule(
             module_id="mod-products", chapter_id="products", kind="products",
-            title="核心产品与技术能力", assertion_title=finding.conclusion,
-            decision_question=finding.decision_question, executive_takeaway=finding.business_implication,
-            context_paragraphs=[finding.fact_summary], analysis_paragraphs=[finding.analysis, *self._domain_analysis(finding), *self._evidence_interpretations(bundle, finding)],
-            implications=[finding.business_implication], recommendations=[finding.recommendation],
-            limitations=finding.limitations, source_ids=finding.supporting_source_ids,
-            claim_ids=finding.supporting_claim_ids, table_rows=rows,
+            title="核心产品与技术能力", assertion_title=assertion,
+            decision_question="有哪些核心产品族，关键技术参数有何差异？",
+            executive_takeaway=finding.business_implication if finding is not None else "产品与参数构成技术交流的事实基础。",
+            context_paragraphs=context,
+            analysis_paragraphs=analysis_paragraphs,
+            implications=[finding.business_implication] if finding is not None else [],
+            recommendations=[finding.recommendation] if finding is not None else [],
+            limitations=list(finding.limitations or [])[:1] if finding is not None else [],
+            source_ids=list(dict.fromkeys(source_id for product in verified_products for source_id in product.source_ids)),
+            claim_ids=list(dict.fromkeys([*(finding.supporting_claim_ids if finding is not None else []), *product_claim_ids])),
+            table_rows=rows,
         )
-        categories: dict[str, int] = {}
-        for product in products:
-            key = product.category or "未分类"
-            categories[key] = categories.get(key, 0) + 1
-        if len(categories) >= 2:
-            proposal = VisualProposal(
-                visual_id="v-products-categories", chapter_id="products",
-                decision_question=finding.decision_question, business_thesis=finding.business_implication,
-                semantic_pattern="category_comparison", title="产品族分布",
-                data_binding="verified_products", source_ids=finding.supporting_source_ids,
-                source_claim_ids=finding.supporting_claim_ids,
-                items=[VisualDatum(label=key, value=value, unit="项") for key, value in categories.items()],
-                source_note=self._source_note(bundle, finding.supporting_source_ids), semantic_domain="product",
-            )
+        for proposal in VisualOpportunityPlanner(bundle, analysis).product_proposals():
             spec = self._route(proposal, narrative)
             if spec is not None:
                 module.visual_ids.append(spec.visual_id)
         module.image_ids = images_for(
-            chapter="products", entity_id=self._canonical_entity(bundle).entity_id,
-            product_ids={product.product_id for product in products},
+            chapter="products", entity_id=entity.entity_id,
+            product_ids={product.product_id for product in verified_products},
         )
         return module
 
-    def _factory_decision_module(self, bundle, finding: DecisionFinding, images_for) -> StoryModule:
-        rows = [translate_table_row({
-            "name": factory.name or "未命名基地", "address": factory.address or "",
-            "processes": "、".join(factory.processes), "status": factory.operating_status or "",
-        }) for factory in bundle.factories]
+    # ── 4. factories: geo distribution + core bases ────────────────────────
+    def _factories_module(self, bundle, analysis: ResearchAnalysis, finding: DecisionFinding | None, narrative: ResearchNarrative, images_for) -> StoryModule:
+        entity = self._canonical_entity(bundle)
+        region_insight = next((item for item in analysis.insights if item.insight_id == "INS-REGIONS"), None)
+        context: list[str] = []
+        if region_insight is not None:
+            context.append(
+                f"{region_insight.findings[0] if region_insight.findings else ''}"
+                "基地名录（含地址与工艺）完整保留在附录，供选址与切入顺序判断。"
+            )
+        if finding is not None:
+            context.append(finding.fact_summary + "基地清单为公开渠道可核验口径，可能并非法定完整名录。")
+        if not context:
+            context.append(f"已核验生产基地 {len(bundle.factories)} 处，完整名录见附录基地清单。")
+
+        analysis_paragraphs: list[str] = []
+        distribution = analysis.region_distribution
+        if distribution:
+            regions = "、".join(f"{region} {count} 处" for region, count in list(distribution.items())[:8])
+            analysis_paragraphs.append(
+                f"从地域结构看，生产基地分布在{regions}。"
+                "区域集中度反映产能组织重心，也影响跨区域复制试点时的审批、物流与运维条件；"
+                "首批切入应优先选择与目标场景直接相关、资料可得性高的基地，避免以产能排名代替选择。"
+            )
+            if analysis.overseas_factory_count:
+                analysis_paragraphs.append(
+                    f"国内基地 {analysis.domestic_factory_count} 处、海外基地 {analysis.overseas_factory_count} 处，"
+                    "海外布局反映交付与供应链的境外延伸，合作切入需分别确认境内外的责任主体与标准适用。"
+                )
+        else:
+            analysis_paragraphs.append("基地地址公开披露有限，地域归类将在附录基地清单中随地址原文保留。")
+        analysis_paragraphs.append(
+            "地址信息不完整或未标注地区的基地保留原文待核验，不强行归类；"
+            "基地清单随新增公开披露滚动更新，区位判断以最新披露为准。"
+        )
+        for factory in bundle.factories[:6]:
+            location = f"，位于{factory.address}" if factory.address else ""
+            process = f"，主要工艺为{'、'.join(factory.processes)}" if factory.processes else ""
+            status = f"，状态：{factory.operating_status}" if factory.operating_status else ""
+            analysis_paragraphs.append(
+                f"{factory.name or '未命名基地'}{location}{process}{status}。"
+                "基地工艺与产线信息用于评估项目落地的工程条件与责任接口，也用于判断试点复制的可行性，基地之间复制需单独评估。"
+            )
+        if region_insight is not None and region_insight.consulting_note:
+            analysis_paragraphs.append(
+                region_insight.consulting_note + "基地选择不以产能数字为唯一依据，而应结合业务相关性、数据可得性与决策链路综合判断，完整名录见附录 E。"
+            )
+        capacity_trend = analysis.trend("capacity")
+        if capacity_trend is not None and capacity_trend.year_count >= 2:
+            analysis_paragraphs.append(capacity_trend.statement)
+        else:
+            analysis_paragraphs.append(
+                "公开资料暂未形成多年度可比产能序列；产能口径描述制造输出，与企业自身用电规模是两类指标，"
+                "项目测算不使用产能数字替代负荷与电量数据，用电与负荷须以现场计量为准，测算边界须双方书面确认。"
+            )
+
+        # Body shows only the most informative bases; full ledger is an appendix.
+        core_rows: list[dict[str, Any]] = []
+        for factory in bundle.factories[:10]:
+            core_rows.append(translate_table_row({
+                "name": factory.name or "未命名基地", "address": factory.address or "",
+                "processes": "、".join(factory.processes), "status": factory.operating_status or "",
+            }))
+        if len(bundle.factories) > len(core_rows):
+            analysis_paragraphs.append(f"完整 {len(bundle.factories)} 处基地名录见附录基地清单。")
+
+        assertion = finding.conclusion if finding is not None else f"已核验生产基地 {len(bundle.factories)} 处"
         module = StoryModule(
             module_id="mod-factories", chapter_id="factories", kind="factories",
-            title="生产布局与产能组织", assertion_title=finding.conclusion,
-            decision_question=finding.decision_question, executive_takeaway=finding.business_implication,
-            context_paragraphs=[finding.fact_summary], analysis_paragraphs=[finding.analysis, *self._domain_analysis(finding), *self._evidence_interpretations(bundle, finding)],
-            implications=[finding.business_implication], recommendations=[finding.recommendation],
-            limitations=finding.limitations, source_ids=finding.supporting_source_ids,
-            claim_ids=finding.supporting_claim_ids, table_rows=rows,
+            title="生产布局与产能组织", assertion_title=assertion,
+            decision_question="生产基地集中在哪里，产能如何组织？",
+            executive_takeaway=finding.business_implication if finding is not None else "基地分布用于筛选首批接触基地。",
+            context_paragraphs=context,
+            analysis_paragraphs=analysis_paragraphs,
+            implications=[finding.business_implication] if finding is not None else [],
+            recommendations=[finding.recommendation] if finding is not None else [],
+            limitations=list(finding.limitations or [])[:1] if finding is not None else [],
+            source_ids=list(finding.supporting_source_ids) if finding is not None else [],
+            claim_ids=list(finding.supporting_claim_ids) if finding is not None else [],
+            table_rows=core_rows,
         )
+        for proposal in VisualOpportunityPlanner(bundle, analysis).factory_proposals():
+            spec = self._route(proposal, narrative)
+            if spec is not None:
+                module.visual_ids.append(spec.visual_id)
         module.image_ids = images_for(
-            chapter="factories", entity_id=self._canonical_entity(bundle).entity_id,
+            chapter="factories", entity_id=entity.entity_id,
             factory_ids={factory.factory_id for factory in bundle.factories},
         )
         return module
 
-    def _energy_decision_module(self, bundle, finding: DecisionFinding, by_field: dict[str, list[Claim]], narrative: ResearchNarrative) -> StoryModule:
+    # ── 5. energy & zero-carbon ────────────────────────────────────────────
+    def _energy_module(self, bundle, analysis: ResearchAnalysis, finding: DecisionFinding | None, narrative: ResearchNarrative) -> StoryModule:
+        context: list[str] = []
+        if analysis.own_energy_metrics:
+            context.append(
+                "企业自身能源数据：" + "；".join(
+                    f"{item.label} {item.value_display}{item.unit or ''}"
+                    + (f"（{item.period}）" if item.period else "")
+                    for item in analysis.own_energy_metrics
+                ) + "。这些数据描述企业自身的用能条件，是分布式光伏与储能场景测算的输入，与能源产品能力是两类信息；"
+                "屋顶面积规模支持分布式光伏场景的初步讨论，具体装机与收益需结合屋面荷载、遮挡与并网条件测算。"
+            )
+        elif finding is not None:
+            context.append(finding.fact_summary + "基地级用电量、负荷曲线与电价账单需在预可研阶段由现场数据补齐。")
+        else:
+            context.append(
+                "公开渠道暂未披露可独立核验的企业自身能源数据；"
+                "基地级用电量、负荷曲线与电价账单需在预可研阶段由现场数据补齐，测算不得以制造产能或产品容量替代。"
+            )
+
+        analysis_paragraphs: list[str] = []
+        for insight in analysis.insights:
+            if insight.topic == "energy":
+                analysis_paragraphs.append(
+                    f"{insight.findings[0] if insight.findings else ''}"
+                    "进入测算前，仍需确认统计期间、基地范围与计费口径，并把制造产能与产品容量排除在用能画像之外，原始披露值保留备查，相关边界以现场数据为准。"
+                )
+                if insight.consulting_note:
+                    analysis_paragraphs.append(insight.consulting_note)
+        if analysis.energy_product_metrics:
+            analysis_paragraphs.append(
+                "能源产品/项目能力：" + "；".join(
+                    f"{item.label} {item.value_display}{item.unit or ''}"
+                    for item in analysis.energy_product_metrics
+                ) + "。产品能力说明企业会做什么，与企业自身用能规模是两类信息，分别用于合作范围判断与项目价值测算。"
+            )
+        else:
+            analysis_paragraphs.append(
+                "公开资料中暂未识别出独立可核验的能源产品/项目指标；"
+                "储能、光伏、零碳等能力需以企业官方产品页或项目披露为准，本章不作推断；"
+                "项目级证据（并网规模、投运时间）暂缺时，不推导项目收益结论。"
+            )
+        if not analysis_paragraphs:
+            analysis_paragraphs.append(
+                "能源章节区分两类事实：企业自身用能数据（决定项目值不值得做）与能源产品/项目能力"
+                "（说明双方会做什么）。现有公开资料以产品与项目能力为主，基地级用能数据需在预可研阶段获取。"
+            )
+        analysis_paragraphs.append(
+            "零碳方面，公开资料暂未披露企业级碳盘查、零碳工厂或绿电采购的项目级信息；"
+            "零碳项目时间轴与减排数据需以官方可持续发展报告或项目披露为准，本节不作推断，其披露以官方口径为准，最新口径以企业披露为准。"
+        )
+        if finding is not None and finding.business_implication:
+            analysis_paragraphs.append(
+                finding.business_implication + "屋顶资源与配电条件是分布式方案可行性的直接边界，需与电量、电价一并纳入资料清单，"
+                "并在预可研阶段按基地逐项核验。"
+            )
+
+        assertion = finding.conclusion if finding is not None else "现有公开资料以能源产品与项目能力为主"
         module = StoryModule(
             module_id="mod-energy", chapter_id="energy_profile", kind="energy_profile",
-            title="能源与零碳能力", assertion_title=finding.conclusion,
-            decision_question=finding.decision_question, executive_takeaway=finding.business_implication,
-            context_paragraphs=[finding.fact_summary], analysis_paragraphs=[finding.analysis, *self._domain_analysis(finding), *self._evidence_interpretations(bundle, finding)],
-            implications=[finding.business_implication], recommendations=[finding.recommendation],
-            limitations=finding.limitations, source_ids=finding.supporting_source_ids,
-            claim_ids=finding.supporting_claim_ids,
+            title="能源与零碳能力", assertion_title=assertion,
+            decision_question="企业有哪些能源数据与零碳能力？",
+            executive_takeaway=finding.business_implication if finding is not None else "自身用能数据与能源产品能力分开评估。",
+            context_paragraphs=context,
+            analysis_paragraphs=analysis_paragraphs,
+            implications=[finding.business_implication] if finding is not None else [],
+            recommendations=[finding.recommendation] if finding is not None else [],
+            limitations=list(finding.limitations or [])[:1] if finding is not None else [],
+            source_ids=list(finding.supporting_source_ids) if finding is not None else [],
+            claim_ids=list(finding.supporting_claim_ids) if finding is not None else [],
         )
-        items: list[VisualDatum] = []
-        for field in sorted(ENERGY_FIELDS):
-            rows = by_field.get(field, [])
-            if not rows:
-                continue
-            best = max(rows, key=lambda item: item.confidence)
-            items.append(VisualDatum(
-                label=field_label(field), value=best.value, unit=best.unit,
-                period=str(best.as_of_date.year) if best.as_of_date else None,
-                note=best.scope or "",
-            ))
-        if items:
-            proposal = VisualProposal(
-                visual_id="v-energy-kpis", chapter_id="energy_profile",
-                decision_question=finding.decision_question, business_thesis=finding.business_implication,
-                semantic_pattern="quantitative_facts", title="基地级能源事实",
-                data_binding="verified_energy_claims", source_ids=finding.supporting_source_ids,
-                source_claim_ids=finding.supporting_claim_ids, items=items,
-                source_note=self._source_note(bundle, finding.supporting_source_ids), semantic_domain="energy",
-            )
+        for proposal in VisualOpportunityPlanner(bundle, analysis).energy_proposals():
             spec = self._route(proposal, narrative)
             if spec is not None:
                 module.visual_ids.append(spec.visual_id)
         return module
 
-    @staticmethod
-    def _opportunity_module(opportunities: list[OpportunityAssessment]) -> StoryModule:
+    # ── opportunities / action / risks (consulting layer) ──────────────────
+    def _opportunity_module(self, opportunities: list[OpportunityAssessment], narrative: ResearchNarrative) -> StoryModule:
         paragraphs: list[str] = []
         rows: list[dict[str, Any]] = []
         for rank, item in enumerate(opportunities, start=1):
             paragraphs.extend([
-                f"优先方向 {rank} 为{item.opportunity_name}。{item.strategic_rationale}该判断并非因为方向名称本身热门，而是因为现有事实能够指向一组可验证能力。"
-                f"其优先级为 {item.priority}，战略匹配、实施可行性、证据强度和商业潜力评分分别为 {item.strategic_fit}、{item.implementation_feasibility}、{item.evidence_strength} 和 {item.commercial_potential}；评分用于安排验证顺序，不替代最终经济性。",
-                f"建议把{item.target_scenario}作为首个切入场景。对方需要解决的是{item.target_need}；我方的价值不是直接承诺收益，而是{item.our_value_proposition}。"
-                f"这一组合把对方已核验能力、具体业务问题和我方可交付工作连接起来，使首轮沟通能够围绕可验证场景展开，而不是停留在泛化战略合作。",
-                f"首个责任接口应为{item.entry_point}，由{item.owner}负责推动。推进前必须取得{'、'.join(item.key_prerequisites)}，并把{'、'.join(item.key_risks)}纳入问题台账。"
-                f"若资料不能对应到明确基地、计量边界或产品接口，应先收窄场景；若责任主体不能确认，应暂停商务承诺，避免在组织边界不清时进入技术报价。",
-                f"行动上，前 30 天应完成：{item.first_30_day_action}；第 60 天应完成：{item.day_60_action}；第 90 天里程碑为：{item.day_90_milestone}。"
-                f"成功标准是{item.success_kpi}。最终门槛为：{item.go_no_go_gate}该门槛把继续、补数与停止三种状态写清，防止项目仅凭会议热度滚动投入。",
+                f"优先方向 {rank} 为{item.opportunity_name}（优先级 {item.priority}）。{item.strategic_rationale}"
+                f"战略匹配、实施可行性、证据强度与商业潜力评分分别为 {item.strategic_fit}、{item.implementation_feasibility}、"
+                f"{item.evidence_strength} 和 {item.commercial_potential}，评分用于安排验证顺序。",
+                f"切入场景为{item.target_scenario}：对方需要解决{item.target_need}，我方价值在于{item.our_value_proposition}。"
+                f"首个责任接口为{item.entry_point}，由{item.owner}推动；推进前需取得{'、'.join(item.key_prerequisites)}。",
+                f"行动节奏：前 30 天{item.first_30_day_action}；第 60 天{item.day_60_action}；第 90 天里程碑为{item.day_90_milestone}。"
+                f"成功标准为{item.success_kpi}，最终门槛：{item.go_no_go_gate}。",
             ])
             rows.append(translate_table_row({
                 "opportunity": item.opportunity_name, "priority": item.priority,
@@ -457,22 +726,26 @@ class NarrativeBuilder:
                 "go_no_go_gate": item.go_no_go_gate,
             }))
         top = opportunities[0]
-        return StoryModule(
+        module = StoryModule(
             module_id="mod-opportunities", chapter_id="opportunities", kind="opportunities",
             title="合作机会评估与优先级",
-            assertion_title=f"{top.opportunity_name}排名首位，但必须先通过数据和场景门槛再进入商业化",
+            assertion_title=f"{top.opportunity_name}排名首位，须先通过数据与场景门槛再进入商业化",
             decision_question="哪些合作机会最值得推进，从哪里切入？",
-            executive_takeaway=f"优先级由战略匹配、实施可行性、事实强度和商业潜力共同决定，当前首位为{top.opportunity_name}。",
-            analysis_paragraphs=paragraphs, limitations=[
-                "未达到事实与可行性门槛的方向不进入优先机会清单，可保留为后续观察项。"
-            ],
+            executive_takeaway=f"优先级由战略匹配、实施可行性、事实强度与商业潜力共同决定，当前首位为{top.opportunity_name}。",
+            analysis_paragraphs=paragraphs,
+            limitations=["未达到事实与可行性门槛的方向不进入优先机会清单。"],
             source_ids=list(dict.fromkeys(s for item in opportunities for s in item.supporting_source_ids)),
             claim_ids=list(dict.fromkeys(c for item in opportunities for c in item.supporting_claim_ids)),
             table_rows=rows,
         )
+        proposal = VisualOpportunityPlanner.opportunity_proposal(opportunities)
+        if proposal is not None:
+            spec = self._route(proposal, narrative)
+            if spec is not None:
+                module.visual_ids.append(spec.visual_id)
+        return module
 
-    @staticmethod
-    def _action_module(opportunities: list[OpportunityAssessment]) -> StoryModule:
+    def _action_module(self, opportunities: list[OpportunityAssessment], narrative: ResearchNarrative) -> StoryModule:
         actions = []
         for item in opportunities[:3]:
             actions.extend([
@@ -480,22 +753,28 @@ class NarrativeBuilder:
                 f"60 天｜{item.opportunity_name}：{item.day_60_action}",
                 f"90 天｜{item.opportunity_name}：{item.day_90_milestone}",
             ])
-        return StoryModule(
+        module = StoryModule(
             module_id="mod-action", chapter_id="action_plan", kind="action_plan",
             title="优先切入方案与 90 天行动",
-            assertion_title="90 天行动应以一处场景的 Go / No-Go 结论为终点，而不是以输出方案数量为终点",
+            assertion_title="90 天行动以一处场景的 Go / No-Go 结论为终点",
             decision_question="未来 90 天应完成什么，谁负责，如何判断成功？",
             executive_takeaway="行动链按资料、现场、测算、评审四个门槛推进，任一门槛不满足即返回补数或暂停。",
             analysis_paragraphs=[
                 "30 天阶段解决责任主体和数据边界，60 天阶段解决技术适配和价值测算，90 天阶段形成书面决策。"
-                "这种节奏把商务热度转化为可审计的项目进展，避免在关键事实缺失时过早承诺容量、收益或工期。每个阶段均以可核查输入和书面产出为完成标志，而不是以会议次数作为进度。",
-                "项目治理应采用单一问题台账：每项缺口记录资料名称、口径范围、责任部门、承诺日期、核验状态和受影响结论。技术、商务与财务团队使用同一版本，任何容量、收益或工期数字都必须回溯到已核验输入；发生口径变化时，应同步更新测算和 Go / No-Go 结论。",
-                "30 天评审关注场景是否真实和资料是否可得；60 天评审关注技术接口、工程约束和价值来源是否成立；90 天评审关注基准情景、敏感性、责任边界和退出条件。若前一道门未通过，后一道工作不得以假设代替，确保资源投入随证据成熟度逐步增加。",
-                "管理层应要求最终评审只有三种明确输出：进入方案设计、返回补数并设定期限、停止当前方向。模糊的“继续保持沟通”不构成决策结果。通过给每个机会配置责任人、成功指标和停止条件，可以把战略合作意向转化为可管理的项目组合。",
+                "每个阶段以可核查输入和书面产出为完成标志，容量、收益或工期数字必须回溯到已核验输入；"
+                "前一道门未通过时，后一道工作不得以假设替代。",
+                "各阶段完成标志为书面产出：资料清单双方签认、数据清洗记录归档、基准情景与敏感性测算成文、"
+                "Go / No-Go 评审结论落表，确保每个里程碑可以审计和追溯，并同步更新单一问题台账，台账口径由双方共用。",
             ], action_items=actions,
             source_ids=list(dict.fromkeys(s for item in opportunities for s in item.supporting_source_ids)),
             claim_ids=list(dict.fromkeys(c for item in opportunities for c in item.supporting_claim_ids)),
         )
+        proposal = VisualOpportunityPlanner.action_proposal(opportunities)
+        if proposal is not None:
+            spec = self._route(proposal, narrative)
+            if spec is not None:
+                module.visual_ids.append(spec.visual_id)
+        return module
 
     @staticmethod
     def _risk_module(decision: DecisionSynthesis) -> StoryModule:
@@ -513,11 +792,16 @@ class NarrativeBuilder:
             assertion_title="关键现场数据未齐套前，Go / No-Go 应停留在技术交流层而非报价层",
             decision_question="主要风险、前置条件和停止条件是什么？",
             executive_takeaway="缺口必须转化为责任明确、时点明确、影响明确的决策前置条件。",
+            context_paragraphs=[
+                "本章集中呈现合作推进的主要风险、前置条件与停止条件，并把每条缺口转化为责任、时点与影响明确的行动要求；"
+                "风险清单来自公开资料识别与现场数据缺口分析，不构成对企业的投资评级，新发现的缺口在问题台账中补充。"
+            ],
             analysis_paragraphs=[
-                *(decision.key_risks or ["当前未发现需要单列的外部风险，但仍应在预可研中复核数据口径、责任边界和项目时效。"]),
-                "风险管理的重点不是罗列所有不确定性，而是识别哪些缺口会改变容量、收益、投资或责任判断。阻断性事项未关闭前，只能批准资料获取和技术验证；非阻断性事项可以并行补齐，但必须记录其对优先级、范围和实施节奏的影响。",
-                "Go 条件应同时覆盖事实、技术、组织和商业四个维度：原始数据口径一致且可复核，关键接口与工程条件可行，责任主体和审批路径明确，价值测算在不利情景下仍满足双方门槛。任何一维不满足，都不能仅凭其他维度的优势越级推进。",
-                "No-Go 并不等于永久否定合作，而是对当前场景和当前证据状态作资源纪律约束。若缺口能够在明确期限内关闭，可返回补数；若核心价值来源无法验证、责任主体长期缺位或技术边界不可控，应停止当前方向，把团队资源转向证据更强的机会。",
+                *(decision.key_risks or ["当前未发现需要单列的外部风险，仍应在预可研阶段复核数据口径、责任边界与项目时效，确保测算输入可追溯、结论可复核。"]),
+                "Go 条件覆盖事实、技术、组织和商业四个维度：原始数据口径一致且可复核，关键接口与工程条件可行，"
+                "责任主体和审批路径明确，价值测算在不利情景下仍满足双方门槛。任一维度不满足，不得仅凭其他维度优势越级推进。",
+                "No-Go 不等于永久否定合作：缺口在明确期限内关闭可返回补数；核心价值来源无法验证、责任主体长期缺位"
+                "或技术边界不可控时，应停止当前方向，把团队资源转向证据更强的机会，避免以会议热度替代决策质量。",
             ],
             recommendations=[
                 "在决策评审会上逐项核对阻断性资料；未取得原始数据或责任部门书面确认的事项不得以假设替代。"
@@ -526,329 +810,7 @@ class NarrativeBuilder:
             claim_ids=list(dict.fromkeys(claim_id for finding in decision.findings for claim_id in finding.supporting_claim_ids)),
         )
 
-    @staticmethod
-    def _domain_analysis(finding: DecisionFinding) -> list[str]:
-        common = (
-            f"围绕“{finding.conclusion}”，本节判断由 {len(finding.supporting_claim_ids)} 条事实和 {len(finding.supporting_source_ids)} 个来源支撑，"
-            "证据强度用于界定可推进阶段，不用于制造确定性。资料能够证明的范围必须与结论范围一致；来源只覆盖集团时，不下推到单一基地；来源只覆盖产品能力时，不外推为客户需求或项目收益。"
-        )
-        mapping = {
-            "strategy": [
-                common,
-                "企业身份、核心业务和组织边界决定首轮合作应与谁谈、围绕什么议题谈。它们能够排除主体混淆和泛化合作叙事，却不能替代产品接口、基地条件或项目经济性的验证；因此战略位置分析的作用是缩小搜索和沟通范围，而不是提前给出项目收益结论。",
-                "管理层应优先寻找同时掌握业务目标、原始数据和实施责任的接口人。若只有集团层战略口径而没有业务条线或基地责任主体，合作可停留在框架交流，但不宜投入详细设计；责任链路一旦确认，再将研究问题拆解到产品、制造和能源三个证据域。",
-                "下一步应把已核验业务边界转化为一页责任地图，明确决策发起人、数据提供方、技术评审方、投资审批方和最终使用方。任何合作方向只有在这五类角色及其权限得到确认后，才具备进入 30 / 60 / 90 天行动计划的组织基础。",
-            ],
-            "financial": [
-                common,
-                "经营指标应被解释为合作对象的资源基础、业务韧性和投入能力，而不是项目收益的代理变量。只有连续三个以上可比年度且合并范围、币种和会计口径一致时，才可讨论增长、盈利趋势或复合增速；否则更稳妥的表述是当前经营规模，并在后续尽调中补齐可比较时间序列。",
-                "对于合作决策，经营分析的 So What 是判断对方是否有能力组织跨部门验证、承担联合投入并把试点复制到更多场景。即便经营规模较大，若具体基地缺少数据、责任接口或投资边界，也不应跳过预可研；反之，经营规模有限也不自动否定范围清晰的小型试点。",
-                "下一步应把经营数据与合作场景分开建账：经营口径用于合作对象筛选，基地级技术与财务输入用于项目决策。评审时同时展示公开披露口径、可比性限制和受影响结论，避免把企业层数字重复包装为项目层价值。",
-            ],
-            "product": [
-                common,
-                "产品目录、型号、参数和认证能够证明对方具备何种技术路线与交付能力，但它们只回答“能提供什么”，不能单独回答“客户为什么购买”或“能源项目为什么盈利”。产品分析必须进一步映射目标工况、系统接口、合规要求、运维责任和交付边界，才能成为合作机会的事实基础。",
-                "优先级应放在与目标场景直接相关、参数可核验、责任主体清晰的产品族，而不是完整 SKU 数量。对参数缺失或仅有营销描述的产品，应保留记录但不进入技术适配结论；正文讨论产品族重心和接口问题，完整目录交由交互式附件承载。",
-                "下一步技术交流应形成逐项接口矩阵，至少覆盖目标场景、关键参数、适用标准、认证状态、数据协议、安装运维、质保和责任分工，同时明确复核责任人与材料有效期。只有接口矩阵与一处真实场景完成匹配，产品能力才可上升为可评审的联合方案。",
-            ],
-            "manufacturing": [
-                common,
-                "制造布局用于判断组织复杂度、基地进入顺序和复制潜力。基地数量、产线和生产能力反映制造输出与资源组织，并不等于企业自身年度用电量、峰值负荷或可调节负荷；任何 GWh 产能数字都必须留在制造语义域，不能进入用能画像或项目收益测算。",
-                "正文应关注哪些基地与目标业务直接相关、哪些基地资料更完整、哪些基地责任链路更清晰，以及国内外布局对审批、标准和交付的影响。完整基地名录本身不会提高决策质量，因此只将影响切入判断的结构性信息放入分析，长名单留在附录或数据附件。",
-                "首批验证基地宜满足三项条件：场景与优先机会直接相关，原始数据能够在明确期限内取得，工厂运营或能源责任人愿意参与联合评审。若只因产能大而选择基地，却无法确认计量边界和决策主体，试点很容易停留在概念方案。",
-            ],
-            "energy": [
-                common,
-                "能源画像只能使用年度或分月电量、峰值负荷、电价账单、负荷曲线、配电容量、屋面条件以及现有光伏和储能等能源语义事实。制造产能、产品容量、零碳业务收入或能源产品数量可以证明能力，却不能推导企业自身的消费规模，两者必须在分析、图表和结论中持续隔离。",
-                "即使取得单个能源数字，也要确认对应基地、统计期间、计量边界、单位和是否含自备电源。缺少这些限定条件时，数字最多用于提出核验假设，不能直接计算削峰、需量管理、光伏自消纳或储能套利收益。真正可用于预可研的输入应能重构典型日和全年运行边界。",
-                "因此本节的管理含义是把能源能力判断和基地项目判断分成两道门：第一道门确认双方具备技术与组织合作基础；第二道门以原始负荷、电价、配电和场地资料验证具体价值。只有第二道门通过，才讨论容量、投资、收益和工程进度。",
-            ],
-        }
-        return mapping.get(finding.semantic_domain, [common])
-
-    @staticmethod
-    def _evidence_interpretations(bundle: FrozenResearchBundle, finding: DecisionFinding) -> list[str]:
-        """Contextualize selected facts; never copy a raw field/value ledger."""
-        wanted = set(finding.supporting_claim_ids)
-        groups: dict[str, list[Claim]] = {}
-        for claim in bundle.claims:
-            if claim.claim_id in wanted:
-                groups.setdefault(claim.field_name, []).append(claim)
-        formatter = PublicationNumberFormatter()
-        paragraphs: list[str] = []
-        meanings = {
-            "financial": "该信息用于判断经营资源基础及跨期可比性；它不能替代具体项目的现金流、投资边界和敏感性分析。",
-            "product": "该信息用于确认技术路线与接口讨论的起点；是否适配目标场景仍需原厂参数、认证与实际工况共同验证。",
-            "manufacturing": "该信息用于识别制造组织、基地进入顺序和复制条件；它描述的是生产活动，不代表企业自身能源消费。",
-            "energy": "该信息只有在基地、期间、计量边界和单位均明确时才能进入用能判断；缺少任一限定条件时只作为待复核输入。",
-        }
-        for field, claims in list(groups.items())[:8]:
-            observations: list[str] = []
-            for claim in sorted(claims, key=lambda item: str(item.as_of_date or item.period_end or ""))[-3:]:
-                formatted = formatter.format(claim.value, claim.unit)
-                period = str((claim.period_end or claim.as_of_date or claim.period_start).year) if (claim.period_end or claim.as_of_date or claim.period_start) else "披露期"
-                scope = claim.scope or "公开披露口径"
-                observations.append(f"{period} 年{scope}为 {formatted.display_value}{formatted.display_unit}")
-            paragraphs.append(
-                f"就{field_label(field)}而言，现有证据可归纳为{'；'.join(observations)}。"
-                f"{meanings.get(finding.semantic_domain, '该记录用于限定本节结论范围，任何超出来源范围的外推都应作为待确认事项。')}"
-                "后续评审应保留原始值、来源、期间和范围，若新资料改变口径，应同步重算并更新受影响的管理结论。"
-            )
-        return paragraphs
-
-    # ── helpers ──
-    @staticmethod
-    def _canonical_entity(bundle: FrozenResearchBundle):
-        canonical_id = bundle.run_manifest.canonical_entity_id
-        return next(
-            (item for item in bundle.entities if item.entity_id == canonical_id),
-            bundle.entities[0] if bundle.entities else None,
-        )
-
-    @staticmethod
-    def _verified_claims(bundle: FrozenResearchBundle) -> list[Claim]:
-        return [claim for claim in bundle.claims if claim.verification_status == VerificationStatus.VERIFIED]
-
-    def _default_synthesis(self, bundle: FrozenResearchBundle, entity) -> ResearchSynthesis:
-        from enterprise_energy_research.research.synthesis import ResearchSynthesizer
-        return ResearchSynthesizer().synthesize(
-            run_id=bundle.run_manifest.run_id,
-            entity=entity,
-            entities=bundle.entities,
-            claims=bundle.claims,
-            sources=bundle.sources,
-            edges=bundle.edges,
-            factories=bundle.factories,
-            products=bundle.products,
-            energy_profiles=bundle.energy_profiles,
-            gaps=bundle.gaps,
-            solutions=bundle.solutions,
-        )
-
-    def _decision_questions(self, bundle: FrozenResearchBundle, synthesis: ResearchSynthesis, by_field: dict[str, list[Claim]]) -> list[str]:
-        questions: list[str] = []
-        if synthesis.cooperation_opportunities:
-            questions.append("哪些合作机会最值得推进，从哪里切入？")
-        if synthesis.risks:
-            questions.append("合作面临的主要风险与不确定性是什么？")
-        if any(field in by_field for field in ("revenue", "profit", "gross_margin", "market_share")):
-            questions.append("经营趋势是否支持合作判断？")
-        if bundle.gaps:
-            questions.append("推进合作前需要补齐哪些关键数据？")
-        if bundle.factories:
-            questions.append("从哪个生产基地切入最可行？")
-        return questions or ["该企业是否值得合作，应从哪里切入？", "如何用公开证据验证合作方案？"]
-
-    def _images_for(
-        self,
-        bundle: FrozenResearchBundle,
-        *,
-        chapter: str,
-        entity_id: str | None,
-        product_ids: set[str] | None = None,
-        factory_ids: set[str] | None = None,
-        exclude: set[str] | None = None,
-    ) -> list[str]:
-        budget = IMAGE_BUDGETS.get(chapter, IMAGE_BUDGETS["default"])
-        candidates = [image for image in publishable_images(bundle) if image.image_id not in (exclude or set())]
-        # chapter relevance: product photos belong to products, site photos to
-        # factories, entity-level photos (logo/headquarters/editorial) to the
-        # executive/profile chapters
-        if chapter == "products":
-            candidates = [image for image in candidates if image.product_id and image.product_id in (product_ids or set())]
-        elif chapter == "factories":
-            candidates = [image for image in candidates if image.factory_id and image.factory_id in (factory_ids or set())]
-        elif chapter in {"executive_summary", "entity_profile"}:
-            candidates = [
-                image for image in candidates
-                if image.target_entity_type in {"logo", "headquarters", "office", "editorial"}
-                or (image.entity_id == entity_id and not image.product_id and not image.factory_id)
-            ]
-        scored: list[tuple[int, ImageEvidence]] = []
-        for image in candidates:
-            score = image.publication_priority
-            if product_ids and image.product_id in product_ids:
-                score += 4
-            if factory_ids and image.factory_id in factory_ids:
-                score += 4
-            if entity_id and image.target_entity_id == entity_id:
-                score += 2
-            scored.append((score, image))
-        scored.sort(key=lambda pair: (-pair[0], pair[1].image_id))
-        return [image.image_id for _, image in scored[:budget]]
-
-    def _route(self, proposal: VisualProposal, narrative: ResearchNarrative) -> VisualSpec | None:
-        spec, check = self.router.route(proposal)
-        if spec is not None:
-            narrative.visuals.append(spec)
-            narrative.visual_events.append(VisualEvent(
-                visual_id=spec.visual_id, chapter_id=spec.chapter_id,
-                pattern=spec.semantic_pattern,
-                outcome="fallback_table" if check.fallback else "routed",
-                visual_type=spec.visual_type,
-                reason="；".join(check.reasons) if check.fallback else None,
-            ))
-            return spec
-        narrative.visual_events.append(VisualEvent(
-            visual_id=proposal.visual_id, chapter_id=proposal.chapter_id,
-            pattern=proposal.semantic_pattern, outcome="dropped_to_prose",
-            reason="；".join(check.reasons),
-        ))
-        return None
-
-    def _analysis_visuals(self, bundle: FrozenResearchBundle, entity_id: str, narrative: ResearchNarrative, chapter_id: str) -> list[str]:
-        results = self.analyst.analyze(entity_id, bundle.claims)
-        created: list[str] = []
-        for result in results:
-            proposal = VisualProposal(
-                visual_id=f"v-{chapter_id}-{result.metric}",
-                chapter_id=chapter_id,
-                decision_question=f"{result.metric_label}趋势说明了什么？",
-                business_thesis=f"{result.metric_label}{result.value_display}（{len(result.period)} 个真实期间）。",
-                semantic_pattern="time_series",
-                title=f"{result.metric_label}趋势",
-                subtitle=f"{result.value_display}；期间：{'、'.join(result.period)}。",
-                data_binding=f"analysis:{result.result_id}",
-                source_ids=list(result.source_ids),
-                source_claim_ids=list(result.source_claim_ids),
-                unit=result.unit,
-                period="、".join(result.period),
-                transformation=result.transformation,
-                assumption_status=result.assumption_status,
-                verified=result.verified,
-                items=[VisualDatum(**row) for row in result.items()],
-                source_note=self._source_note(bundle, result.source_ids),
-                confidence="high", semantic_domain="financial",
-            )
-            spec = self._route(proposal, narrative)
-            if spec is not None:
-                created.append(spec.visual_id)
-        return created
-
-    @staticmethod
-    def _source_note(bundle: FrozenResearchBundle, source_ids: list[str]) -> str:
-        names = {
-            source.source_id: source.source_title or source.source_domain
-            for source in bundle.sources
-        }
-        cited = [names[source_id] for source_id in source_ids if source_id in names]
-        return "数据来源：" + "、".join(cited[:5]) if cited else ""
-
-    def _counts(self, bundle: FrozenResearchBundle, narrative: ResearchNarrative) -> dict[str, int]:
-        verified_products = [product for product in bundle.products if product.verification_status == VerificationStatus.VERIFIED]
-        chapter_counts = {
-            chapter.chapter_id: len(re.findall(
-                r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]",
-                "".join([
-                    chapter.assertion_title, chapter.executive_takeaway,
-                    *chapter.context_paragraphs, *chapter.analysis_paragraphs,
-                    *chapter.implications, *chapter.recommendations,
-                    *chapter.counter_evidence, *chapter.limitations, *chapter.action_items,
-                ]),
-            ))
-            for chapter in narrative.chapters
-        }
-        return {
-            "chapters": len(narrative.chapters),
-            "visuals": len(narrative.visuals),
-            "verified_claims": len(self._verified_claims(bundle)),
-            "sources": len(bundle.sources),
-            "factories": len(bundle.factories),
-            "verified_products": len(verified_products),
-            "images_publishable": len(publishable_images(bundle)),
-            "main_body_cjk_char_count": sum(chapter_counts.values()),
-            "executive_summary_cjk_char_count": chapter_counts.get("executive_summary", 0),
-            **{f"chapter_cjk_{key}": value for key, value in chapter_counts.items()},
-        }
-
-    # ── chapters (dynamic: return None → chapter omitted) ──
-    def _chapter_executive(self, bundle: FrozenResearchBundle, synthesis: ResearchSynthesis, by_field: dict[str, list[Claim]], narrative: ResearchNarrative, images_for) -> StoryModule:
-        entity = self._canonical_entity(bundle)
-        content = list(synthesis.executive_summary)
-        if not content:
-            content = [
-                f"本报告研究对象为{entity.canonical_name}，围绕合作可行性展开分析。",
-                f"已核验公开披露数据 {len(self._verified_claims(bundle))} 项，来源 {len(bundle.sources)} 个。",
-            ]
-        module = StoryModule(
-            module_id="mod-exec", chapter_id="executive_summary", kind="executive_summary",
-            title="决策结论", decision_question=narrative.decision_questions[0],
-            thesis="从哪里切入合作，依据是什么",
-            content=content,
-            source_ids=[source.source_id for source in bundle.sources],
-            claim_ids=[claim.claim_id for claim in self._verified_claims(bundle)],
-        )
-        kpi_items: list[VisualDatum] = []
-        for field, label in (("revenue", "营业收入"), ("profit", "净利润"), ("employee_count", "员工人数")):
-            rows = by_field.get(field)
-            if not rows:
-                continue
-            best = max(rows, key=lambda item: item.confidence)
-            kpi_items.append(VisualDatum(
-                label=label, value=best.value, unit=best.unit,
-                period=best.as_of_date.strftime("%Y-%m") if best.as_of_date else None,
-                note=best.raw_text,
-            ))
-        if len(kpi_items) >= 1:
-            proposal = VisualProposal(
-                visual_id="v-exec-kpis", chapter_id="executive_summary",
-                decision_question=narrative.decision_questions[0],
-                business_thesis="关键经营指标一栏总览。",
-                semantic_pattern="quantitative_facts", title="关键经营指标",
-                data_binding="verified_claims",
-                source_ids=[claim.source_id for claim in self._verified_claims(bundle)],
-                source_claim_ids=[claim.claim_id for claim in self._verified_claims(bundle)],
-                items=kpi_items,
-                source_note=self._source_note(bundle, [claim.source_id for claim in self._verified_claims(bundle)]),
-            )
-            spec = self._route(proposal, narrative)
-            if spec is not None:
-                module.visual_ids.append(spec.visual_id)
-        module.image_ids = images_for(chapter="executive_summary", entity_id=entity.entity_id)
-        return module
-
-    def _chapter_entity_profile(self, bundle: FrozenResearchBundle, synthesis: ResearchSynthesis, by_field: dict[str, list[Claim]], narrative: ResearchNarrative, images_for) -> StoryModule:
-        entity = self._canonical_entity(bundle)
-        profile = synthesis.company_profile
-        content: list[str] = []
-        rows: dict[str, Any] = {}
-        if entity.registered_name and entity.registered_name != entity.canonical_name:
-            rows["注册名称"] = entity.registered_name
-        if entity.registration_region:
-            rows["注册地"] = entity.registration_region
-        if profile and profile.founded_date:
-            rows["成立时间"] = profile.founded_date
-        if profile and profile.headquarters:
-            rows["总部"] = profile.headquarters
-        if profile and profile.official_website:
-            rows["官方网站"] = str(profile.official_website)
-        if profile and profile.actual_controller:
-            rows["实际控制人"] = profile.actual_controller
-        if profile and profile.parent_company:
-            rows["母公司"] = profile.parent_company
-        if profile and profile.core_business:
-            rows["主营业务"] = profile.core_business
-        if profile and profile.business_segments:
-            rows["产业板块"] = "、".join(profile.business_segments)
-        if profile and profile.employee_count:
-            rows["员工人数"] = profile.employee_count
-        if synthesis.business_summary:
-            content.append(synthesis.business_summary + "。")
-        if synthesis.subsidiary_summary:
-            content.append(synthesis.subsidiary_summary + "。")
-        module = StoryModule(
-            module_id="mod-profile", chapter_id="entity_profile", kind="entity_profile",
-            title="企业概况",
-            decision_question="这是一家什么样的企业，业务底盘是什么？",
-            thesis=profile.core_business if profile and profile.core_business else entity.canonical_name,
-            content=content,
-            source_ids=[claim.source_id for claim in self._verified_claims(bundle)],
-            claim_ids=[claim.claim_id for claim in self._verified_claims(bundle)],
-            table_rows=[{"field": key, "value": value} for key, value in rows.items()],
-        )
-        module.image_ids = images_for(chapter="entity_profile", entity_id=entity.entity_id)
-        return module
-
+    # ── group structure (unchanged ownership tree) ─────────────────────────
     def _chapter_group_structure(self, bundle: FrozenResearchBundle, narrative: ResearchNarrative) -> StoryModule | None:
         entity = self._canonical_entity(bundle)
         verified_edges = [
@@ -856,7 +818,6 @@ class NarrativeBuilder:
             if edge.verification_status == VerificationStatus.VERIFIED
             and edge.relation in STRUCTURED_RELATIONS
         ]
-        # Only ownership-family relations build the org tree.
         ownership_edges = [
             edge for edge in verified_edges
             if edge.relation in {"SUBSIDIARY", "CONTROLLED_BY", "OWNED_BY", "JOINT_VENTURE", "Subsidiary", "ParentCompany", "Owns"}
@@ -866,8 +827,6 @@ class NarrativeBuilder:
         entity_names = {item.entity_id: item.canonical_name for item in bundle.entities}
         children_ids = {edge.to_id for edge in ownership_edges}
         roots = {edge.from_id for edge in ownership_edges if edge.from_id not in children_ids} or {entity.entity_id}
-        if not roots:
-            roots = {entity.entity_id}
         nodes: list[VisualNode] = []
         node_ids: set[str] = set()
         for root in roots:
@@ -920,267 +879,156 @@ class NarrativeBuilder:
             module.visual_ids.append(spec.visual_id)
         return module
 
-    def _chapter_partnerships(self, bundle: FrozenResearchBundle, narrative: ResearchNarrative) -> StoryModule | None:
+    # ── helpers ──
+    @staticmethod
+    def _canonical_entity(bundle: FrozenResearchBundle):
+        canonical_id = bundle.run_manifest.canonical_entity_id
+        return next(
+            (item for item in bundle.entities if item.entity_id == canonical_id),
+            bundle.entities[0] if bundle.entities else None,
+        )
+
+    def _profile_paragraph(self, bundle: FrozenResearchBundle) -> str:
+        """Objective company-profile paragraph from verified identity facts."""
         entity = self._canonical_entity(bundle)
-        verified_edges = [
-            edge for edge in bundle.edges
-            if edge.verification_status == VerificationStatus.VERIFIED
-            and edge.relation in {"PARTNER", "SUPPLIER", "CUSTOMER", "LICENSEE"}
-        ]
-        if not verified_edges:
-            return None
-        entity_names = {item.entity_id: item.canonical_name for item in bundle.entities}
-        names = {name for edge in verified_edges for name in (edge.from_id, edge.to_id)}
-        content = []
-        for edge in verified_edges:
-            left = entity_names.get(edge.from_id, edge.from_id)
-            right = entity_names.get(edge.to_id, edge.to_id)
-            relation_label = {"PARTNER": "合作伙伴", "SUPPLIER": "供应商", "CUSTOMER": "客户", "LICENSEE": "被许可方"}.get(edge.relation, edge.relation)
-            content.append(f"{left} 与 {right} 为{relation_label}关系。")
-        module = StoryModule(
-            module_id="mod-partners", chapter_id="partnerships", kind="partnerships",
-            title="商业合作关系",
-            decision_question="已核验的商业合作关系有哪些？",
-            thesis=f"已核验商业合作关系 {len(verified_edges)} 条。",
-            content=content,
-            source_ids=[claim.source_id for edge in verified_edges for claim in bundle.claims if claim.claim_id in edge.claim_ids],
-            claim_ids=[claim_id for edge in verified_edges for claim_id in edge.claim_ids],
-            table_rows=[
-                {"relation": {"PARTNER": "合作伙伴", "SUPPLIER": "供应商", "CUSTOMER": "客户", "LICENSEE": "被许可方"}.get(edge.relation, edge.relation),
-                 "from": entity_names.get(edge.from_id, edge.from_id),
-                 "to": entity_names.get(edge.to_id, edge.to_id)}
-                for edge in verified_edges
-            ],
-        )
-        return module
+        if entity is None:
+            return ""
+        facts: list[str] = []
+        verified = {claim.field_name: claim for claim in self._verified_claims(bundle)}
+        for field_name, label in (
+            ("headquarters", "总部"), ("registration_region", "注册地"),
+            ("founded_date", "成立时间"), ("stock_code", "股票代码"),
+        ):
+            claim = verified.get(field_name)
+            if claim is not None and str(claim.value).strip():
+                facts.append(f"{label}{str(claim.value).strip()}")
+        employee = verified.get("employee_count")
+        if employee is not None and str(employee.value).strip():
+            facts.append(f"员工人数 {str(employee.value).strip()}{employee.unit or ''}")
+        prefix = f"{entity.canonical_name}：{'；'.join(facts)}"
+        return prefix + "。上述信息用于识别研究主体与合作责任边界，构成经营分析的组织背景；"
+        "相关登记与工商信息以公开页面为准，如后续发现登记信息变化，以最新官方公示为准。"
 
-    def _chapter_operations(self, bundle: FrozenResearchBundle, synthesis: ResearchSynthesis, by_field: dict[str, list[Claim]], narrative: ResearchNarrative) -> StoryModule | None:
-        entity = self._canonical_entity(bundle)
-        content: list[str] = []
-        if synthesis.business_summary:
-            content.append(synthesis.business_summary + "。")
-        if synthesis.financial_summary:
-            content.append("经营情况（公开披露口径）" + synthesis.financial_summary + "。")
-        if not content and not any(field in by_field for field in ("revenue", "profit", "gross_margin", "market_share", "capacity")):
-            return None
-        module = StoryModule(
-            module_id="mod-operations", chapter_id="operations", kind="operations",
-            title="经营与产业分析",
-            decision_question="经营趋势是否支持合作判断？",
-            thesis="经营指标变化趋势与产业能力评估。",
-            content=content,
-            source_ids=[claim.source_id for claim in self._verified_claims(bundle)],
-            claim_ids=[claim.claim_id for claim in self._verified_claims(bundle)],
-        )
-        results = self._analysis_visuals(bundle, entity.entity_id, narrative, "operations")
-        module.visual_ids.extend(results)
-        return module
+    @staticmethod
+    def _verified_claims(bundle: FrozenResearchBundle) -> list[Claim]:
+        return [claim for claim in bundle.claims if claim.verification_status == VerificationStatus.VERIFIED]
 
-    def _chapter_factories(self, bundle: FrozenResearchBundle, narrative: ResearchNarrative, images_for) -> StoryModule | None:
-        if not bundle.factories:
-            return None
-        entity = self._canonical_entity(bundle)
-        content: list[str] = [f"已核验生产基地 {len(bundle.factories)} 处。"]
-        rows: list[dict[str, Any]] = []
-        for factory in bundle.factories:
-            rows.append({
-                "name": factory.name or "未命名基地",
-                "address": factory.address or "",
-                "processes": "、".join(factory.processes),
-                "status": factory.operating_status or "",
-            })
-            if factory.name:
-                location = f"，地址：{factory.address}" if factory.address else ""
-                process = f"，工艺：{'、'.join(factory.processes)}" if factory.processes else ""
-                content.append(f"{factory.name}{location}{process}。")
-        module = StoryModule(
-            module_id="mod-factories", chapter_id="factories", kind="factories",
-            title="生产基地布局",
-            decision_question="从哪个生产基地切入最可行？",
-            thesis=f"已核验生产基地 {len(bundle.factories)} 处。",
-            content=content,
-            source_ids=[claim.source_id for claim in bundle.claims],
-            claim_ids=[claim.claim_id for claim in bundle.claims if claim.field_name in {"capacity", "factory_name", "process"}],
-            table_rows=rows,
-        )
-        module.image_ids = images_for(
-            chapter="factories", entity_id=entity.entity_id,
-            factory_ids={factory.factory_id for factory in bundle.factories},
-        )
-        return module
-
-    def _chapter_products(self, bundle: FrozenResearchBundle, narrative: ResearchNarrative, images_for) -> StoryModule | None:
-        verified_products = [product for product in bundle.products if product.verification_status == VerificationStatus.VERIFIED]
-        if not verified_products:
-            return None
-        entity = self._canonical_entity(bundle)
-        categories: dict[str, list[Product]] = {}
-        for product in verified_products:
-            categories.setdefault(product.category or "未分类", []).append(product)
-        content: list[str] = []
-        if len(categories) > 1:
-            content.append(
-                "产品族分布：" + "、".join(f"{category} {len(items)} 项" for category, items in categories.items()) + "。"
-            )
-        content.append(f"已核验产品合计 {len(verified_products)} 项，覆盖产品族 {len(categories)} 个。")
-        rows: list[dict[str, Any]] = []
-        for product in verified_products:
-            rows.append({
-                "name": product.name,
-                "brand": product.brand or "",
-                "model": product.model or "",
-                "category": product.category or "未分类",
-                "series": product.series or "",
-                "description": product.description or "",
-                "parameters": "；".join(
-                    f"{parameter.name} {parameter.value} {parameter.unit or ''}".strip()
-                    for parameter in product.parameters
-                ),
-            })
-        module = StoryModule(
-            module_id="mod-products", chapter_id="products", kind="products",
-            title="产品矩阵",
-            decision_question="核心产品与可合作的产品方向是什么？",
-            thesis=f"已核验产品 {len(verified_products)} 项、产品族 {len(categories)} 个。",
-            content=content,
-            source_ids=[source_id for product in verified_products for source_id in product.source_ids],
-            claim_ids=[],
-            table_rows=rows,
-        )
-        if len(categories) >= 2:
-            proposal = VisualProposal(
-                visual_id="v-products-categories", chapter_id="products",
-                decision_question="产品组合的重心在哪几个产品族？",
-                business_thesis=f"产品分布：{len(verified_products)} 项产品、{len(categories)} 个产品族。",
-                semantic_pattern="category_comparison", title="产品族分布",
-                data_binding="verified_products",
-                source_ids=module.source_ids,
-                items=[
-                    VisualDatum(label=category, value=len(items), unit="项")
-                    for category, items in categories.items()
-                ],
-                source_note=self._source_note(bundle, module.source_ids),
-            )
-            spec = self._route(proposal, narrative)
-            if spec is not None:
-                module.visual_ids.append(spec.visual_id)
-        module.image_ids = images_for(
-            chapter="products", entity_id=entity.entity_id,
-            product_ids={product.product_id for product in verified_products},
-        )
-        return module
-
-    def _chapter_energy(self, bundle: FrozenResearchBundle, synthesis: ResearchSynthesis, by_field: dict[str, list[Claim]], narrative: ResearchNarrative) -> StoryModule | None:
-        entity = self._canonical_entity(bundle)
-        content: list[str] = []
-        if synthesis.energy_summary:
-            content.append(synthesis.energy_summary + "。")
-        if synthesis.existing_energy_projects:
-            content.append("已有能源项目：" + "；".join(synthesis.existing_energy_projects[:6]) + "。")
-        has_energy = bundle.energy_profiles or content
-        if not has_energy:
-            return None
-        module = StoryModule(
-            module_id="mod-energy", chapter_id="energy_profile", kind="energy_profile",
-            title="能源画像与用能特征",
-            decision_question="用能结构与节能空间是什么？",
-            thesis=synthesis.energy_summary or f"已形成 {len(bundle.energy_profiles)} 份能源画像。",
-            content=content,
-            source_ids=[claim.source_id for claim in self._verified_claims(bundle)],
-            claim_ids=[claim.claim_id for claim in self._verified_claims(bundle)],
-        )
-        energy_items: list[VisualDatum] = []
-        for field, label in (("electricity_consumption", "年度用电量"), ("roof_area", "可用屋面面积"), ("capacity", "产能")):
-            rows = by_field.get(field)
-            if not rows:
-                continue
-            best = max(rows, key=lambda item: item.confidence)
-            energy_items.append(VisualDatum(label=label, value=best.value, unit=best.unit, note=best.raw_text))
-        if energy_items:
-            proposal = VisualProposal(
-                visual_id="v-energy-kpis", chapter_id="energy_profile",
-                decision_question="用能规模与节能空间是多少？",
-                business_thesis=synthesis.energy_summary or "能源关键指标。",
-                semantic_pattern="quantitative_facts", title="能源关键指标",
-                data_binding="verified_claims",
-                source_ids=module.source_ids, source_claim_ids=module.claim_ids,
-                items=energy_items,
-                source_note=self._source_note(bundle, module.source_ids),
-            )
-            spec = self._route(proposal, narrative)
-            if spec is not None:
-                module.visual_ids.append(spec.visual_id)
-        return module
-
-    def _chapter_opportunities(self, bundle: FrozenResearchBundle, synthesis: ResearchSynthesis, narrative: ResearchNarrative) -> StoryModule | None:
-        solutions = [
-            solution for solution in bundle.solutions
-            if solution.priority in {"A", "B"}
-        ]
-        if not solutions:
-            return None
-        content: list[str] = []
-        rows: list[dict[str, Any]] = []
-        for solution in solutions:
-            content.append(
-                f"{solution.opportunity}：{solution.proposed_solution}"
-                + (f"（下一步：{solution.next_step}）" if solution.next_step else "")
-            )
-            rows.append({
-                "opportunity": solution.opportunity,
-                "solution": solution.proposed_solution,
-                "priority": solution.priority,
-                "next_step": solution.next_step,
-            })
-        module = StoryModule(
-            module_id="mod-opportunities", chapter_id="opportunities", kind="opportunities",
-            title="合作机会与切入路径",
-            decision_question="哪些合作机会最值得推进，从哪里切入？",
-            thesis=f"已识别可推进机会 {len(solutions)} 项。",
-            content=content,
-            source_ids=[claim.source_id for solution in solutions for claim in bundle.claims if claim.claim_id in solution.claim_ids],
-            claim_ids=[claim_id for solution in solutions for claim_id in solution.claim_ids],
-            table_rows=rows,
-        )
-        return module
-
-    def _chapter_risks(self, bundle: FrozenResearchBundle, synthesis: ResearchSynthesis, narrative: ResearchNarrative) -> StoryModule | None:
-        content: list[str] = list(synthesis.risks)
-        unknowns = synthesis.key_unknowns[:8]
-        if unknowns:
-            content.append("待核实事项：" + "；".join(unknowns) + "。")
-        if not content:
-            return None
-        return StoryModule(
-            module_id="mod-risks", chapter_id="risks_evidence", kind="risks_evidence",
-            title="风险与待核实事项",
-            decision_question="主要风险与不确定性是什么？",
-            thesis=f"已识别风险 {len(synthesis.risks)} 项、待核实事项 {len(unknowns)} 项。",
-            content=content,
-            source_ids=[claim.source_id for claim in self._verified_claims(bundle)],
-            claim_ids=[claim.claim_id for claim in self._verified_claims(bundle)],
+    def _default_synthesis(self, bundle: FrozenResearchBundle, entity) -> ResearchSynthesis:
+        from enterprise_energy_research.research.synthesis import ResearchSynthesizer
+        return ResearchSynthesizer().synthesize(
+            run_id=bundle.run_manifest.run_id,
+            entity=entity,
+            entities=bundle.entities,
+            claims=bundle.claims,
+            sources=bundle.sources,
+            edges=bundle.edges,
+            factories=bundle.factories,
+            products=bundle.products,
+            energy_profiles=bundle.energy_profiles,
+            gaps=bundle.gaps,
+            solutions=bundle.solutions,
         )
 
-    def _chapter_sources(self, bundle: FrozenResearchBundle) -> StoryModule:
-        rows = [
-            {
-                "title": source.source_title or source.source_domain,
-                "domain": source.source_domain,
-                "level": source.source_level.value if hasattr(source.source_level, "value") else str(source.source_level),
-                "date": source.publication_date.isoformat() if source.publication_date else "",
-                "url": str(source.canonical_url),
-            }
+    def _images_for(
+        self,
+        bundle: FrozenResearchBundle,
+        *,
+        chapter: str,
+        entity_id: str | None,
+        product_ids: set[str] | None = None,
+        factory_ids: set[str] | None = None,
+        exclude: set[str] | None = None,
+    ) -> list[str]:
+        budget = IMAGE_BUDGETS.get(chapter, IMAGE_BUDGETS["default"])
+        candidates = [image for image in publishable_images(bundle) if image.image_id not in (exclude or set())]
+        if chapter == "products":
+            candidates = [image for image in candidates if image.product_id and image.product_id in (product_ids or set())]
+        elif chapter == "factories":
+            candidates = [image for image in candidates if image.factory_id and image.factory_id in (factory_ids or set())]
+        elif chapter in {"executive_summary", "entity_profile"}:
+            candidates = [
+                image for image in candidates
+                if image.target_entity_type in {"logo", "headquarters", "office", "editorial"}
+                or (image.entity_id == entity_id and not image.product_id and not image.factory_id)
+            ]
+        scored: list[tuple[int, ImageEvidence]] = []
+        for image in candidates:
+            score = image.publication_priority
+            if product_ids and image.product_id in product_ids:
+                score += 4
+            if factory_ids and image.factory_id in factory_ids:
+                score += 4
+            if entity_id and image.target_entity_id == entity_id:
+                score += 2
+            scored.append((score, image))
+        scored.sort(key=lambda pair: (-pair[0], pair[1].image_id))
+        return [image.image_id for _, image in scored[:budget]]
+
+    def _route(self, proposal: VisualProposal, narrative: ResearchNarrative) -> VisualSpec | None:
+        spec, check = self.router.route(proposal)
+        if spec is not None:
+            narrative.visuals.append(spec)
+            narrative.visual_events.append(VisualEvent(
+                visual_id=spec.visual_id, chapter_id=spec.chapter_id,
+                pattern=spec.semantic_pattern,
+                outcome="fallback_table" if check.fallback else "routed",
+                visual_type=spec.visual_type,
+                reason="；".join(check.reasons) if check.fallback else None,
+            ))
+            return spec
+        narrative.visual_events.append(VisualEvent(
+            visual_id=proposal.visual_id, chapter_id=proposal.chapter_id,
+            pattern=proposal.semantic_pattern, outcome="dropped_to_prose",
+            reason="；".join(check.reasons),
+        ))
+        return None
+
+    @staticmethod
+    def _source_note(bundle: FrozenResearchBundle, source_ids: list[str]) -> str:
+        names = {
+            source.source_id: source.source_title or source.source_domain
             for source in bundle.sources
-        ]
-        return StoryModule(
-            module_id="mod-sources", chapter_id="sources", kind="sources",
-            title="数据来源",
-            decision_question="结论建立在哪些公开来源之上？",
-            thesis=f"共引用公开来源 {len(bundle.sources)} 个。",
-            content=[f"本报告结论基于 {len(bundle.sources)} 个公开来源。"],
-            source_ids=[source.source_id for source in bundle.sources],
-            table_rows=rows,
+        }
+        cited = [names[source_id] for source_id in source_ids if source_id in names]
+        return "数据来源：" + "、".join(cited[:5]) if cited else ""
+
+    def _counts(self, bundle: FrozenResearchBundle, narrative: ResearchNarrative) -> dict[str, int]:
+        verified_products = [product for product in bundle.products if product.verification_status == VerificationStatus.VERIFIED]
+        chapter_counts = {
+            chapter.chapter_id: len(re.findall(
+                r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]",
+                "".join([
+                    chapter.assertion_title, chapter.executive_takeaway,
+                    *chapter.context_paragraphs, *chapter.analysis_paragraphs,
+                    *chapter.implications, *chapter.recommendations,
+                    *chapter.counter_evidence, *chapter.limitations, *chapter.action_items,
+                ]),
+            ))
+            for chapter in narrative.chapters
+        }
+        meaningful = 0
+        for visual in narrative.visuals:
+            numeric = [item for item in visual.items if isinstance(item.value, (int, float))]
+            if len(numeric) >= 2 or len(visual.stages) >= 2 or len(visual.nodes) >= 2:
+                meaningful += 1
+        product_image_count = sum(
+            len(chapter.image_ids) for chapter in narrative.chapters if chapter.chapter_id == "products"
         )
+        return {
+            "chapters": len(narrative.chapters),
+            "visuals": len(narrative.visuals),
+            "meaningful_visual_count": meaningful,
+            "verified_claims": len(self._verified_claims(bundle)),
+            "sources": len(bundle.sources),
+            "factories": len(bundle.factories),
+            "verified_products": len(verified_products),
+            "images_publishable": len(publishable_images(bundle)),
+            "product_image_count": product_image_count,
+            "kpis": len(narrative.kpis),
+            "main_body_cjk_char_count": sum(chapter_counts.values()),
+            "executive_summary_cjk_char_count": chapter_counts.get("executive_summary", 0),
+            **{f"chapter_cjk_{key}": value for key, value in chapter_counts.items()},
+        }
 
 
 def write_narrative(narrative: ResearchNarrative, path) -> None:

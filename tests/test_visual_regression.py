@@ -13,7 +13,9 @@ from enterprise_energy_research.artifacts import html as html_module
 from enterprise_energy_research.artifacts.diagram_design_adapter import ENTERPRISE_PROFILE
 from enterprise_energy_research.artifacts.visual_policy import colors, word_policy
 
-FROZEN_CSS_SHA256 = "25da81c9742e16fc5567ab7a2bc4cf33334095be28ab0921d0ee890cb2ca7fb2"
+# P0 third-round baseline: ENTERPRISE RESEARCH DASHBOARD hero (real KPI grid,
+# judgement demoted to one module) instead of the decision-first hero.
+FROZEN_CSS_SHA256 = "6c7716ab951c96d6b9326906613d7a3101f01fb217fc854e16f985117a3f3acd"
 
 FROZEN_WORD_POLICY = {
     "page": "A4", "body_cjk_font": "SimSun", "body_latin_font": "Times New Roman",
