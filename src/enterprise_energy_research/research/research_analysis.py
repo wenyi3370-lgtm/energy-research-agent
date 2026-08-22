@@ -254,10 +254,11 @@ class ResearchAnalysisEngine:
             value = parse_number(best.value)
             if value is None:
                 continue
+            formatted = PublicationNumberFormatter().format(best.value, best.unit)
             rows.append(ResearchMetric(
                 label=label, field_name=field_name, value=value,
-                value_display=PublicationNumberFormatter().format(best.value, best.unit).display_value,
-                unit=best.unit, period=self._period_of(best),
+                value_display=formatted.display_value,
+                unit=formatted.display_unit, period=self._period_of(best),
                 scope=best.scope, source_ids=[best.source_id], claim_ids=[best.claim_id],
             ))
         if len(rows) < 2:
@@ -351,10 +352,11 @@ class ResearchAnalysisEngine:
             value = parse_number(best.value)
             if value is None:
                 continue
+            formatted = PublicationNumberFormatter().format(best.value, best.unit)
             analysis.own_energy_metrics.append(ResearchMetric(
                 label=field_label(field_name), field_name=field_name, value=value,
-                value_display=PublicationNumberFormatter().format(best.value, best.unit).display_value,
-                unit=best.unit, period=self._period_of(best), scope=best.scope,
+                value_display=formatted.display_value,
+                unit=formatted.display_unit, period=self._period_of(best), scope=best.scope,
                 source_ids=[best.source_id], claim_ids=[best.claim_id],
             ))
         for field_name in sorted(product_fields):
@@ -365,10 +367,11 @@ class ResearchAnalysisEngine:
             value = parse_number(best.value)
             if value is None:
                 continue
+            formatted = PublicationNumberFormatter().format(best.value, best.unit)
             analysis.energy_product_metrics.append(ResearchMetric(
                 label=field_label(field_name), field_name=field_name, value=value,
-                value_display=PublicationNumberFormatter().format(best.value, best.unit).display_value,
-                unit=best.unit, period=self._period_of(best), scope=best.scope,
+                value_display=formatted.display_value,
+                unit=formatted.display_unit, period=self._period_of(best), scope=best.scope,
                 source_ids=[best.source_id], claim_ids=[best.claim_id],
             ))
         if analysis.own_energy_metrics:
@@ -396,10 +399,11 @@ class ResearchAnalysisEngine:
             value = parse_number(best.value)
             if value is None:
                 continue
+            formatted = PublicationNumberFormatter().format(best.value, best.unit)
             analysis.kpis.append(ResearchKpi(
                 label=label,
-                value=PublicationNumberFormatter().format(best.value, best.unit).display_value,
-                unit=best.unit, period=self._period_of(best), scope=best.scope,
+                value=formatted.display_value,
+                unit=formatted.display_unit, period=self._period_of(best), scope=best.scope,
                 source_ids=[best.source_id], claim_ids=[best.claim_id],
             ))
         if bundle.products:
@@ -464,10 +468,11 @@ class ResearchAnalysisEngine:
             claim = by_period[year]
             value = parse_number(claim.value)
             assert value is not None
+            formatted = fmt.format(claim.value, claim.unit)
             points.append(ResearchMetric(
                 label=label, field_name=field_name, value=value,
-                value_display=fmt.format(claim.value, claim.unit).display_value,
-                unit=claim.unit, period=year, scope=claim.scope,
+                value_display=formatted.display_value,
+                unit=formatted.display_unit, period=year, scope=claim.scope,
                 source_ids=[claim.source_id], claim_ids=[claim.claim_id],
                 period_from_text=not (claim.period_start or claim.period_end or claim.as_of_date),
             ))

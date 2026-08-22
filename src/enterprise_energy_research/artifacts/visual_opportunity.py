@@ -42,9 +42,19 @@ class VisualOpportunityPlanner:
             self._source_note_cache[key] = "数据来源：" + "、".join(cited[:5]) if cited else ""
         return self._source_note_cache[key]
 
+    @staticmethod
+    def _chart_value(value: float, unit: str | None) -> float:
+        """Scale a raw stored value to its display magnitude (亿元/万元)."""
+        if unit == "亿元":
+            return round(value / 1e8, 2)
+        if unit == "万元":
+            return round(value / 1e4, 2)
+        return value
+
     def _trend_proposal(self, chapter_id: str, index: int, title: str, thesis: str, points: list[ResearchMetric]) -> VisualProposal | None:
         if len(points) < 2:
             return None
+        scaled_unit = points[-1].unit
         return VisualProposal(
             visual_id=f"v-{chapter_id}-{index:02d}", chapter_id=chapter_id,
             decision_question=f"{title}如何变化？", business_thesis=thesis,
@@ -54,10 +64,17 @@ class VisualOpportunityPlanner:
             data_binding=f"research:{points[0].field_name}",
             source_ids=list(dict.fromkeys(source_id for point in points for source_id in point.source_ids)),
             source_claim_ids=list(dict.fromkeys(claim_id for point in points for claim_id in point.claim_ids)),
-            unit=points[-1].unit, period=f"{points[0].period}—{points[-1].period}",
-            transformation="直接映射冻结证据，未插值、未预测。",
+            unit=scaled_unit, period=f"{points[0].period}—{points[-1].period}",
+            transformation=(
+                "直接映射冻结证据，未插值、未预测；图表数值按亿元折算显示，原始值保留于来源。"
+                if scaled_unit == "亿元" else "直接映射冻结证据，未插值、未预测。"
+            ),
             items=[
-                VisualDatum(label=f"{point.period}年", value=point.value, unit=point.unit, period=point.period)
+                VisualDatum(
+                    label=f"{point.period}年",
+                    value=self._chart_value(point.value, point.unit),
+                    unit=point.unit, period=point.period,
+                )
                 for point in points
             ],
             source_note=self._note(list(dict.fromkeys(source_id for point in points for source_id in point.source_ids))),
@@ -87,7 +104,12 @@ class VisualOpportunityPlanner:
                 data_binding="research:segments",
                 source_ids=comparison.source_ids, source_claim_ids=comparison.claim_ids,
                 unit=comparison.rows[0].unit, period=comparison.rows[0].period,
-                items=[VisualDatum(label=row.label, value=row.value, unit=row.unit, period=row.period) for row in comparison.rows],
+                transformation="直接映射冻结证据；图表数值按亿元折算显示，原始值保留于来源。",
+                items=[VisualDatum(
+                    label=row.label,
+                    value=self._chart_value(row.value, row.unit),
+                    unit=row.unit, period=row.period,
+                ) for row in comparison.rows],
                 source_note=self._note(comparison.source_ids),
             ))
         return proposals

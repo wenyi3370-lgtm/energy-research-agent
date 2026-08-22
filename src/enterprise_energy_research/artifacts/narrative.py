@@ -573,14 +573,17 @@ class NarrativeBuilder:
             "地址信息不完整或未标注地区的基地保留原文待核验，不强行归类；"
             "基地清单随新增公开披露滚动更新，区位判断以最新披露为准。"
         )
-        for factory in bundle.factories[:6]:
+        for index, factory in enumerate(bundle.factories[:6]):
             location = f"，位于{factory.address}" if factory.address else ""
             process = f"，主要工艺为{'、'.join(factory.processes)}" if factory.processes else ""
             status = f"，状态：{factory.operating_status}" if factory.operating_status else ""
-            analysis_paragraphs.append(
-                f"{factory.name or '未命名基地'}{location}{process}{status}。"
-                "基地工艺与产线信息用于评估项目落地的工程条件与责任接口，也用于判断试点复制的可行性，基地之间复制需单独评估。"
-            )
+            if index == 0:
+                analysis_paragraphs.append(
+                    f"{factory.name or '未命名基地'}{location}{process}{status}。"
+                    "基地工艺与产线信息用于评估项目落地的工程条件与责任接口，也用于判断试点复制的可行性，基地之间复制需单独评估。"
+                )
+            else:
+                analysis_paragraphs.append(f"{factory.name or '未命名基地'}{location}{process}{status}。")
         if region_insight is not None and region_insight.consulting_note:
             analysis_paragraphs.append(
                 region_insight.consulting_note + "基地选择不以产能数字为唯一依据，而应结合业务相关性、数据可得性与决策链路综合判断，完整名录见附录 E。"
