@@ -326,3 +326,80 @@ class KimiImageDiscoveryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProductDetailPassTests(unittest.TestCase):
+    """Product detail pages (one level below the product center) carry the
+    parameter tables and real product photos — the pass must follow the
+    product-card links and feed the snapshot back into extraction."""
+
+    class DetailFakeKimi:
+        name = "kimi_webbridge"
+
+        def __init__(self):
+            self.link_payload = {
+                "links": [
+                    {"url": "https://www.acme-corp.com/product/ess-200", "text": "ESS 200 储能柜"},
+                    {"url": "https://www.acme-corp.com/product/ess-500", "text": "ESS 500 储能柜"},
+                    {"url": "https://www.acme-corp.com/news/x", "text": "新闻"},
+                    {"url": "https://other-site.com/p", "text": "外部"},
+                ],
+            }
+            self.opened: list[str] = []
+
+        def health(self):
+            return AdapterHealth(name=self.name, available=True, diagnostics=[])
+
+        def evaluate(self, code: str):
+            return self.link_payload
+
+        def search(self, request):
+            url = request.metadata.get("url")
+            self.opened.append(url)
+            return SearchResultEnvelope(
+                adapter=self.name, query_id=request.query_id, status="ok",
+                hits=[{
+                    "requested_url": url, "final_url": url,
+                    "title": "ESS 200 产品详情",
+                    "text": "型号 ESS-200 容量 200kWh 循环寿命 6000 次", "status": "ok",
+                    "retrieved_at": "2026-08-22T00:00:00Z",
+                    "metadata": {"target_page": True},
+                }],
+            )
+
+    def test_product_detail_links_are_followed_within_budget(self) -> None:
+        from enterprise_energy_research.research.production_runner import AdaptiveResearchRunner
+        from enterprise_energy_research.research.image_discovery import KimiUsageTelemetry
+        from enterprise_energy_research.adapters.base import SearchResultEnvelope
+
+        kimi = self.DetailFakeKimi()
+        runner = AdaptiveResearchRunner(
+            {"kimi_webbridge": kimi, "anysearch": None},
+            fetcher=None, max_product_detail_pages=2,
+        )
+        envelope = SearchResultEnvelope(
+            adapter="kimi_webbridge", query_id="Q1", status="ok",
+            hits=[{
+                "requested_url": "https://www.acme-corp.com/products", "final_url": "https://www.acme-corp.com/products",
+                "title": "产品中心", "text": "产品列表", "status": "ok",
+                "retrieved_at": "2026-08-22T00:00:00Z", "metadata": {},
+            }],
+        )
+        envelope = envelope.model_copy(update={
+            "topic": "products", "purpose": "R1 catalog", "collection_round": "R1",
+            "round_goal": "coverage", "trigger": "baseline", "expected_fields": ["model", "parameter_name"],
+        })
+        telemetry = KimiUsageTelemetry()
+        extended = runner._product_detail_pass([envelope], telemetry)
+        self.assertEqual(len(extended), 3)  # original + 2 detail pages (budget 2)
+        detail_urls = {hit.final_url for env in extended[1:] for hit in env.hits}
+        self.assertIn("https://www.acme-corp.com/product/ess-200", detail_urls)
+        self.assertIn("https://www.acme-corp.com/product/ess-500", detail_urls)
+        # same-site product links only: no news page, no external site
+        self.assertFalse(any("news" in (u or "") for u in detail_urls))
+        self.assertFalse(any("other-site" in (u or "") for u in detail_urls))
+        self.assertEqual(telemetry.kimi_product_pages, 2)
+        # detail snapshots inherit the product extraction contract
+        detail = extended[1]
+        self.assertEqual(detail.topic, "products")
+        self.assertTrue(detail.hits[0].text)

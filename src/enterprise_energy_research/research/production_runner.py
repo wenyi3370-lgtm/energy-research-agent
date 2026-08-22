@@ -125,6 +125,7 @@ class AdaptiveResearchRunner:
         enable_publication: bool = True,
         extraction_workers: int = 4,
         fulltext_pages_per_query: int = 4,
+        max_product_detail_pages: int = 12,
     ) -> None:
         self.adapters = adapters
         self.gateway = gateway
@@ -139,6 +140,7 @@ class AdaptiveResearchRunner:
         self.enable_publication = enable_publication
         self.extraction_workers = extraction_workers
         self.fulltext_pages_per_query = fulltext_pages_per_query
+        self.max_product_detail_pages = max_product_detail_pages
         self._pending_image_candidates: list = []
         # Official domains learned from resolution; later rounds prioritize
         # official pages for deep browsing (product catalog quality).
@@ -209,6 +211,10 @@ class AdaptiveResearchRunner:
             # Product-catalog topics: Kimi opens the REAL official product
             # center/detail pages (SPA content plain HTTP cannot see) — P0-17.
             envelopes = self._browser_depth_pass(envelopes, queries, telemetry)
+            # Product detail pages: parameter tables and real product photos
+            # live one level below the product center — follow the product
+            # card links on the pages we already opened (P0-17 enumeration).
+            envelopes = self._product_detail_pass(envelopes, telemetry)
             # Kimi WebBridge is reserved for IMAGE discovery on real pages.
             self._image_pass(envelopes, telemetry)
             # Parallel structured extraction across pages (network-bound).
@@ -555,6 +561,96 @@ class AdaptiveResearchRunner:
                 visited_by_topic[envelope.topic] = topic_pages + 1
                 round_pages += 1
         return extended
+
+    def _product_detail_pass(
+        self,
+        envelopes: list[SearchResultEnvelope],
+        telemetry: KimiUsageTelemetry,
+    ) -> list[SearchResultEnvelope]:
+        """Follow product-card links one level down to real detail pages.
+
+        Parameter tables and real product photos live on detail pages below
+        the product center (one more navigation).  Each product page we
+        already opened contributes up to ``product_detail_links_per_page``
+        same-site links (bounded globally by ``max_product_detail_pages``),
+        opened via Kimi on the real browser, snapshot-extracted and fed back
+        into the SAME envelope list so extraction picks up parameters.
+        """
+        kimi = self.adapters.get("kimi_webbridge")
+        if kimi is None:
+            return envelopes
+        candidate_pages = [
+            envelope for envelope in envelopes
+            if envelope.adapter == "kimi_webbridge"
+            and envelope.topic in {"products", "product_series", "product_models", "product_parameters"}
+        ]
+        if not candidate_pages:
+            return envelopes
+        extended: list[SearchResultEnvelope] = list(envelopes)
+        visited: set[str] = set()
+        opened = 0
+        for envelope in candidate_pages:
+            if opened >= self.max_product_detail_pages:
+                break
+            try:
+                payload = kimi.evaluate(self.PRODUCT_LINKS_JS)
+            except Exception:  # noqa: BLE001 - one page failure never sinks the round
+                continue
+            links = (payload or {}).get("links") or []
+            for link in links:
+                if opened >= self.max_product_detail_pages:
+                    break
+                url = str(link.get("url") or "")
+                if not url or url in visited:
+                    continue
+                visited.add(url)
+                try:
+                    deep = kimi.search(SearchRequest(
+                        query_id=envelope.query_id,
+                        query=url,
+                        entity_id="PENDING-ENTITY",
+                        purpose=envelope.purpose or "",
+                        requires_browser=True,
+                        metadata={"url": url, "target_page": True},
+                    ))
+                except Exception:  # noqa: BLE001
+                    continue
+                if not deep.hits:
+                    continue
+                deep = deep.model_copy(update={
+                    "topic": envelope.topic, "purpose": envelope.purpose,
+                    "collection_round": envelope.collection_round,
+                    "round_goal": envelope.round_goal, "trigger": envelope.trigger,
+                    "target_gap_ids": envelope.target_gap_ids,
+                    "target_conflict_ids": envelope.target_conflict_ids,
+                    "target_claim_ids": envelope.target_claim_ids,
+                    "canonical_company_name": envelope.canonical_company_name,
+                    "expected_fields": envelope.expected_fields,
+                })
+                extended.append(deep)
+                telemetry.kimi_product_pages += 1
+                opened += 1
+        return extended
+
+    PRODUCT_LINKS_JS = r"""
+(() => {
+  const out = [];
+  const seen = new Set();
+  const abs = (u) => { try { return new URL(u, location.href).href; } catch (e) { return u || ''; } };
+  document.querySelectorAll('a[href]').forEach(a => {
+    const href = (a.getAttribute('href') || '').trim();
+    if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:')) return;
+    const absUrl = abs(href);
+    if (!absUrl.startsWith(location.origin)) return;  // same-site detail pages only
+    const text = (a.textContent || '').trim().slice(0, 60);
+    if (!/product|products|detail|solution|系列|型号|详情/i.test(href + ' ' + text)) return;
+    if (seen.has(absUrl)) return;
+    seen.add(absUrl);
+    out.push({url: absUrl, text});
+  });
+  return {links: out.slice(0, 12)};
+})()
+"""
 
     def _fulltext_pass(
         self,
