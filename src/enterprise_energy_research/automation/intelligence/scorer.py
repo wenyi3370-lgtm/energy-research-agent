@@ -7,6 +7,7 @@ from datetime import date, datetime
 from typing import Any
 
 from .models import IntelligenceItem, RawIntelligenceItem
+from .freshness import are_same_event, normalize_current_time, parse_exact_publication_time
 
 # 与"本公司业务"（储能/V2G 设备、系统、电力交易）相关度关键词
 _RELEVANCE_KEYWORDS = [
@@ -19,22 +20,25 @@ _RELEVANCE_KEYWORDS = [
 _INDUSTRY_SIGNALS = ["规模", "首", "试点", "示范", "标准", "规则", "价格", "降价", "并购", "产能"]
 
 
-def _freshness(published_at: str, today: date) -> float:
-    match = re.search(r"(\d{4})[-年.](\d{1,2})[-月.](\d{1,2})", published_at)
-    if not match:
-        return 7.0  # 未注明日期，给中间分
-    try:
-        published = date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
-    except ValueError:
-        return 7.0
-    days = (today - published).days
-    if days <= 1:
+def _freshness(item: RawIntelligenceItem, current_time: date | datetime) -> float:
+    if isinstance(current_time, date) and not isinstance(current_time, datetime):
+        current_time = datetime.combine(current_time, datetime.max.time()).replace(
+            tzinfo=normalize_current_time().tzinfo
+        )
+    current_time = normalize_current_time(current_time)
+    if item.freshness_status == "UPDATED":
+        updated = item.updated_at_iso or parse_exact_publication_time(item.updated_at)
+        if updated is None:
+            return 0.0
+        hours = (current_time - updated).total_seconds() / 3600
+        return 9.0 if 0 <= hours <= 72 else (7.0 if 72 < hours <= 168 else 0.0)
+    published = item.published_at_iso or parse_exact_publication_time(item.published_at)
+    if published is None:
+        return 0.0
+    hours = (current_time - published).total_seconds() / 3600
+    if 0 <= hours <= 24:
         return 10.0
-    if days <= 3:
-        return 8.0
-    if days <= 7:
-        return 6.0
-    return 3.0
+    return 8.0 if 24 < hours <= 72 else 0.0
 
 
 def _relevance(text: str) -> float:
@@ -57,16 +61,16 @@ def _industry_impact(category: str, text: str) -> float:
     return min(10.0, 4.0 + hits * 1.5)
 
 
-def score_item(item: RawIntelligenceItem, today: date | None = None) -> IntelligenceItem:
+def score_item(item: RawIntelligenceItem, today: date | datetime | None = None) -> IntelligenceItem:
     """按用户权重计算 Strategic Intelligence Score (0-100)。"""
-    today = today or date.today()
-    text = f"{item.title} {item.fact} {item.entity}"
+    today = today or normalize_current_time()
+    text = f"{item.title} {item.fact} {item.company} {item.entity}"
     scores = {
         "政策/监管影响": _policy_weight(item.category),
         "与本公司业务相关性": _relevance(text),
         "潜在商业价值": _business_value(item.category, item.fact),
         "行业影响程度": _industry_impact(item.category, text),
-        "信息新鲜度": _freshness(item.published_at, today),
+        "信息新鲜度": _freshness(item, today),
     }
     weights = {"政策/监管影响": 0.30, "与本公司业务相关性": 0.30,
                "潜在商业价值": 0.20, "行业影响程度": 0.10, "信息新鲜度": 0.10}
@@ -85,13 +89,27 @@ def _policy_weight(category: str) -> float:
 
 
 def deduplicate(items: list[IntelligenceItem]) -> list[IntelligenceItem]:
-    """同类信息合并：同实体+同类别只保留评分最高者。"""
-    seen: dict[tuple[str, str], IntelligenceItem] = {}
+    """同一事件只留最优来源；实质更新、来源权威性和最新版本优先。"""
+    groups: list[list[IntelligenceItem]] = []
     for item in items:
-        key = (item.category, (item.entity or item.title)[:12])
-        if key not in seen or item.score > seen[key].score:
-            seen[key] = item
-    return sorted(seen.values(), key=lambda item: item.score, reverse=True)
+        group = next((group for group in groups if are_same_event(item, group[0])), None)
+        if group is None:
+            groups.append([item])
+        else:
+            group.append(item)
+    preferred = [min(group, key=_source_choice_key) for group in groups]
+    return sorted(preferred, key=lambda item: item.score, reverse=True)
+
+
+def _source_choice_key(item: IntelligenceItem) -> tuple[Any, ...]:
+    effective = item.updated_at_iso if item.freshness_status == "UPDATED" else item.published_at_iso
+    timestamp = effective.timestamp() if effective is not None else 0.0
+    return (
+        0 if item.freshness_status == "UPDATED" else 1,
+        item.source_priority,
+        -timestamp,
+        -item.score,
+    )
 
 
 def select_top(items: list[IntelligenceItem], *, maximum: int = 5, floor: float = 70.0) -> list[IntelligenceItem]:

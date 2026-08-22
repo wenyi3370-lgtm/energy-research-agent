@@ -66,6 +66,31 @@ class FeishuTests(unittest.TestCase):
 
 
 class MonitorWorkflowContractTests(unittest.TestCase):
+    def test_daily_intelligence_schedule_is_active_at_10_am(self):
+        workflow = json.loads(
+            (ROOT / "automation" / "n8n" / "daily-intelligence-workflow.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(workflow["active"])
+        schedule_nodes = [
+            node for node in workflow["nodes"]
+            if node.get("type") == "n8n-nodes-base.scheduleTrigger"
+        ]
+        self.assertEqual(len(schedule_nodes), 1)
+        rule = schedule_nodes[0]["parameters"]["rule"]
+        self.assertNotIn("triggerAtHour", rule)
+        self.assertNotIn("triggerAtMinute", rule)
+        self.assertEqual(
+            rule["interval"],
+            [{
+                "field": "days",
+                "daysInterval": 1,
+                "triggerAtHour": 10,
+                "triggerAtMinute": 0,
+            }],
+        )
+
     def test_failure_watchdog_only_recovers_stale_runs(self):
         workflow = json.loads(
             (ROOT / "automation" / "n8n" / "failure-watchdog-workflow.json").read_text(

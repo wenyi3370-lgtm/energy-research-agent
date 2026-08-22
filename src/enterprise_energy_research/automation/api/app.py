@@ -25,7 +25,7 @@ import os
 import re
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from importlib import metadata
 from pathlib import Path
 from typing import Any
@@ -652,14 +652,28 @@ def create_app(
         intel = _intelligence_service()
         if intel.is_paused():
             return {"triggered": False, "paused": True, "message": "每日情报推送已暂停"}
-        background.add_task(intel.run_daily)
-        return {"triggered": True, "date": datetime.now().date().isoformat(), "ran_async": True}
+        from ..intelligence import current_intelligence_time
+
+        current_time = current_intelligence_time()
+        background.add_task(intel.run_daily, current_time=current_time)
+        return {
+            "triggered": True,
+            "date": current_time.date().isoformat(),
+            "current_time": current_time.isoformat(),
+            "report_cutoff_time": current_time.isoformat(),
+            "primary_window_start": (current_time - timedelta(hours=24)).isoformat(),
+            "recovery_window_start": (current_time - timedelta(hours=72)).isoformat(),
+            "update_window_start": (current_time - timedelta(days=7)).isoformat(),
+            "ran_async": True,
+        }
 
     @app.get("/api/v1/intelligence/daily/latest")
     def intelligence_latest() -> dict:
         """最近一份情报日报（不触发采集）。"""
         intel = _intelligence_service()
-        brief = intel._load_published(datetime.now().date())
+        from ..intelligence import current_intelligence_time
+
+        brief = intel._load_published(current_intelligence_time().date())
         if brief is None:
             return {"brief_date": None, "message": "今日情报尚未生成；POST /api/v1/intelligence/daily 触发"}
         return brief.model_dump(mode="json")

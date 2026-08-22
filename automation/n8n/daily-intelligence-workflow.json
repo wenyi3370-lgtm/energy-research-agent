@@ -1,6 +1,7 @@
 {
   "id": "daily-intelligence-v1",
   "name": "每日情报（V2G & 储能日报）",
+  "active": true,
   "nodes": [
     {
       "parameters": {
@@ -8,11 +9,11 @@
           "interval": [
             {
               "field": "days",
-              "daysInterval": 1
+              "daysInterval": 1,
+              "triggerAtHour": 10,
+              "triggerAtMinute": 0
             }
-          ],
-          "triggerAtHour": 10,
-          "triggerAtMinute": 0
+          ]
         }
       },
       "id": "n8n-node-schedule-daily",
