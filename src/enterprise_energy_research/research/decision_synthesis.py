@@ -428,6 +428,7 @@ class DecisionSynthesisEngine:
             + f"。本报告基于公开渠道已核验事实，对公司经营、产品、制造布局与能源相关能力作客观研究，"
             "再回答与委托方的合作价值与切入方式；研究范围覆盖集团口径与主要经营实体，"
             "全篇事实均标注期间、范围与来源，分析与建议部分与事实部分明确区分。"
+            "报告正文覆盖经营、产品、制造、能源与合作五个维度，附录保留来源清单、基地与产品名录。"
         )
 
         # 2. 关键经营事实（真实数据）
@@ -503,6 +504,7 @@ class DecisionSynthesisEngine:
             third += "零碳披露方面，" + "；".join(
                 f"{item.label} {item.value_display}{item.unit or ''}" for item in analysis.zero_carbon_metrics[:2]
             ) + "，构成绿电与零碳合作议题的事实起点。"
+        third += "上述能力构成联合验证的事实起点，具体以第 3 至第 5 章数据为准。"
 
         # 4. 主要机会与限制
         blockers = [item.item for item in requirements if item.decision_blocker]
@@ -522,7 +524,7 @@ class DecisionSynthesisEngine:
             "60 天完成现场踏勘、数据清洗与技术接口验证；90 天提交预可研结论并召开 Go / No-Go 评审。"
             "评审材料覆盖价值来源、技术约束、责任主体、投资边界、关键风险与退出条件六个方面；"
             "只有当关键资料齐套、技术边界可控、责任主体明确且价值测算通过敏感性检验时，才进入方案设计或报价阶段，"
-            "同时明确返回补数或停止投入的触发条件。"
+            "同时明确返回补数或停止投入的触发条件；评审结论连同数据台账一并归档，作为后续轮次复核与口径一致的基线。"
         )
         return [first, second, third, fourth, fifth]
 

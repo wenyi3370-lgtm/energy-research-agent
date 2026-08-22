@@ -25,7 +25,10 @@ class ClaimValidator:
                 # No value, no fact to conflict over: these claims never join
                 # a conflict group (avoids conflict/claim status drift).
                 continue
-            groups[(claim.entity_id, claim.field_name, claim.as_of_date, claim.scope)].append(claim)
+            # The period is part of the fact identity: 2022 revenue and 2023
+            # revenue are different facts and must never enter one conflict
+            # group just because both lack as_of_date/scope.
+            groups[(claim.entity_id, claim.field_name, claim.as_of_date, claim.scope, claim.period_start, claim.period_end)].append(claim)
 
         conflicts: list[ConflictGroup] = []
         conflicting_ids: dict[str, str] = {}
@@ -96,7 +99,7 @@ class ClaimValidator:
             source = sources_by_id[claim.source_id]
             if source.source_level == SourceLevel.SOURCE_B:
                 origin = (source.publisher or source.source_domain).lower()
-                corroboration[(claim.entity_id, claim.field_name, canonical_json(claim.value), claim.as_of_date, claim.scope)].add(origin)
+                corroboration[(claim.entity_id, claim.field_name, canonical_json(claim.value), claim.as_of_date, claim.scope, claim.period_start, claim.period_end)].add(origin)
 
         validated: list[Claim] = []
         for claim in claims:
@@ -127,6 +130,7 @@ class ClaimValidator:
                 conflict_id = None
             elif source.source_level == SourceLevel.SOURCE_B and len(corroboration[(
                 claim.entity_id, claim.field_name, canonical_json(claim.value), claim.as_of_date, claim.scope,
+                claim.period_start, claim.period_end,
             )]) >= 2:
                 status = VerificationStatus.VERIFIED
                 confidence = 0.80

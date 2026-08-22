@@ -526,6 +526,7 @@ class ResearchAnalysisEngine:
     # ── helpers ────────────────────────────────────────────────────────────
     def _series(self, field_name: str, label: str, claims: list[Claim]) -> list[ResearchMetric]:
         by_period: dict[str, Claim] = {}
+        today = date.today()
         for claim in claims:
             value = parse_number(claim.value)
             if value is None:
@@ -537,10 +538,21 @@ class ResearchAnalysisEngine:
                 or (claim.period_end.month, claim.period_end.day) != (12, 31)
             ):
                 continue
+            # A full-year period that ends in the future is a mislabeled
+            # claim (e.g. an H1 figure stamped as a full year) — never plot it.
+            if claim.period_end and claim.period_end > today:
+                continue
             period = self._period_of(claim) or self._year_from_text(claim)
             if not period:
                 continue
             year = period[:4]
+            # Text-derived years in the future are mislabeled claims too;
+            # a current-year value without an explicit full-year period can
+            # only be an interim figure (H1/Q) — never an annual point.
+            if year.isdigit() and int(year) > today.year:
+                continue
+            if year == str(today.year) and not (claim.period_start and claim.period_end):
+                continue
             existing = by_period.get(year)
             if existing is None or claim.confidence > existing.confidence:
                 by_period[year] = claim
@@ -618,10 +630,13 @@ class ResearchAnalysisEngine:
         first, last = points[0], points[-1]
         span = f"{first.period}—{last.period} 年" if first.period and last.period else "最近可比年度"
         growth = f"，{span}复合增速 {cagr:+.1f}%" if cagr is not None else ""
-        yoy_text = f"，较上期 {yoy:+.1f}%" if yoy is not None else ""
+        if len(points) >= 3:
+            delta_text = f"，累计增长 {yoy:+.1f}%" if yoy is not None else ""
+        else:
+            delta_text = f"，较上期 {yoy:+.1f}%" if yoy is not None else ""
         return (
             f"{span}{label}由 {first.value_display}{first.unit or ''} 增至 {last.value_display}{last.unit or ''}"
-            f"{growth}{yoy_text}。"
+            f"{growth}{delta_text}。"
         )
 
     @staticmethod
