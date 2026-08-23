@@ -143,6 +143,7 @@ def main() -> int:
         minimum_substantive_claims=20,
         enable_image_archiving=True,
         enable_publication=True,
+        baseline_budget_is_per_round=True,
     )
     report = runner.run(
         args.company,

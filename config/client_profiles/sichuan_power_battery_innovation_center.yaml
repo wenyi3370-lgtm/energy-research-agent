@@ -1,0 +1,24 @@
+schema_version: "1.0"
+client_id: sichuan-power-battery-innovation-center
+client_name: 四川动力电池产业创新中心
+role: 产业创新协同与技术验证平台
+provenance: user_selected_default_configuration
+capabilities:
+  - capability_id: industrial-collaboration
+    name: 产业协同议题组织
+    description: 组织产业链主体围绕明确技术或商业议题开展交流与协同。
+    status: CONFIGURED_CLIENT_CAPABILITY
+    applicable_opportunity_types: [PRODUCT_COOPERATION, JOINT_RND, SUPPLY_CHAIN, CHANNEL]
+  - capability_id: joint-validation
+    name: 联合技术验证组织
+    description: 组织需求方、技术方与应用场景方定义验证问题和评价结果。
+    status: CONFIGURED_CLIENT_CAPABILITY
+    applicable_opportunity_types: [JOINT_RND, PRODUCT_COOPERATION, STORAGE, ENERGY_MANAGEMENT]
+  - capability_id: decision-research
+    name: 产业决策研究
+    description: 根据企业事实和产业变化明确接洽重点、验证课题与投入安排。
+    status: CONFIGURED_CLIENT_CAPABILITY
+    applicable_opportunity_types: [OTHER, OVERSEAS, ZERO_CARBON_FACTORY, ENERGY_DIGITALIZATION]
+excluded_capabilities:
+  - 未经单独配置，不假定具备项目投资、EPC 总包、设备供货或收益兜底能力
+  - 未经单独配置，不假定具备目标企业内部数据访问权或行政审批权

@@ -91,6 +91,8 @@ def main() -> int:
         run_id=run_id, request_id=run_manifest.request_id, status=RunStatus.RUNNING,
         config_hash=run_manifest.config_hash, code_version=run_manifest.code_version,
         model_gateway=run_manifest.model_gateway,
+        client_profile=run_manifest.client_profile,
+        client_profile_hash=run_manifest.client_profile_hash,
     ))
 
     env_path = ROOT / ".env"
@@ -118,12 +120,11 @@ def main() -> int:
     for entity in evidence.entities:
         if entity.official_website and entity.official_website.host:
             official_domains.add(str(entity.official_website.host).lower().removeprefix("www."))
-    for source in evidence.sources:
-        if "official" in (source.grading_reason or "").lower() and source.source_domain:
-            official_domains.add(source.source_domain.lower().removeprefix("www."))
-    # This recovery script registers CATL's official catalog explicitly.
-    official_domains.add("catl.com")
-
+    # Source grading alone must never promote a third-party portal to an
+    # official company domain.  A previous recovery treated an automotive
+    # database as official because its grading note contained the word
+    # "official", then attached unrelated exhibition photos to products.
+    # Only entity-owned websites are authoritative here.
     # When extraction missed the entity website, restore it from the derived
     # official domain so the image validator can grant the official_domain
     # signal (which gates VERIFIED -> archiving -> vision verification).
@@ -133,13 +134,29 @@ def main() -> int:
     )
     if canonical_entity is not None and not canonical_entity.official_website and official_domains:
         from pydantic import HttpUrl
-        domain = "catl.com" if "catl.com" in official_domains else sorted(official_domains)[0]
+        domain = sorted(official_domains)[0]
         patched = canonical_entity.model_copy(update={"official_website": HttpUrl(f"https://{domain}/")})
         evidence.entities = [
             patched if entity.entity_id == canonical_entity.entity_id else entity
             for entity in evidence.entities
         ]
         canonical_entity = patched
+
+    def on_official_domain(domain: str) -> bool:
+        host = (domain or "").lower().removeprefix("www.")
+        return any(host == allowed or host.endswith("." + allowed) for allowed in official_domains)
+
+    # Remove previously accumulated third-party image bindings when a frozen
+    # recovery store is used as the next round's input.  Other evidence is
+    # preserved; products whose selected image disappears are reset so the
+    # detector can select a valid official replacement later in this run.
+    evidence.images = [image for image in evidence.images if on_official_domain(image.source_domain)]
+    valid_image_ids = {image.image_id for image in evidence.images}
+    evidence.products = [
+        product.model_copy(update={"image_id": None})
+        if product.image_id and product.image_id not in valid_image_ids else product
+        for product in evidence.products
+    ]
 
     # Pages = verified product source pages on OFFICIAL domains only
     # (spec: official product pages first, search thumbnails never publish).
@@ -172,15 +189,24 @@ def main() -> int:
             entry["product_ids"].add(product.product_id)
             entry["specific"] = len(entry["product_ids"]) == 1
 
-    # Official catalog landing pages (SPA navigation on catl.com): these are
-    # the pages that actually render product photos.  Register a source for
-    # each when it is not already in evidence.
-    catalog_pages = (
-        ("https://www.catl.com/ess/", "储能系统"),
-        ("https://www.catl.com/solution/passengerEV/", "乘用车解决方案"),
-        ("https://www.catl.com/solution/commercialEV/", "商业应用解决方案"),
-        ("https://www.catl.com/solution/recycling/", "循环回收"),
-    )
+    # Catalog landing pages come from verified catalog-scope claims and
+    # official sources already discovered in research. No company/domain
+    # special cases are allowed in the portable recovery path.
+    catalog_pages: list[tuple[str, str]] = []
+    for claim in evidence.claims:
+        if claim.verification_status != VerificationStatus.VERIFIED or claim.field_name != "product_catalog_scope":
+            continue
+        if not isinstance(claim.value, dict):
+            continue
+        for url in claim.value.get("official_product_centers") or []:
+            if isinstance(url, str) and url.lower().startswith(("http://", "https://")):
+                catalog_pages.append((url, "官方产品中心"))
+    for source in evidence.sources:
+        host = source.source_domain.lower().removeprefix("www.")
+        url = str(source.canonical_url)
+        if host in official_domains and any(token in url.lower() for token in ("/product", "/solution", "/catalog", "/products", "/ess/")):
+            catalog_pages.append((url, source.source_title or "官方产品页面"))
+    catalog_pages = list(dict.fromkeys(catalog_pages))
     for url, title in catalog_pages:
         existing = next((source_id for source_id, source in source_by_id.items() if str(source.canonical_url) == url), None)
         if existing is not None:
@@ -192,7 +218,8 @@ def main() -> int:
             source_id = new_sortable_id("source")
             evidence.sources.append(Source(
                 source_id=source_id, canonical_url=url,  # type: ignore[arg-type]
-                source_title=title, source_domain="catl.com", publisher="宁德时代官网",
+                source_title=title, source_domain=(url.split("/", 3)[2].lower().removeprefix("www.")),
+                publisher=(canonical_entity.canonical_name if canonical_entity else "企业官网"),
                 source_level=SourceLevel.SOURCE_A, content_type="text/html",
                 grading_reason="official product catalog page",
             ))
@@ -200,47 +227,76 @@ def main() -> int:
         if url not in pages:
             pages[url] = {
                 "url": url, "kind": "product", "source_kind": "official_company",
-                "publisher": "宁德时代官网", "source_id": source_id,
+                "publisher": (canonical_entity.canonical_name if canonical_entity else "企业官网"), "source_id": source_id,
                 "product_ids": set(), "specific": False,
             }
 
     # Product records often originate from annual reports, whose source page
-    # is not where the official product photo lives.  Use the approved
-    # AnySearch adapter to discover one CATL-hosted page per branded product;
-    # Kimi will open those real target pages for DOM/pixel evidence.
-    generic_names = {"储能系统", "动力电池系统", "锂电池材料", "电池回收"}
+    # is not where the official product photo lives. Discover one page on any
+    # configured official domain per sufficiently specific verified product.
     branded_products = [
         product for product in products
-        if product.name not in generic_names and not product.name.endswith("解决方案")
+        if product.model or product.series or len(product.name.strip()) >= 4
     ]
     branded_products.sort(key=lambda product: (-len(product.name), product.name))
+    def normalized_name(value: str) -> str:
+        return "".join(character.casefold() for character in value if character.isalnum())
+
     anysearch = AnySearchCliAdapter()
     if anysearch.health().available:
         for product in branded_products[: min(12, args.max_pages)]:
-            envelope = anysearch.search(SearchRequest(
-                query_id=f"IMG-{product.product_id}",
-                query=f"site:catl.com {product.name} 宁德时代",
-                entity_id=canonical_entity.entity_id if canonical_entity else "PENDING-ENTITY",
-                purpose="official product image page discovery",
-                max_results=3,
-                topic="image_evidence",
-            ))
-            for hit in envelope.hits:
-                url = str(hit.final_url or "")
-                from urllib.parse import urlparse
-                host = (urlparse(url).hostname or "").lower().removeprefix("www.")
-                if host != "catl.com" and not host.endswith(".catl.com"):
-                    continue
-                if url.lower().split("?", 1)[0].endswith(NON_PAGE_SUFFIXES):
-                    continue
-                entry = pages.setdefault(url, {
-                    "url": url, "kind": "product", "source_kind": "official_company",
-                    "publisher": product.name, "source_id": None,
-                    "product_ids": set(), "specific": True,
-                })
-                entry["product_ids"].add(product.product_id)
-                entry["specific"] = len(entry["product_ids"]) == 1
-                break
+            found = False
+            # Search engines treat parenthesized multi-domain expressions
+            # inconsistently. Query each configured official domain directly
+            # and stop at the first exact official hit.
+            for domain in sorted(official_domains)[:3]:
+                envelope = anysearch.search(SearchRequest(
+                    query_id=f"IMG-{product.product_id}-{domain}",
+                    # Quote the canonical product name.  Without a phrase
+                    # constraint the search backend can return a company
+                    # profile that happens to contain only a few generic
+                    # product tokens, while omitting the exact detail page.
+                    # Do not append the full legal entity name here.  Search
+                    # backends often treat it as another mandatory phrase;
+                    # official product news pages commonly use only the
+                    # consumer brand and then disappear from the result set.
+                    query=f'site:{domain} "{product.name}"',
+                    entity_id=canonical_entity.entity_id if canonical_entity else "PENDING-ENTITY",
+                    purpose="official product image page discovery",
+                    max_results=6,
+                    topic="image_evidence",
+                ))
+                product_key = normalized_name(product.name)
+                for hit in envelope.hits:
+                    url = str(hit.final_url or "")
+                    from urllib.parse import urlparse
+                    host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+                    if not any(host == allowed or host.endswith("." + allowed) for allowed in official_domains):
+                        continue
+                    if url.lower().split("?", 1)[0].endswith(NON_PAGE_SUFFIXES):
+                        continue
+                    parsed_url = urlparse(url)
+                    path = parsed_url.path.rstrip("/").casefold()
+                    if not path or path.endswith("/about/profile"):
+                        continue
+                    hit_context = normalized_name(f"{hit.title or ''} {hit.text or ''}")
+                    # A site-restricted engine can still rank the corporate
+                    # homepage above the named product. Page-level exact
+                    # binding is granted only when the result itself names
+                    # the product; otherwise keep searching.
+                    if product_key not in hit_context:
+                        continue
+                    entry = pages.setdefault(url, {
+                        "url": url, "kind": "product", "source_kind": "official_company",
+                        "publisher": product.name, "source_id": None,
+                        "product_ids": set(), "specific": True,
+                    })
+                    entry["product_ids"].add(product.product_id)
+                    entry["specific"] = len(entry["product_ids"]) == 1
+                    found = True
+                    break
+                if found:
+                    break
 
     page_list = sorted(
         pages.values(),
@@ -306,6 +362,43 @@ def main() -> int:
     round_evidence.sources = new_sources
     round_evidence.images = new_images
     MergeEvidence.merge(runner.cumulative, round_evidence)
+
+    # Multi-product launch pages can contain several unrelated hero images.
+    # Page text is too broad for exact binding; use the pixel-derived vision
+    # description to rebind only when it explicitly names one verified,
+    # sufficiently specific product.  Otherwise clear the page-level product
+    # binding and keep the image as unbound evidence.
+    shared_product_pages = {
+        entry["url"] for entry in page_list if len(entry["product_ids"]) > 1
+    }
+    specific_products = [
+        product for product in runner.cumulative.products
+        if product.verification_status == VerificationStatus.VERIFIED
+        and (product.model or product.series)
+        and len(normalized_name(product.name)) >= 4
+    ]
+    repaired_images = []
+    for image in runner.cumulative.images:
+        if str(image.source_page_url) not in shared_product_pages:
+            repaired_images.append(image)
+            continue
+        context = normalized_name(" ".join(filter(None, (
+            image.visual_description, image.alt_text, image.source_title,
+        ))))
+        matches = [product for product in specific_products if normalized_name(product.name) in context]
+        matches.sort(key=lambda product: len(normalized_name(product.name)), reverse=True)
+        if matches:
+            target = matches[0]
+            repaired_images.append(image.model_copy(update={
+                "product_id": target.product_id,
+                "target_entity_id": target.product_id,
+                "target_entity_type": "product",
+            }))
+        else:
+            repaired_images.append(image.model_copy(update={
+                "product_id": None, "target_entity_id": None,
+            }))
+    runner.cumulative.images = repaired_images
     runner.cumulative.products, _ = ProductDetector().detect(
         runner.cumulative.products, runner.cumulative.images, runner.cumulative.sources,
         runner.cumulative.claims,
@@ -329,10 +422,14 @@ def main() -> int:
     print("[recovery] readiness:", readiness["status"])
     from enterprise_energy_research.research.data_coverage import ResearchDataCoverageValidator
     coverage = ResearchDataCoverageValidator().audit(
-        entity_name="宁德时代", claims=runner.cumulative.claims,
+        entity_name=(canonical_entity.canonical_name if canonical_entity else "目标企业"), claims=runner.cumulative.claims,
         products=runner.cumulative.products, factories=runner.cumulative.factories,
-        images=runner.cumulative.images, complexity=EnterpriseComplexity.GROUP_LARGE,
-        has_stock_code=True,
+        images=runner.cumulative.images,
+        complexity=run_manifest.complexity or EnterpriseComplexity.UNKNOWN,
+        has_stock_code=any(
+            claim.verification_status == VerificationStatus.VERIFIED and claim.field_name == "stock_code"
+            for claim in runner.cumulative.claims
+        ),
     )
     high_gaps = [gap.gap_code for gap in coverage.gaps if gap.severity == "high"]
     print("[recovery] high coverage gaps:", high_gaps)

@@ -27,6 +27,7 @@ from enterprise_energy_research.artifacts.image_publication import (
 )
 from enterprise_energy_research.artifacts.narrative import NarrativeBuilder, ResearchNarrative, write_narrative
 from enterprise_energy_research.artifacts.publication_boilerplate import PublicationBoilerplateFilter
+from enterprise_energy_research.artifacts.toc import heading_levels, materialize_toc
 from enterprise_energy_research.artifacts.qa_report import (
     QAFinding,
     QAVisualEntry,
@@ -44,6 +45,7 @@ from enterprise_energy_research.validation.consulting_narrative import (
     VisualSemanticValidator, write_consulting_validation,
 )
 from enterprise_energy_research.validation.publication_quality import (
+    DecisionIntelligenceValidator,
     ProductImageCoverageValidator,
     PublicationBoilerplateValidator,
     ResearchValueValidator,
@@ -107,6 +109,7 @@ class FrozenWordPublisher:
             *PublicationBoilerplateValidator().validate(narrative),
             *ResearchValueValidator().validate(narrative, bundle),
             *ProductImageCoverageValidator().validate(narrative),
+            *DecisionIntelligenceValidator().validate(narrative, bundle),
         ]:
             if check.status == "FAIL":
                 qa.record_finding(QAFinding(code=check.code, severity="error", message=check.message))
@@ -164,15 +167,21 @@ class FrozenWordPublisher:
             bundle, binding, output_path, entity, synthesis, narrative,
             render_results, publication_images, asset_root,
         )
+        # A real TOC field with an empty cached result looks like a missing
+        # directory outside desktop Word.  Seed visible Heading 1/2 entries;
+        # final office-render QA refreshes their page-number slots.
+        toc_headings = heading_levels(output_path)
+        materialize_toc(output_path, [(heading, 0, level) for heading, level in toc_headings])
         visible_validator = PublicationVisibleTextValidator()
         for message in [*visible_validator.validate_text(visible_validator.extract_docx(output_path)), *TOCValidator().validate(output_path)]:
             qa.record_finding(QAFinding(code="word_visible_text_or_toc", severity="error", message=message))
         verified_products = [item for item in bundle.products if item.verification_status == VerificationStatus.VERIFIED]
-        image_backed_products = [
-            item for item in verified_products
-            if (narrative.product_images.get(item.product_id) or item.image_id) in publication_images
-        ]
-        if len(verified_products) >= 5 and len(image_backed_products) < 5:
+        verified_product_ids = {item.product_id for item in verified_products}
+        image_backed_product_ids = {
+            item.product_id for item in image_manifest.prepared_images
+            if item.product_id in verified_product_ids
+        }
+        if len(verified_products) >= 5 and len(image_backed_product_ids) < 5:
             qa.record_finding(QAFinding(
                 code="word_product_image_gate", severity="error",
                 message="正式 Word 报告至少需要 5 个图片、参数和场景完整绑定的重点产品。",
@@ -272,7 +281,9 @@ class FrozenWordPublisher:
         # with a dot leader at the content width.
         from docx.enum.style import WD_STYLE_TYPE
         from docx.enum.text import WD_TAB_ALIGNMENT, WD_TAB_LEADER
-        for toc_name, size in (("TOC 1", 11), ("TOC 2", 10.5), ("TOC 3", 10)):
+        # Keep the executive TOC compact enough that a 9-chapter report plus
+        # appendices does not spill one orphan entry onto a nearly blank page.
+        for toc_name, size in (("TOC 1", 10), ("TOC 2", 9.5), ("TOC 3", 9)):
             try:
                 toc_style = styles.add_style(toc_name, WD_STYLE_TYPE.PARAGRAPH)
             except ValueError:
@@ -406,7 +417,7 @@ class FrozenWordPublisher:
                 self._add_evidence_image(document, publication, asset_root, f"{index}-P{image_counter}", figure_width)
             self._add_statement_list(document, "业务含义", chapter.implications)
             self._add_statement_list(document, "建议", chapter.recommendations)
-            self._add_statement_list(document, "反向证据", chapter.counter_evidence)
+            self._add_statement_list(document, "可能改变判断的事项", chapter.counter_evidence)
             constraints = [*chapter.limitations]
             if chapter.kind == "risks_evidence":
                 constraints = [*chapter.analysis_paragraphs, *constraints]
@@ -461,11 +472,17 @@ class FrozenWordPublisher:
         from docx.shared import Cm, Pt, RGBColor
 
         rows = []
+        prepared_by_product: dict[str, tuple[str, PublicationImage]] = {}
+        for prepared_id, prepared in publication_images.items():
+            if prepared.product_id and prepared.product_id not in prepared_by_product:
+                prepared_by_product[prepared.product_id] = (prepared_id, prepared)
         for product in bundle.products:
             if product.verification_status != VerificationStatus.VERIFIED:
                 continue
             image_id = narrative.product_images.get(product.product_id) or product.image_id
             publication = publication_images.get(image_id or "")
+            if publication is None and product.product_id in prepared_by_product:
+                image_id, publication = prepared_by_product[product.product_id]
             if publication is not None:
                 rows.append((product, image_id, publication))
         rows = rows[:8]
@@ -689,13 +706,13 @@ class FrozenWordPublisher:
                 })
             return compact
 
-        opportunity_columns = {"合作方向", "优先级", "切入场景", "其他公开披露事项", "Go / No-Go Gate"}
+        opportunity_columns = {"合作方向", "优先级", "切入场景", "其他公开披露事项", "立项条件"}
         if opportunity_columns.issubset(columns):
             return [{
                 "合作方向 / 优先级": f"{row.get('合作方向') or ''}｜{row.get('优先级') or ''}",
                 "切入场景": row.get("切入场景") or "",
                 "公开依据与决策门槛": (
-                    f"{row.get('其他公开披露事项') or ''}；Go / No-Go：{row.get('Go / No-Go Gate') or ''}"
+                    f"{row.get('其他公开披露事项') or ''}；立项条件：{row.get('立项条件') or ''}"
                 ).strip("；"),
             } for row in rows]
         return rows

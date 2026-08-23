@@ -38,6 +38,7 @@ from enterprise_energy_research.validation.consulting_narrative import (
     ConsultingNarrativeValidator, VisualSemanticValidator, write_consulting_validation,
 )
 from enterprise_energy_research.validation.publication_quality import (
+    DecisionIntelligenceValidator,
     ProductImageCoverageValidator,
     PublicationBoilerplateValidator,
     ResearchValueValidator,
@@ -122,6 +123,7 @@ class FrozenHtmlPublisher:
             *PublicationBoilerplateValidator().validate(narrative),
             *ResearchValueValidator().validate(narrative, bundle),
             *ProductImageCoverageValidator().validate(narrative),
+            *DecisionIntelligenceValidator().validate(narrative, bundle),
         ]:
             if check.status == "FAIL":
                 qa.record_finding(QAFinding(code=check.code, severity="error", message=check.message))
@@ -174,11 +176,18 @@ class FrozenHtmlPublisher:
         # Full product ledger remains searchable in collapsed detail. The
         # default showcase is image-backed only: no placeholders are published.
         products = []
+        prepared_by_product = {}
+        for publication in image_manifest.prepared_images:
+            if publication.product_id and publication.product_id not in prepared_by_product:
+                prepared_by_product[publication.product_id] = publication
         for product in bundle.products:
             if product.verification_status != VerificationStatus.VERIFIED:
                 continue
             bound_image_id = narrative.product_images.get(product.product_id) or product.image_id
             publication = prepared.get(bound_image_id or "")
+            if publication is None:
+                publication = prepared_by_product.get(product.product_id)
+                bound_image_id = publication.image_id if publication is not None else bound_image_id
             products.append({
                 "id": product.product_id, "name": product.name, "brand": product.brand, "model": product.model,
                 "family": product.category or "未分类", "series": product.series or "",
@@ -496,7 +505,7 @@ function kpiStrip(rows){return `<div class="chapter-kpis">${(rows||[]).slice(0,6
 function insightBlock(rows){return `<div class="insight-grid">${(rows||[]).slice(0,3).map((v,i)=>`<article><span>INSIGHT ${i+1}</span><p>${esc(chunks(v,220)[0])}</p></article>`).join('')}</div>`}
 function productShowcase(){const rows=DATA.featuredProducts||[];if(!rows.length)return '';return `<div class="product-grid featured-products">${rows.map(p=>`<article class="product-card"><img src="${p.offlineAsset}" alt="${esc(p.name)}"><div class="product-body"><h3>${esc(p.name)}</h3><div class="product-meta"><span>${esc(p.family)}</span>${p.series?`<span>${esc(p.series)}</span>`:''}${p.model?`<span>${esc(p.model)}</span>`:''}</div>${p.applications?.length?`<p><b>应用：</b>${esc(p.applications.slice(0,4).join(' / '))}</p>`:''}${p.parameters?.length?`<div class="product-meta">${p.parameters.slice(0,5).map(x=>`<span>${esc(x.name)}：${esc(x.value)} ${esc(x.unit||'')}</span>`).join('')}</div>`:''}${p.imageSource?`<p class="image-source"><a href="${esc(p.imageSource)}" target="_blank" rel="noreferrer">官方图片来源 ↗</a></p>`:''}</div></article>`).join('')}</div>`}
 function productLedger(){if(!DATA.products?.length)return '';const rows=DATA.products.map(p=>({'产品':p.name,'产品族':p.family,'系列/型号':[p.series,p.model].filter(Boolean).join(' / '),'应用场景':(p.applications||[]).join('；'),'公开参数':(p.parameters||[]).map(x=>`${x.name}:${x.value}${x.unit||''}`).join('；')}));return `<details class="nested-details"><summary>完整产品清单（${rows.length} 项）</summary>${tableBlock(rows)}</details>`}
-function detailBlock(c){const prose=[...(c.context||[]),...(c.analysis||[])].flatMap(p=>chunks(p)).map(p=>`<p>${esc(p)}</p>`).join('');return `<details class="chapter-details"><summary>展开分析与数据明细</summary>${c.executiveTakeaway?`<p class="takeaway">${esc(c.executiveTakeaway)}</p>`:''}<div class="content">${prose}</div>${tableBlock(c.tables)}${imageBlock(c.images)}${listBlock('业务含义',c.implications)}${listBlock('建议',c.recommendations)}${listBlock('反向事实',c.counterEvidence)}${listBlock('待确认事项',c.limitations)}${listBlock('行动项',c.actions)}${c.kind==='products'?productLedger():''}</details>`}
+function detailBlock(c){const prose=[...(c.context||[]),...(c.analysis||[])].flatMap(p=>chunks(p)).map(p=>`<p>${esc(p)}</p>`).join('');return `<details class="chapter-details"><summary>展开分析与数据明细</summary>${c.executiveTakeaway?`<p class="takeaway">${esc(c.executiveTakeaway)}</p>`:''}<div class="content">${prose}</div>${tableBlock(c.tables)}${imageBlock(c.images)}${listBlock('业务含义',c.implications)}${listBlock('建议',c.recommendations)}${listBlock('可能改变判断的事项',c.counterEvidence)}${listBlock('待确认事项',c.limitations)}${listBlock('行动项',c.actions)}${c.kind==='products'?productLedger():''}</details>`}
 function renderKpis(){$('kpiGrid').innerHTML=(DATA.kpis||[]).slice(0,6).map(k=>`<article class="kpi-card"><span>${esc(k.label)}</span><b>${esc(String(k.value??''))}${k.unit?`<small style="font-size:12px">${esc(k.unit)}</small>`:''}</b><i>${esc(k.period||k.scope||'公开披露口径')}</i></article>`).join('')}
 function renderChapters(){$('chapters').innerHTML=DATA.chapters.map((c,index)=>`<article class="chapter dashboard-chapter" id="${index+1}"><header class="chapter-head"><div><span>CHAPTER ${String(index+1).padStart(2,'0')}</span><h2>${esc(c.title)}</h2></div><p class="assertion">${esc(c.assertionTitle)}</p></header>${kpiStrip(c.kpis)}<div class="visual-grid">${(c.visuals||[]).slice(0,3).map((v,i)=>figBlock(v,i+1)).join('')}</div>${c.kind==='products'?productShowcase():''}${insightBlock(c.insights)}${detailBlock(c)}</article>`).join('');document.querySelectorAll('[data-img]').forEach(el=>el.querySelector('img').onclick=()=>{const w=window.open('');w.document.write(`<img src="${el.dataset.img}" style="max-width:96vw;max-height:94vh;display:block;margin:auto"><p style="text-align:center;font-family:sans-serif">${el.dataset.cap}</p>`)});}
 function renderSources(){$('sourceList').innerHTML=DATA.sources.map(s=>`<article class="source-row"><div><b>${esc(s['来源名称'])}</b></div><div><span>${esc(s['来源类型'])}${s['发布日期']?` · ${esc(s['发布日期'])}`:''}</span></div><div><a href="${esc(s['网址'])}" target="_blank" rel="noreferrer">查看原始页面 ↗</a></div></article>`).join('')}

@@ -18,7 +18,7 @@ FIELD_LABELS: dict[str, str] = {
     "opportunity": "合作方向", "solution": "价值主张", "priority": "优先级",
     "next_step": "下一步行动", "strategic_rationale": "战略理由",
     "target_scenario": "切入场景", "our_value_proposition": "我方价值",
-    "key_prerequisites": "关键前提", "go_no_go_gate": "Go / No-Go Gate",
+    "key_prerequisites": "关键前提", "go_no_go_gate": "立项条件",
     "electricity_consumption": "年度用电量",
     "energy_consumption": "综合能源消费量",
     "transformer_capacity": "配电变压器容量",
@@ -74,10 +74,10 @@ REASON_LABELS: dict[str, str] = {
 }
 
 SOURCE_TYPE_LABELS: dict[str, str] = {
-    "SOURCE_A": "一级来源（企业官网、年报、政府或监管机构）",
-    "SOURCE_B": "二级来源（权威行业机构或专业数据库）",
-    "SOURCE_C": "三级来源（主流媒体或行业媒体）",
-    "SOURCE_D": "辅助来源（其他公开资料）",
+    "SOURCE_A": "核心一级证据",
+    "SOURCE_B": "高质量辅助证据",
+    "SOURCE_C": "线索型来源",
+    "SOURCE_D": "弱证据/舆情线索",
 }
 
 TABLE_HEADER_LABELS = FIELD_LABELS

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+import json
 from typing import Any, Iterable
 
 from pydantic import BaseModel, Field
@@ -53,6 +54,30 @@ BOILERPLATE_PHRASES = (
 
 DECISION_DENSITY_PHRASES = (
     "Go / No-Go", "决策门", "30 / 60 / 90", "阻断条件", "预可研",
+)
+
+# These phrases expose the internal reasoning template instead of stating a
+# business conclusion in ordinary Chinese.  They are forbidden across the
+# complete publication DTO because unified HTML embeds that DTO inline.
+AI_TONE_PHRASES = (
+    "这些事实回答企业靠什么经营",
+    "不把企业规模本身等同于合作价值",
+    "当前结论为",
+    "至少一个合作假设已同时通过",
+    "目标问题、合作时点、委托方能力、价值机制和反证条件门槛",
+    "机会评估回答目标问题",
+    "完整合作假设契约",
+    "目标问题、时点和委托方能力缺一不可",
+    "30 天回答目标问题是否真实且重要",
+    "每一步都允许证伪并停止",
+    "不以工作量证明机会成立",
+    "关键输出不是资料包或流程台账",
+    "价值取决于经核验的现场数据与可审计基线",
+    "下一阶段资源仅投向仍未被证伪",
+    "不以研究作业是否完成替代业务判断",
+    "委托方配置能力无法影响目标问题或无法组织关键关系方",
+    "合作假设的证伪门槛",
+    "按当前战略优先级验证合作假设",
 )
 
 # Allowed decision-language chapters (consulting layer only).
@@ -253,3 +278,78 @@ class ProductImageCoverageValidator:
                 message=f"verified_products={verified_products}，正式产品图片={product_images}（门槛 ≥5）", value=verified_products,
             )]
         return [QualityCheck(code="product_image_coverage", status="PASS", message=f"{product_images} 张产品图片", value=product_images)]
+
+
+class DecisionIntelligenceValidator:
+    """Hard publication gates for management-useful decision intelligence."""
+
+    PROCESS_TERMS = (
+        "资料清单", "数据清洗", "补数", "预可研", "检索失败", "检索流程",
+        "报告生成", "问题台账", "资料齐套率", "完成报告", "证据收集流程",
+    )
+    GAP_TERMS = (
+        "数据缺口", "资料缺失", "未找到资料", "尚未检索", "检索失败",
+        "待补充资料", "公开资料不足", "现场数据缺失",
+    )
+    GENERIC_OPPORTUNITY = "提供场景诊断、数据边界梳理、技术适配与预可研服务"
+
+    def validate(self, narrative: Any, bundle: Any) -> list[QualityCheck]:
+        body = _narrative_body(narrative)
+        sentences = _sentences(body)
+        denominator = max(1, len(sentences))
+        process = [sentence for sentence in sentences if any(term in sentence for term in self.PROCESS_TERMS)]
+        gaps = [sentence for sentence in sentences if any(term in sentence for term in self.GAP_TERMS)]
+        process_ratio = len(process) / denominator
+        gap_ratio = len(gaps) / denominator
+        verified_count = sum(getattr(claim, "verification_status", None).value == "VERIFIED" for claim in bundle.claims)
+        gap_threshold = 0.05 if verified_count >= 80 else 0.10
+        strategic = getattr(narrative, "strategic_interpretation", None)
+        has_historical_inputs = any(
+            getattr(trend, "year_count", 0) >= 3
+            for trend in __import__(
+                "enterprise_energy_research.research.research_analysis",
+                fromlist=["ResearchAnalysisEngine"],
+            ).ResearchAnalysisEngine().analyze(bundle).trends
+        )
+        trajectory_ok = bool(strategic and strategic.trajectories) if has_historical_inputs else True
+        comparative_claims = [
+            claim for claim in bundle.claims
+            if claim.field_name in {"competitor", "comparison", "market_share", "industry_rank"}
+            and getattr(claim.verification_status, "value", claim.verification_status) == "VERIFIED"
+        ]
+        competition_ok = not (strategic and strategic.competitive_positions) or bool(comparative_claims)
+        hypotheses = list(getattr(narrative, "cooperation_hypotheses", []))
+        bad_priority = [
+            item.hypothesis_id for item in hypotheses
+            if getattr(item.status, "value", item.status) == "PRIORITY_OPPORTUNITY"
+            and (not item.target_problem or not item.why_now or not item.client_capability_match
+                 or not item.value_creation_logic or not item.target_department
+                 or not item.disconfirming_conditions
+                 or "UNKNOWN_CLIENT_CAPABILITY" in item.client_capability_statuses)
+        ]
+        generic = [item.hypothesis_id for item in hypotheses if self.GENERIC_OPPORTUNITY in item.value_creation_logic]
+        executive = narrative.chapter("executive_summary")
+        exec_text = "\n".join([*(executive.context_paragraphs if executive else []), *(executive.analysis_paragraphs if executive else [])])
+        exec_process = [term for term in self.PROCESS_TERMS if term in exec_text]
+        enterprise_chapters = [chapter for chapter in narrative.chapters if chapter.claim_ids]
+        enterprise_ratio = len(enterprise_chapters) / max(1, len(narrative.chapters))
+        full_payload = json.dumps(narrative.model_dump(mode="json"), ensure_ascii=False)
+        ai_tone_hits = {phrase: full_payload.count(phrase) for phrase in AI_TONE_PHRASES if phrase in full_payload}
+        checks = [
+            QualityCheck(code="decision_process_language_ratio", status="PASS" if process_ratio < 0.05 else "FAIL", message=f"流程语言句占比 {process_ratio:.1%}（门槛 <5%）", value=process[:5]),
+            QualityCheck(code="decision_gap_narrative_ratio", status="PASS" if gap_ratio < gap_threshold else "FAIL", message=f"缺口叙事句占比 {gap_ratio:.1%}（门槛 <{gap_threshold:.0%}）", value=gaps[:5]),
+            QualityCheck(code="strategic_trajectory_required", status="PASS" if trajectory_ok else "FAIL", message="存在三年可比数据时必须形成战略轨迹", value=bool(strategic and strategic.trajectories) if strategic else False),
+            QualityCheck(code="competition_evidence_gate", status="PASS" if competition_ok else "FAIL", message="竞争位置必须由具名可比或量化竞争证据打开", value=[claim.claim_id for claim in comparative_claims]),
+            QualityCheck(code="cooperation_hypothesis_contract", status="PASS" if not bad_priority else "FAIL", message="优先合作假设必须满足 Need/Why Now/委托方能力/价值机制/责任部门/反证条件", value=bad_priority),
+            QualityCheck(code="generic_opportunity_rejection", status="PASS" if not generic else "FAIL", message="不得使用通用预可研服务模板生成正式机会", value=generic),
+            QualityCheck(code="executive_summary_process_language", status="PASS" if not exec_process else "FAIL", message="执行摘要不得以研究流程作为结论", value=exec_process),
+            QualityCheck(code="enterprise_specific_chapter_ratio", status="PASS" if enterprise_ratio > 0.70 else "WARN", message=f"企业事实绑定章节占比 {enterprise_ratio:.1%}（目标 >70%）", value=enterprise_ratio),
+            QualityCheck(code="management_usefulness", status="PASS" if executive and len(narrative.executive_summary) == 5 and bool(getattr(narrative, "client_profile", None)) else "FAIL", message="执行摘要须回答企业本质、变化、委托方含义、风险反证与资源决定"),
+            QualityCheck(
+                code="plain_business_language",
+                status="PASS" if not ai_tone_hits else "FAIL",
+                message="公开表达应直接陈述业务事实、建议和条件，不得复述内部推理框架",
+                value=ai_tone_hits,
+            ),
+        ]
+        return checks

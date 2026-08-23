@@ -233,3 +233,7 @@ Release only when:
 - `BrowserExecutionValidator`: enforces a 1–4 worker ceiling, zero active pages at completion and opened/closed lifecycle equality.
 
 The recorded regression suite maps TEST 1–24 in `tests/test_p0_second_round.py`. Formal release additionally requires a real-company regeneration, DOCX → LibreOffice → PDF → per-page PNG inspection, and HTML renders at 1366×768, 1920×1080 and 390×844.
+
+## DecisionIntelligenceValidator
+
+Formal Word/HTML publication is fail-closed on: process-language ratio >=5%; gap narrative >=10% (>=5% for large listed enterprises); a missing strategic trajectory despite three complete comparable years; competition output without comparable evidence; a priority hypothesis missing Need/Why Now/client capability/value logic/target department/disconfirming conditions; priority based on UNKNOWN client capability; generic pre-feasibility service wording; or an executive summary that does not answer the five management questions. Enterprise-specific chapter ratio >70% is tracked as a release target. Regression ownership is `tests/test_p0_decision_intelligence.py` plus existing Word/HTML shared-narrative tests.

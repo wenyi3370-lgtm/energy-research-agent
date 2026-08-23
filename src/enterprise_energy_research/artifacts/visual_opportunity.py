@@ -318,7 +318,8 @@ class VisualOpportunityPlanner:
                 source_note="数据来源：公开披露基地地址（详见附录基地清单）。",
             ))
         # Domestic / overseas split -> part_to_whole treemap (real counts).
-        if self.analysis.overseas_factory_count > 0:
+        classified_count = self.analysis.domestic_factory_count + self.analysis.overseas_factory_count
+        if self.analysis.overseas_factory_count > 0 and classified_count == self.analysis.factory_site_count:
             proposals.append(VisualProposal(
                 visual_id="v-factories-domestic-overseas", chapter_id="factories",
                 decision_question="国内外基地如何分布？", business_thesis="国内与海外基地数量构成。",

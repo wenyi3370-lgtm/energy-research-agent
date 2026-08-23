@@ -212,6 +212,10 @@ Formal PPT requirements:
 
 Before publishing, bind each section/slide/sheet/widget to claim, source, image and chart IDs. `visual_manifest.json` is mandatory and a visual record includes title, analytical purpose, family, canonical type, data/analysis/schematic class, source claim/source/image IDs, transformation, units, display rounding and Word/HTML/PPT targets. Publishers may format/round only according to this record. Word, unified HTML and PPT must reference the same visual ID when they present the same analysis.
 
+### Management narrative contract
+
+Word and unified HTML serialize the same `ResearchNarrative` 4.0. The body order is executive decision, strategic trajectory/turning points, business and operating evidence, products/manufacturing/energy where supported, cooperation hypotheses, business-led 30/60/90 actions, and enterprise risks/scenarios. The full source, image, factory, product and due-diligence ledgers remain appendices or collapsed detail. A publisher must not reconstruct opportunities or promote a rejected hypothesis. Source labels are exactly: A 核心一级证据, B 高质量辅助证据, C 线索型来源, D 弱证据/舆情线索.
+
 ## 9. Packaging rules
 
 - Include validation reports and checksums.

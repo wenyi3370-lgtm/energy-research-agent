@@ -396,7 +396,7 @@ def screenshot_html(html_path: Path, output: Path) -> dict:
                 rendered_visible_text = page.locator("body").inner_text()
             target = output / f"html-{width}x{height}.png"
             page.screenshot(path=str(target), full_page=True)
-            geometry = page.evaluate("""() => ({scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth, sourceSections: [...document.querySelectorAll('h2')].filter(x => x.textContent.trim() === '来源与方法').length, chapterCount: document.querySelectorAll('.chapter').length, decisionFirst: !!document.querySelector('.judgement b')})""")
+            geometry = page.evaluate("""() => ({scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth, sourceSections: document.querySelectorAll('.workspace.sources').length, chapterCount: document.querySelectorAll('.chapter').length, decisionFirst: !!document.querySelector('.judgement b')})""")
             screenshots[f"{width}x{height}"] = str(target)
             checks[f"{width}x{height}"] = {**geometry, "pageErrors": errors, "horizontalOverflow": geometry["scrollWidth"] > geometry["clientWidth"] + 2}
             page.close()
@@ -464,7 +464,7 @@ def main() -> int:
     if word_render.page_count == 0 and any("PyMuPDF" in item for item in word_render.findings):
         word_render = fallback_word_render_validation(final_pdf)
     visible = PublicationVisibleTextValidator()
-    word_findings = visible.validate_text(visible.extract_docx(args.docx)) + TOCValidator().validate(args.docx)
+    word_findings = visible.validate_text(visible.extract_docx(args.docx)) + TOCValidator().validate(args.docx, require_page_numbers=True)
     html_result = screenshot_html(args.html, output)
     rendered_html_text = html_result.pop("_rendered_visible_text", "")
     html_findings = visible.validate_text(rendered_html_text)

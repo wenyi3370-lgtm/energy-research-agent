@@ -18,6 +18,12 @@ class GoalExtractionContract(BaseModel):
     normalization_rules: list[str] = Field(default_factory=list)
     criticality: str = "major"  # critical | major | minor
     report_destination: str = "appendix"  # body | appendix | diagnostic
+    interpretation_goal: str | None = None
+    evidence_patterns: list[str] = Field(default_factory=list)
+    counter_evidence_patterns: list[str] = Field(default_factory=list)
+    time_scope: str | None = None
+    comparison_required: bool = False
+    historical_required: bool = False
 
 
 FINANCIAL_FIELDS = [
@@ -414,6 +420,57 @@ GOAL_CONTRACTS: dict[str, GoalExtractionContract] = {
         report_destination="body",
     ),
 }
+
+GOAL_CONTRACTS.update({
+    "strategic_trajectory": GoalExtractionContract(
+        goal_family="strategic_trajectory", business_question="企业过去五年如何变化，哪些事件构成战略转折？",
+        expected_fields=["strategy_event", "major_investment", "new_factory", "technology_route", "overseas_expansion", *FINANCIAL_FIELDS],
+        preferred_source_types=OFFICIAL_TYPES, criticality="critical", report_destination="body",
+        interpretation_goal="形成至少三个可比期间的战略轨迹并识别具名转折点",
+        evidence_patterns=["连续年度经营指标", "带日期的投资/并购/产能/技术路线事件"],
+        counter_evidence_patterns=["单期规模", "未投产规划", "无日期战略口号"], time_scope="最近5个完整年度", historical_required=True,
+    ),
+    "business_drivers": GoalExtractionContract(
+        goal_family="business_drivers", business_question="哪些客户、政策、技术与经营机制驱动企业变化？",
+        expected_fields=["customer", "order", "contract", "policy", "technology_route", "gross_margin", "profit", "capacity"],
+        preferred_source_types=DEEP_TYPES, criticality="major", report_destination="body",
+        interpretation_goal="将可核验变化连接到业务驱动机制",
+        evidence_patterns=["指标变化与具名事件同期间出现", "企业明确说明驱动原因"],
+        counter_evidence_patterns=["只有相关性无机制", "通用行业趋势替代企业证据"], time_scope="最近5个完整年度", historical_required=True,
+    ),
+    "customer_market_proof": GoalExtractionContract(
+        goal_family="customer_market_proof", business_question="哪些合同、订单、具名客户或份额证明市场接受度？",
+        expected_fields=["customer_name", "contract", "order", "market_share", "application_case", "customer_segment"],
+        preferred_source_types=DEEP_TYPES, criticality="major", report_destination="body",
+        interpretation_goal="按合同/订单、具名客户、客群描述分级市场证明",
+        evidence_patterns=["具名合同或订单", "同口径市场份额", "官方客户案例"],
+        counter_evidence_patterns=["无金额合作意向", "未具名客群描述", "经销商宣传"], time_scope="最近3年",
+    ),
+    "competitive_position": GoalExtractionContract(
+        goal_family="competitive_position", business_question="同一指标、期间和市场范围下企业处于什么竞争位置？",
+        expected_fields=["competitor", "comparison", "market_share", "industry_rank", "industry_position"],
+        preferred_source_types=DEEP_TYPES, criticality="major", report_destination="body",
+        interpretation_goal="只在可比口径成立时生成竞争位置",
+        evidence_patterns=["同期间同市场份额", "权威机构排名", "具名可比企业"],
+        counter_evidence_patterns=["跨市场或跨期间排名", "主观领先表述"], time_scope="最新完整年度", comparison_required=True,
+    ),
+    "enterprise_risks": GoalExtractionContract(
+        goal_family="enterprise_risks", business_question="哪些企业特定风险会改变经营结果或合作窗口？",
+        expected_fields=["risk", "regulatory_risk", "customer_concentration", "supply_chain", "litigation", "impairment"],
+        preferred_source_types=["annual_report", "official_announcement", "government"], criticality="critical", report_destination="body",
+        interpretation_goal="识别风险、作用机制与可能改变的决策，不把数据缺口当风险",
+        evidence_patterns=["年报风险因素", "监管或诉讼事件", "集中度或减值披露"],
+        counter_evidence_patterns=["检索失败", "未披露字段", "现场数据待取得"], time_scope="最近3年",
+    ),
+    "cooperation_timing": GoalExtractionContract(
+        goal_family="cooperation_timing", business_question="为什么是现在，哪些战略时点使合作值得验证？",
+        expected_fields=["strategic_priority", "strategy_event", "investment", "technology_route", "customer", "order", "risk"],
+        preferred_source_types=DEEP_TYPES, criticality="critical", report_destination="body",
+        interpretation_goal="确认对方是否有具体需求、近期是否适合接洽，以及应联系哪个业务部门",
+        evidence_patterns=["战略优先级变化", "新客户/订单/监管时点", "资源投向变化"],
+        counter_evidence_patterns=["问题不存在", "资源已投向其他路径", "责任部门不认可优先级"], time_scope="当前及最近3年", historical_required=True,
+    ),
+})
 
 
 def contract_for(goal_family: str) -> GoalExtractionContract:

@@ -48,6 +48,13 @@ from enterprise_energy_research.research.opportunity_assessment import (
     OpportunityAssessment,
     OpportunityAssessmentEngine,
 )
+from enterprise_energy_research.research.client_profile import ClientProfile, client_profile_from_manifest
+from enterprise_energy_research.research.cooperation_hypothesis import (
+    CooperationHypothesis, CooperationHypothesisEngine,
+)
+from enterprise_energy_research.research.strategic_interpretation import (
+    StrategicInterpretation, StrategicInterpretationEngine,
+)
 from enterprise_energy_research.research.product_images import ProductImageResolver
 from enterprise_energy_research.research.research_analysis import (
     ResearchAnalysis,
@@ -104,6 +111,7 @@ class StoryModule(BaseModel):
         "executive_summary", "entity_profile", "group_structure", "partnerships",
         "operations", "factories", "products", "energy_profile", "opportunities",
         "action_plan", "risks_evidence",
+        "strategic_interpretation",
     ]
     title: str
     assertion_title: str
@@ -146,7 +154,7 @@ class NarrativeAppendices(BaseModel):
 
 
 class ResearchNarrative(BaseModel):
-    schema_version: str = "3.1"
+    schema_version: str = "4.0"
     run_id: str
     freeze_id: str
     entity_name: str
@@ -165,6 +173,9 @@ class ResearchNarrative(BaseModel):
     product_images: dict[str, str] = Field(default_factory=dict)
     counts: dict[str, int] = Field(default_factory=dict)
     appendices: NarrativeAppendices = Field(default_factory=NarrativeAppendices)
+    client_profile: ClientProfile | None = None
+    strategic_interpretation: StrategicInterpretation | None = None
+    cooperation_hypotheses: list[CooperationHypothesis] = Field(default_factory=list)
     generated_at: str = ""
 
     def visual_manifest(self) -> VisualManifest:
@@ -215,8 +226,15 @@ class NarrativeBuilder:
             raise ValueError("Frozen bundle contains no enterprise entity")
         synthesis = synthesis or self._default_synthesis(bundle, entity)
         analysis = ResearchAnalysisEngine().analyze(bundle)
-        decision = self.decision_engine.synthesize(bundle, analysis, synthesis)
-        opportunities = self.opportunity_engine.assess(bundle)
+        client = client_profile_from_manifest(bundle.run_manifest)
+        strategic = StrategicInterpretationEngine().interpret(bundle, analysis)
+        hypotheses = CooperationHypothesisEngine().build(bundle, strategic, client)
+        decision = self.decision_engine.synthesize(
+            bundle, analysis, synthesis, strategic=strategic,
+            hypotheses=hypotheses, client=client,
+        )
+        all_opportunities = self.opportunity_engine.assess(bundle, strategic)
+        opportunities = [item for item in all_opportunities if item.hypothesis_status != "REJECTED"]
         product_images = ProductImageResolver().resolve(bundle)
 
         narrative = ResearchNarrative(
@@ -232,6 +250,9 @@ class NarrativeBuilder:
             kpis=[item.model_dump(mode="json") for item in analysis.kpis],
             product_images=product_images,
             generated_at=datetime.now(timezone.utc).isoformat(),
+            client_profile=client,
+            strategic_interpretation=strategic,
+            cooperation_hypotheses=hypotheses,
         )
         order = 0
         used_images: set[str] = set()
@@ -256,6 +277,8 @@ class NarrativeBuilder:
         structure = self._chapter_group_structure(bundle, narrative)
         if structure is not None:
             add(structure)
+
+        add(self._strategic_module(strategic))
 
         finding_by_domain = {item.semantic_domain: item for item in decision.findings}
         add(self._operations_module(bundle, analysis, finding_by_domain, narrative, synthesis))
@@ -295,8 +318,31 @@ class NarrativeBuilder:
             }) for product in bundle.products if product.verification_status == VerificationStatus.VERIFIED],
         )
 
+        # A fact can legitimately support more than one analytical module,
+        # but repeating its paragraph verbatim makes the publication read as
+        # stitched output.  Keep the first editorial occurrence and remove
+        # later exact copies across every visible paragraph collection.
+        self._deduplicate_chapter_paragraphs(narrative)
         narrative.counts = self._counts(bundle, narrative)
         return narrative
+
+    @staticmethod
+    def _deduplicate_chapter_paragraphs(narrative: ResearchNarrative) -> None:
+        seen: set[str] = set()
+        fields = (
+            "context_paragraphs", "analysis_paragraphs", "implications",
+            "recommendations", "counter_evidence", "limitations", "action_items",
+        )
+        for chapter in narrative.chapters:
+            for field in fields:
+                unique: list[str] = []
+                for paragraph in getattr(chapter, field):
+                    key = paragraph.strip()
+                    if not key or key in seen:
+                        continue
+                    seen.add(key)
+                    unique.append(paragraph)
+                setattr(chapter, field, unique)
 
     # ── executive summary (data-first) ─────────────────────────────────────
     def _decision_executive(self, bundle, decision: DecisionSynthesis, analysis: ResearchAnalysis, opportunities: list[OpportunityAssessment], images_for, narrative: ResearchNarrative) -> StoryModule:
@@ -335,6 +381,47 @@ class NarrativeBuilder:
                 module.visual_ids.append(spec.visual_id)
         module.image_ids = images_for(chapter="executive_summary", entity_id=entity.entity_id)
         return module
+
+    def _strategic_module(self, strategic: StrategicInterpretation) -> StoryModule:
+        trajectories = ([
+            "跨期轨迹覆盖" + "；".join(
+                f"{item.title}（{'—'.join(item.periods)}）" for item in strategic.trajectories
+            ) + "。具体数值变化在经营章节呈现；本章比较这些轨迹是否共同指向资源投向、能力建设或合作窗口的变化。"
+        ] if strategic.trajectories else [])
+        turning_points = [f"{item.period}｜{item.event}：{item.implication}" for item in strategic.turning_points]
+        priorities = [f"{item.name}：{item.rationale}" for item in strategic.priorities]
+        competition = [item.conclusion for item in strategic.competitive_positions]
+        strength_labels = {"strong": "强", "medium": "中", "weak": "弱"}
+        customer = [f"{item.customer_or_market}（资料支持程度：{strength_labels.get(item.strength, '待确认')}）：{item.conclusion}" for item in strategic.customer_market_proofs]
+        body = [*trajectories[:4], *turning_points[:4], *priorities[:4], *competition[:2], *customer[:4]]
+        if not body:
+            body = ["现有证据不足以形成跨期战略轨迹；本章不以单期规模、产品列表或通用行业叙事替代战略变化判断。"]
+        claim_ids = list(dict.fromkeys(
+            claim_id for collection in (
+                strategic.trajectories, strategic.turning_points, strategic.priorities,
+                strategic.competitive_positions, strategic.customer_market_proofs,
+            ) for item in collection for claim_id in item.lineage.claim_ids
+        ))
+        source_ids = list(dict.fromkeys(
+            source_id for collection in (
+                strategic.trajectories, strategic.turning_points, strategic.priorities,
+                strategic.competitive_positions, strategic.customer_market_proofs,
+            ) for item in collection for source_id in item.lineage.source_ids
+        ))
+        return StoryModule(
+            module_id="mod-strategy", chapter_id="strategic_interpretation", kind="strategic_interpretation",
+            title="战略轨迹、市场证明与未来情景",
+            assertion_title=(strategic.trajectories[0].direction if strategic.trajectories else "跨期战略轨迹尚未达到可验证门槛"),
+            decision_question="企业如何变化，哪些驱动、市场证明和风险会改变未来选择？",
+            executive_takeaway=strategic.saturation.rationale,
+            analysis_paragraphs=body,
+            counter_evidence=[item.risk for item in strategic.enterprise_risks[:4]],
+            limitations=[] if strategic.competitive_positions else ["缺少同口径、同期间和同市场范围的可比证据，因此不生成具名竞争格局。"],
+            claim_ids=claim_ids, source_ids=source_ids,
+            table_rows=[{
+                "情景": item.scenario, "成立条件": item.condition, "管理含义": item.implication,
+            } for item in strategic.scenarios],
+        )
 
     # ── 2. operations: data-centric business chapter ───────────────────────
     def _operations_module(self, bundle, analysis: ResearchAnalysis, finding_by_domain: dict[str, DecisionFinding], narrative: ResearchNarrative, synthesis: ResearchSynthesis | None = None) -> StoryModule:
@@ -694,11 +781,12 @@ class NarrativeBuilder:
         if distribution:
             regions = "、".join(f"{region} {count} 处" for region, count in list(distribution.items())[:8])
             analysis_paragraphs.append(
-                f"从地域结构看，生产基地分布在{regions}。"
+                f"从地域结构看，基地记录按公开地址归类为{regions}。"
                 "区域集中度反映产能组织重心，也影响跨区域复制试点时的审批、物流与运维条件；"
                 "首批切入应优先选择与目标场景直接相关、资料可得性高的基地，避免以产能排名代替选择。"
             )
-            if analysis.overseas_factory_count:
+            classified_count = analysis.domestic_factory_count + analysis.overseas_factory_count
+            if analysis.overseas_factory_count and classified_count == analysis.factory_site_count:
                 analysis_paragraphs.append(
                     f"国内基地 {analysis.domestic_factory_count} 处、海外基地 {analysis.overseas_factory_count} 处，"
                     "海外布局反映交付与供应链的境外延伸，合作切入需分别确认境内外的责任主体与标准适用。"
@@ -816,77 +904,97 @@ class NarrativeBuilder:
     # ── 5. energy & zero-carbon ────────────────────────────────────────────
     def _energy_module(self, bundle, analysis: ResearchAnalysis, finding: DecisionFinding | None, narrative: ResearchNarrative) -> StoryModule:
         context: list[str] = []
+        verified_energy_claims = [
+            claim for claim in bundle.claims
+            if claim.verification_status == VerificationStatus.VERIFIED
+            and claim.field_name in {
+                "electricity_consumption", "energy_consumption", "power_demand", "peak_load",
+                "peak_demand", "electricity_cost", "load_curve", "transformer_capacity",
+                "roof_area", "carbon_intensity", "pv_capacity", "storage_capacity", "storage_power",
+            }
+        ]
+        report_titles = list(dict.fromkeys(
+            str(claim.value).strip() for claim in verified_energy_claims
+            if "碳排放核算报告" in str(claim.value) and str(claim.value).strip()
+        ))
+        present_fields = {item.field_name for item in analysis.own_energy_metrics}
+        screening_fields = {"electricity_consumption", "load_curve", "electricity_cost", "transformer_capacity"}
+        missing_screening = screening_fields - present_fields
         if analysis.own_energy_metrics:
             context.append(
-                "企业自身能源数据：" + "；".join(
+                "公开披露中可用于能源判断的量化数据包括：" + "；".join(
                     f"{item.label} {item.value_display}{item.unit or ''}"
                     + (f"（{item.period}）" if item.period else "")
                     for item in analysis.own_energy_metrics
-                ) + "。这些数据描述企业自身的用能条件，是分布式光伏与储能场景测算的输入，与能源产品能力是两类信息；"
-                "屋顶面积规模支持分布式光伏场景的初步讨论，具体装机与收益需结合屋面荷载、遮挡与并网条件测算。"
+                ) + "。这些数值只按原披露期间、单位和范围使用，不从公司产品容量或制造产能补算企业用能。"
+            )
+        elif report_titles:
+            context.append(
+                f"公开页面列示{'、'.join(report_titles[:3])}。该页面条目只能确认年度碳核算披露的存在；"
+                "标题本身没有给出综合能源消费量的数值、单位和基地范围，因此不能作为企业能耗指标。"
             )
         elif finding is not None:
-            context.append(finding.fact_summary + "基地级用电量、负荷曲线与电价账单需在预可研阶段由现场数据补齐。")
+            context.append(finding.fact_summary)
         else:
             context.append(
-                "公开渠道暂未披露可独立核验的企业自身能源数据；"
-                "基地级用电量、负荷曲线与电价账单需在预可研阶段由现场数据补齐，测算不得以制造产能或产品容量替代。"
+                "当前公开资料未提供可以落到单一基地的电量、负荷、电价、配电容量或屋顶数据。"
             )
 
         analysis_paragraphs: list[str] = []
-        for insight in analysis.insights:
-            if insight.topic != "energy":
-                continue
-            if insight.insight_id == "INS-ENERGY-OWN":
-                analysis_paragraphs.append(
-                    f"{insight.findings[0] if insight.findings else ''}"
-                    "进入测算前，仍需确认统计期间、基地范围与计费口径，并把制造产能与产品容量排除在用能画像之外，原始披露值保留备查，相关边界以现场数据为准。"
-                )
-            else:
-                analysis_paragraphs.append(insight.findings[0] if insight.findings else "")
-            if insight.consulting_note:
-                analysis_paragraphs.append(insight.consulting_note)
-        if analysis.energy_product_metrics:
+        if analysis.own_energy_metrics and not missing_screening:
             analysis_paragraphs.append(
-                "能源产品/项目能力：" + "；".join(
-                    f"{item.label} {item.value_display}{item.unit or ''}"
-                    for item in analysis.energy_product_metrics
-                ) + "。产品能力说明企业会做什么，与企业自身用能规模是两类信息，分别用于合作范围判断与项目价值测算。"
+                "现有量化信息可用于选择进入预可研的候选基地，但装机规模、储能时长和收益仍取决于同一基地、同一期间的完整账单与运行数据。"
             )
         else:
             analysis_paragraphs.append(
-                "公开资料中暂未识别出独立可核验的能源产品/项目指标；"
-                "储能、光伏、零碳等能力需以企业官方产品页或项目披露为准，本章不作推断；"
-                "项目级证据（并网规模、投运时间）暂缺时，不推导项目收益结论。"
+                "现有证据不能比较各基地的用能成本、峰谷差或可接入容量，也不能确定光伏装机、储能功率与时长。"
+                "因此本章不提供项目规模、投资额或收益估算。"
             )
-        if not analysis_paragraphs:
+        zero_carbon_insight = next((item for item in analysis.insights if item.insight_id == "INS-ZERO-CARBON"), None)
+        if zero_carbon_insight and zero_carbon_insight.findings:
+            analysis_paragraphs.append(zero_carbon_insight.findings[0])
+        if analysis.energy_product_metrics:
             analysis_paragraphs.append(
-                "能源章节区分两类事实：企业自身用能数据（决定项目值不值得做）与能源产品/项目能力"
-                "（说明双方会做什么）。现有公开资料以产品与项目能力为主，基地级用能数据需在预可研阶段获取。"
-            )
-        if finding is not None and finding.business_implication:
-            analysis_paragraphs.append(
-                finding.business_implication + "屋顶资源与配电条件是分布式方案可行性的直接边界，需与电量、电价一并纳入资料清单，"
-                "并在预可研阶段按基地逐项核验，核验记录存档备查。"
+                "公司公开披露的储能或光伏产品参数可以用于讨论技术接口，但不能替代目标基地的负荷和电价数据。"
             )
         analysis_paragraphs.append(
-            "能源章节小结：公司能源维度公开披露以零碳与绿电数据为主，基地级用电与负荷数据暂缺；"
-            "双方合作的能源议题应从零碳目标、绿电采购与储能配套切入，用能画像以现场数据为测算前提，绿电与碳数据随可持续发展报告更新。"
+            "下一步只需做一项明确判断：能否由一处基地的能源管理或设施部门提供近12至24个月电量账单、"
+            "分时负荷、电价、配电容量、屋顶条件和既有光储设施资料。资料齐备后再做预可研；"
+            "若没有明确基地、责任部门或完整数据，则不进入容量设计和商业报价。"
         )
 
-        assertion = finding.conclusion if finding is not None else "现有公开资料以能源产品与项目能力为主"
-        energy_claim_ids = list(finding.supporting_claim_ids) if finding is not None else []
+        if analysis.own_energy_metrics and not missing_screening:
+            assertion = "公开量化能源数据可支持基地初筛，项目方案仍需按基地复核"
+        elif analysis.own_energy_metrics:
+            assertion = "现有量化能源数据不完整，暂不能确定项目容量或收益"
+        else:
+            assertion = "公开资料尚不足以判断单个基地的光伏或储能项目经济性"
+        energy_claim_ids = list(dict.fromkeys(
+            [claim_id for item in analysis.own_energy_metrics for claim_id in item.claim_ids]
+            + [claim.claim_id for claim in verified_energy_claims]
+        ))
+        energy_source_ids = list(dict.fromkeys(
+            [source_id for item in analysis.own_energy_metrics for source_id in item.source_ids]
+            + [claim.source_id for claim in verified_energy_claims]
+        ))
+        recommendation = (
+            "选择一处基地，由能源管理或设施部门提供同一期间的电量、负荷、电价、配电和屋顶数据。"
+        )
         module = StoryModule(
             module_id="mod-energy", chapter_id="energy_profile", kind="energy_profile",
             title="能源与零碳能力", assertion_title=assertion,
-            decision_question="企业有哪些能源数据与零碳能力？",
-            executive_takeaway=finding.business_implication if finding is not None else "自身用能数据与能源产品能力分开评估。",
+            decision_question="现有公开数据能否支持基地能源项目决策？",
+            executive_takeaway="当前公开信息最多支持启动一处基地的数据核验，不支持直接进行容量设计或商业报价。",
             context_paragraphs=context,
             analysis_paragraphs=analysis_paragraphs,
-            implications=[finding.business_implication] if finding is not None else [],
-            recommendations=[finding.recommendation] if (finding is not None and energy_claim_ids) else [],
-            limitations=list(finding.limitations or [])[:1] if finding is not None else [],
-            source_ids=list(finding.supporting_source_ids) if finding is not None else [],
+            implications=[],
+            # An evidence-empty fixture may still state that project sizing is
+            # unsupported, but must not promote an action as an evidence-backed
+            # recommendation.  Real disclosures (including a report listing)
+            # supply the lineage for the one-base data-verification step.
+            recommendations=[recommendation] if energy_claim_ids else [],
+            limitations=["缺少能够落到单一基地和统一期间的完整测算输入。"],
+            source_ids=energy_source_ids,
             claim_ids=energy_claim_ids,
         )
         for proposal in VisualOpportunityPlanner(bundle, analysis).energy_proposals():
@@ -897,38 +1005,49 @@ class NarrativeBuilder:
 
     # ── opportunities / action / risks (consulting layer) ──────────────────
     def _opportunity_module(self, opportunities: list[OpportunityAssessment], narrative: ResearchNarrative) -> StoryModule:
+        status_labels = {
+            "PRIORITY_OPPORTUNITY": "优先接洽",
+            "POTENTIAL_HYPOTHESIS": "备选方向",
+            "REJECTED": "暂不考虑",
+        }
         paragraphs: list[str] = []
         seen_paragraphs: set[str] = set()
         rows: list[dict[str, Any]] = []
         for rank, item in enumerate(opportunities, start=1):
-            paragraph = (
-                f"优先方向 {rank} 为{item.opportunity_name}（优先级 {item.priority}）。{item.strategic_rationale}"
-                f"切入场景为{item.target_scenario}：对方需要解决{item.target_need}，我方价值在于{item.our_value_proposition}"
-                f"首个责任接口为{item.entry_point}，由{item.owner}推动；推进前需取得{'、'.join(item.key_prerequisites)}。"
-                f"战略匹配、实施可行性、证据强度与商业潜力评分分别为 {item.strategic_fit}、{item.implementation_feasibility}、"
-                f"{item.evidence_strength} 和 {item.commercial_potential}，评分用于安排验证顺序。"
-            )
+            status = status_labels.get(item.hypothesis_status, "待确认")
+            if item.hypothesis_status == "PRIORITY_OPPORTUNITY":
+                paragraph = (
+                    f"{rank}. {item.opportunity_name}（{status}）。现有研发、产品或业务资料支持将其列为首个接洽方向。"
+                    f"{item.why_now}仅凭公开资料仍无法判断对方是否准备启动项目。"
+                    f"建议联系{item.target_department}，先确定一个具体课题、技术指标和双方分工。"
+                    f"{item.client_name}可参与{'、'.join(item.client_capability_match) or '相关工作的组织'}。"
+                )
+            else:
+                paragraph = (
+                    f"{rank}. {item.opportunity_name}（{status}）。现有资料能说明相关产品、产能或客户基础，"
+                    f"但未显示对方提出具体合作需求。先由{item.target_department}确认需求；未获确认前不讨论立项。"
+                )
             if paragraph not in seen_paragraphs:
                 seen_paragraphs.add(paragraph)
                 paragraphs.append(paragraph)
             rows.append(translate_table_row({
                 "opportunity": item.opportunity_name, "priority": item.priority,
-                "target_scenario": item.target_scenario, "entry_point": item.entry_point,
+                "target_scenario": item.target_problem, "entry_point": item.target_department,
                 "go_no_go_gate": item.go_no_go_gate,
             }))
         top = opportunities[0]
         paragraphs.append(
-            "机会评估回答“为什么合作、合作什么、从哪里切入、价值与风险是什么”：每项机会的事实基础、切入场景、"
-            "责任接口与 Go / No-Go 门槛在下表并列示，管理层按证据成熟度安排资源，先聚焦最可验证的方向，避免把全部可能性并排列出。"
+            f"排序优先考虑对方需求是否明确、{top.client_name}能否投入相应资源，以及是否能在一个具体课题上形成可量化结果。"
+            "未获得业务部门确认的方向仅作为备选，不进入立项。"
         )
         module = StoryModule(
             module_id="mod-opportunities", chapter_id="opportunities", kind="opportunities",
             title="合作机会评估与优先级",
-            assertion_title=f"{top.opportunity_name}排名首位，须先通过数据与场景门槛再进入商业化",
+            assertion_title=f"{top.opportunity_name}列为首选，但应先完成业务接洽再讨论立项",
             decision_question="哪些合作机会最值得推进，从哪里切入？",
-            executive_takeaway=f"优先级由战略匹配、实施可行性、事实强度与商业潜力共同决定，当前首位为{top.opportunity_name}。",
+            executive_takeaway=f"优先与{top.target_department}讨论{top.opportunity_name}，暂不直接进入项目实施。",
             analysis_paragraphs=paragraphs,
-            limitations=["未达到事实与可行性门槛的方向不进入优先机会清单；各机会的 30/60/90 天动作与门槛见下表及行动章节。"],
+            limitations=["备选方向尚未获得对方业务部门确认，不应据此承诺项目或收益。"],
             source_ids=list(dict.fromkeys(s for item in opportunities for s in item.supporting_source_ids)),
             claim_ids=list(dict.fromkeys(c for item in opportunities for c in item.supporting_claim_ids)),
             table_rows=rows,
@@ -952,21 +1071,21 @@ class NarrativeBuilder:
         ]
         if len(opportunities) > 1:
             actions.append(
-                f"其余 {len(opportunities) - 1} 个机会（{'、'.join(item.opportunity_name for item in opportunities[1:])}）"
-                "按同一节奏并行准备资料，待首轮场景验证后再决定是否进入 60/90 天阶段。"
+                f"其余 {len(opportunities) - 1} 个备选方向（{'、'.join(item.opportunity_name for item in opportunities[1:])}）"
+                "分别确认对方需求，不沿用首位方向的人员和预算安排。"
             )
         module = StoryModule(
             module_id="mod-action", chapter_id="action_plan", kind="action_plan",
             title="优先切入方案与 90 天行动",
-            assertion_title="90 天行动以一处场景的 Go / No-Go 结论为终点",
+            assertion_title=f"用 90 天判断{top.opportunity_name}是否具备立项条件",
             decision_question="未来 90 天应完成什么，谁负责，如何判断成功？",
-            executive_takeaway="行动链按资料、现场、测算、评审四个门槛推进，任一门槛不满足即返回补数或暂停。",
+            executive_takeaway=f"先确认需求，再验证具体课题，最后决定是否为{top.opportunity_name}立项。",
             analysis_paragraphs=[
-                "30 天阶段解决责任主体和数据边界，60 天阶段解决技术适配和价值测算，90 天阶段形成书面决策。"
-                "每个阶段以可核查输入和书面产出为完成标志，容量、收益或工期数字必须回溯到已核验输入；"
-                "前一道门未通过时，后一道工作不得以假设替代。",
-                "各阶段完成标志为书面产出：资料清单双方签认、数据清洗记录归档、基准情景与敏感性测算成文、"
-                "Go / No-Go 评审结论落表，确保每个里程碑可以审计和追溯，并同步更新单一问题台账，台账口径由双方共用。",
+                f"前 30 天先与{top.target_department}核实具体需求并确定负责人。"
+                f"第 31—60 天围绕{top.opportunity_name}选择一个可验证课题，明确技术指标、所需数据、双方分工和知识产权边界。"
+                "第 61—90 天根据课题结果决定立项、缩小范围或结束接洽。",
+                f"判断标准应写得具体：对方是否确认需求，课题是否有可量化指标，{top.client_name}能否落实人员和验证资源。"
+                "其中任何一项无法确认，都不进入下一阶段。",
             ], action_items=actions,
             source_ids=list(dict.fromkeys(s for item in opportunities for s in item.supporting_source_ids)),
             claim_ids=list(dict.fromkeys(c for item in opportunities for c in item.supporting_claim_ids)),
@@ -980,35 +1099,25 @@ class NarrativeBuilder:
 
     @staticmethod
     def _risk_module(decision: DecisionSynthesis) -> StoryModule:
-        due_rows = [{
-            "当前尚不能判断的关键事项": item.item,
-            "为什么重要": item.why_it_matters,
-            "影响判断": item.affected_decision,
-            "建议获取资料": "；".join(item.requested_materials),
-            "获取时点": item.timing,
-            "是否阻断决策": "是" if item.decision_blocker else "否",
-        } for item in decision.due_diligence]
+        critical = [item for item in decision.due_diligence if item.decision_blocker][:5]
+        due_rows = [{"关键不确定性": item.item, "可能改变的判断": item.affected_decision} for item in critical]
         return StoryModule(
             module_id="mod-risks", chapter_id="risks_evidence", kind="risks_evidence",
-            title="风险、前置条件与 Go / No-Go 判断",
-            assertion_title="关键现场数据未齐套前，Go / No-Go 应停留在技术交流层而非报价层",
-            decision_question="主要风险、前置条件和停止条件是什么？",
-            executive_takeaway="缺口必须转化为责任明确、时点明确、影响明确的决策前置条件。",
+            title="企业风险、关键不确定性与停止条件",
+            assertion_title="市场竞争和关键经营信息不足是当前接洽的主要限制",
+            decision_question="哪些企业风险或反证会改变当前合作判断？",
+            executive_takeaway="立项前需核实会影响技术范围、投入规模和合作意愿的关键事项。",
             context_paragraphs=[
-                "本章集中呈现合作推进的主要风险、前置条件与停止条件，并把每条缺口转化为责任、时点与影响明确的行动要求；"
-                "风险清单来自公开资料识别与现场数据缺口分析，不构成对企业的投资评级，新发现的缺口在问题台账中补充。"
+                "本章只列公司公开披露的经营风险，以及会直接影响合作判断但尚待确认的事项。"
             ],
             analysis_paragraphs=[
-                *(decision.key_risks or ["当前未发现需要单列的外部风险，仍应在预可研阶段复核数据口径、责任边界与项目时效，确保测算输入可追溯、结论可复核。"]),
-                "Go 条件覆盖事实、技术、组织和商业四个维度：原始数据口径一致且可复核，关键接口与工程条件可行，"
-                "责任主体和审批路径明确，价值测算在不利情景下仍满足双方门槛。任一维度不满足，不得仅凭其他维度优势越级推进。",
-                "No-Go 不等于永久否定合作：缺口在明确期限内关闭可返回补数；核心价值来源无法验证、责任主体长期缺位"
-                "或技术边界不可控时，应停止当前方向，把团队资源转向证据更强的机会，避免以会议热度替代决策质量。",
-                "前置条件管理采用单一问题台账：每条缺口记录资料名称、口径范围、责任部门、承诺日期、核验结论与受影响结论，"
-                "任何容量、收益或工期数字都必须回溯到已核验输入，台账口径由双方共用并逐轮更新。",
+                *(decision.key_risks or ["当前已核验披露未识别需要单列的企业特定风险；这不等于企业不存在风险。"]),
+                "如对方未提出具体需求、双方技术路线或交付范围无法对齐，或创新中心无法落实必要人员和验证资源，应结束接洽；对方若已明确选择其他技术路径，也不再继续投入。",
+                "监管、客户集中、供应链依赖、技术路线或财务压力只有在公司披露或可靠事件中得到支持时才列为企业风险。缺少某项公开资料本身不代表公司存在相应风险。",
+                "正文仅保留可能改变合作方向或投入规模的未知事项；其他待核实信息列入附录。",
             ],
             recommendations=[
-                "在决策评审会上逐项核对阻断性资料；未取得原始数据或责任部门书面确认的事项不得以假设替代。"
+                "优先核实会影响技术范围、投入规模和对方合作意愿的事项。"
             ], table_rows=due_rows,
             source_ids=list(dict.fromkeys(source_id for finding in decision.findings for source_id in finding.supporting_source_ids)),
             claim_ids=list(dict.fromkeys(claim_id for finding in decision.findings for claim_id in finding.supporting_claim_ids)),

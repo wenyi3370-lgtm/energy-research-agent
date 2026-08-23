@@ -234,3 +234,7 @@ Research Planning → Research Frontier → ProductDetailFrontier
 ```
 
 The crawler boundary ends after discovery, extraction, provenance and checkpoint persistence. It cannot create opportunities, management judgments or publication prose. `DecisionFinding` is the only evidence-to-analysis transition; `OpportunityAssessment` owns canonicalization, evidence merging, ranking, prerequisites, actions and Go / No-Go gates. `ResearchNarrative` is the single shared publication middle layer for Word and HTML, and `appendices.source_ledger` is the only owner of the complete source list.
+
+### P0 decision-intelligence boundary
+
+`ClientProfileLoader` freezes the configured commissioning-party capability boundary in `RunManifest`. `StrategicInterpretationEngine` converts verified claims and multi-year analysis into trajectories, turning points, drivers, priorities, competitive positions, customer/market proof, dependencies, enterprise risks and conditional scenarios, all carrying `InterpretationLineage`. `CooperationHypothesisEngine` consumes registry candidates but can downgrade or reject them. `DecisionSynthesisEngine` consumes formal hypotheses and strategic interpretation; DataGap count does not decide the overall judgement. `ResearchNarrative` schema 4.0 owns the single `client_profile`, `strategic_interpretation`, `cooperation_hypotheses` and five-part executive summary consumed unchanged by Word and HTML.

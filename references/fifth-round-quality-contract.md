@@ -17,6 +17,8 @@ and unified HTML delivery.
   layout and core bases; the full ledger belongs in the appendix.
 - Enterprise own-energy consumption and enterprise energy-product/project
   capability are separate datasets and must never substitute for one another.
+- Energy metrics require a numeric value and a field-compatible unit. Years in
+  document titles or target statements are metadata, not consumption values.
 - An unresolved high-severity coverage gap triggers targeted retry and blocks
   formal publication. Missing data is never replaced with generic prose.
 
@@ -36,6 +38,11 @@ and unified HTML delivery.
 - The following exact phrases have zero tolerance in HTML: `基于当前冻结公开事实`,
   `证据边界`, `本节判断由`, `该信息用于判断`, `不能替代`, `不足以证明`,
   `后续需要验证`.
+- The complete Word/HTML publication payload must use ordinary business
+  language. Internal reasoning-framework recitals, symmetric “A answers X / B
+  answers Y” prose, self-defensive negatives and abstract gate chains are not
+  acceptable published analysis. State the company fact, the proposed contact,
+  the specific task and the proceed/stop condition directly.
 
 ## Word report
 
@@ -43,6 +50,9 @@ and unified HTML delivery.
   capability, manufacturing layout, cooperation directions and constraints.
 - The table of contents includes heading levels 1–2 and page numbers only;
   entries are independent left-aligned paragraphs without manual line breaks.
+- A field code without materialized visible entries is treated as a missing
+  table of contents. Final render QA requires the visible entries and their
+  page numbers, not merely `updateFields=true` in OOXML.
 - The target body mix is 50% facts/data, 35% analysis/insight and 15%
   constraints/limitations. Quality is judged by research density, not a minimum
   character or page count.

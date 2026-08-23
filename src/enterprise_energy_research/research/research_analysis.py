@@ -74,6 +74,25 @@ SEGMENT_FIELDS = {
 
 YEAR_RE = re.compile(r"(?:19|20)\d{2}")
 
+# A year inside a document title is not a measured energy value.  Energy
+# metrics enter analysis only when the claim carries a field-compatible unit;
+# this prevents strings such as "2023年度碳排放核算报告" from becoming a fake
+# "综合能源消费量 2023" KPI.
+ENERGY_UNIT_HINTS = {
+    "electricity_consumption": ("kwh", "mwh", "gwh", "twh", "千瓦时", "兆瓦时", "吉瓦时"),
+    "energy_consumption": ("kwh", "mwh", "gwh", "twh", "千瓦时", "吨标准煤", "tce", "gj", "tj"),
+    "power_demand": ("kw", "mw", "gw", "千瓦", "兆瓦"),
+    "peak_load": ("kw", "mw", "gw", "千瓦", "兆瓦"),
+    "peak_demand": ("kw", "mw", "gw", "千瓦", "兆瓦"),
+    "electricity_cost": ("元", "cny", "rmb"),
+    "transformer_capacity": ("kva", "mva", "千伏安", "兆伏安"),
+    "roof_area": ("m2", "m²", "㎡", "平方米", "万平方米"),
+    "carbon_intensity": ("co2", "co₂", "碳", "%"),
+    "pv_capacity": ("kw", "mw", "gw", "千瓦", "兆瓦", "吉瓦"),
+    "storage_capacity": ("kwh", "mwh", "gwh", "千瓦时", "兆瓦时", "吉瓦时"),
+    "storage_power": ("kw", "mw", "gw", "千瓦", "兆瓦", "吉瓦"),
+}
+
 # Storage-unit scale factors: every series point is normalized to the base
 # unit (元) so 千元/万元/亿元 claims can never produce a false -100% trend.
 UNIT_SCALE = {"元": 1.0, "千元": 1e3, "万元": 1e4, "亿元": 1e8}
@@ -274,7 +293,9 @@ class ResearchAnalysisEngine:
             claims = by_field.get(field_name, [])
             if not claims:
                 continue
-            best = self._best(claims)
+            best = self._latest_valid(claims)
+            if best is None:
+                continue
             value = parse_number(best.value)
             if value is None:
                 continue
@@ -353,15 +374,15 @@ class ResearchAnalysisEngine:
             else:
                 distribution["地区待核验"] += 1
                 sites.add(f"unknown:{address}")
-        # Site-level counts are the honest metric: page records often repeat
-        # the same physical base under near-identical names.
-        analysis.factory_site_count = len(sites)
+        # Publication counts the collected factory records.  Unknown/partial
+        # addresses must not be collapsed into one apparent physical site.
+        analysis.factory_site_count = len(bundle.factories)
         analysis.region_distribution = dict(distribution.most_common())
         if analysis.region_distribution:
             top_regions = "、".join(f"{region} {count} 处" for region, count in list(analysis.region_distribution.items())[:5])
             analysis.insights.append(ResearchInsight(
                 insight_id="INS-REGIONS", topic="manufacturing", title="生产基地地域分布",
-                findings=[f"公开资料识别生产基地 {analysis.factory_site_count} 处（按地域去重口径），主要分布为{top_regions}。"
+                findings=[f"公开资料收录基地记录 {analysis.factory_site_count} 条，按披露地址归类为{top_regions}。"
                           + (f"其中海外基地 {analysis.overseas_factory_count} 处，国内基地 {analysis.domestic_factory_count} 处。" if analysis.overseas_factory_count else "")],
                 consulting_note="基地分布反映产能组织的区域重心与海外交付能力，可作为合作切入与复制路径的参考。",
             ))
@@ -372,16 +393,13 @@ class ResearchAnalysisEngine:
             "peak_demand", "electricity_cost", "load_curve", "transformer_capacity",
             "roof_area", "carbon_intensity",
         }
-        product_fields = {
-            "pv_capacity", "storage_capacity", "storage_power", "energy_project",
-            "project_name", "carbon_project",
-        }
+        product_fields = {"pv_capacity", "storage_capacity", "storage_power"}
         for field_name in sorted(own_fields):
             claims = by_field.get(field_name, [])
             if not claims:
                 continue
             best = self._best(claims)
-            value = parse_number(best.value)
+            value = self._energy_measurement_value(field_name, best)
             if value is None:
                 continue
             formatted = PublicationNumberFormatter().format(best.value, best.unit)
@@ -396,7 +414,7 @@ class ResearchAnalysisEngine:
             if not claims:
                 continue
             best = self._best(claims)
-            value = parse_number(best.value)
+            value = self._energy_measurement_value(field_name, best)
             if value is None:
                 continue
             formatted = PublicationNumberFormatter().format(best.value, best.unit)
@@ -461,6 +479,23 @@ class ResearchAnalysisEngine:
                 consulting_note="绿电与零碳数据是能源合作（绿电采购、零碳工厂、储能配套）的真实事实基础。",
             ))
 
+    @staticmethod
+    def _energy_measurement_value(field_name: str, claim: Claim) -> float | None:
+        """Return a usable quantitative measurement or ``None``.
+
+        Energy economics require both a number and a compatible physical or
+        monetary unit.  Document titles, target years and project names are
+        useful evidence records but are never measurement KPIs.
+        """
+        unit = str(claim.unit or "").strip().casefold().replace(" ", "")
+        hints = ENERGY_UNIT_HINTS.get(field_name, ())
+        if not unit or not any(hint.casefold() in unit for hint in hints):
+            return None
+        value = parse_number(claim.value)
+        if value is None:
+            return None
+        return value
+
     def _kpis(self, analysis: ResearchAnalysis, bundle: FrozenResearchBundle, by_field: dict[str, list[Claim]]) -> None:
         kpi_specs = [
             ("revenue", "营业收入"), ("profit", "归母净利润"), ("employee_count", "员工人数"),
@@ -470,7 +505,9 @@ class ResearchAnalysisEngine:
             claims = by_field.get(field_name, [])
             if not claims:
                 continue
-            best = self._best(claims)
+            best = self._latest_valid(claims)
+            if best is None:
+                continue
             value = parse_number(best.value)
             if value is None:
                 continue
@@ -486,10 +523,12 @@ class ResearchAnalysisEngine:
                                              value=str(len({item.category or "未分类" for item in bundle.products if item.verification_status == VerificationStatus.VERIFIED})),
                                              unit="个"))
         if bundle.factories:
-            analysis.kpis.append(ResearchKpi(label="已核验生产基地", value=str(analysis.factory_site_count or len(bundle.factories)), unit="处"))
+            analysis.kpis.append(ResearchKpi(label="公开基地记录", value=str(analysis.factory_site_count or len(bundle.factories)), unit="条"))
         position = by_field.get("market_share") or by_field.get("industry_position")
         if position:
-            best = self._best(position)
+            best = self._latest_valid(position)
+            if best is None:
+                return
             analysis.kpis.append(ResearchKpi(
                 label="市场地位", value=str(best.value), unit=None, period=self._period_of(best),
                 scope=best.scope, source_ids=[best.source_id], claim_ids=[best.claim_id],
@@ -604,6 +643,34 @@ class ResearchAnalysisEngine:
     @staticmethod
     def _best(claims: list[Claim]) -> Claim:
         return max(claims, key=lambda item: item.confidence)
+
+    @staticmethod
+    def _latest_valid(claims: list[Claim]) -> Claim | None:
+        """Latest verified, completed and non-conflicting reporting period."""
+        today = date.today()
+        valid: list[Claim] = []
+        for claim in claims:
+            if claim.verification_status != VerificationStatus.VERIFIED or claim.conflict_group_id:
+                continue
+            if claim.period_start and claim.period_end:
+                if claim.period_end > today:
+                    continue
+                if (claim.period_start.month, claim.period_start.day) != (1, 1) or (claim.period_end.month, claim.period_end.day) != (12, 31):
+                    continue
+            elif claim.as_of_date and claim.as_of_date > today:
+                continue
+            # Current-year financial KPI without a completed annual period is
+            # interim/mislabeled and cannot supersede the last full year.
+            point = claim.period_end or claim.as_of_date or claim.period_start
+            if point and point.year == today.year and not (claim.period_start and claim.period_end):
+                continue
+            valid.append(claim)
+        if not valid:
+            return None
+        return max(valid, key=lambda item: (
+            item.period_end or item.as_of_date or item.period_start or date.min,
+            item.confidence,
+        ))
 
     @staticmethod
     def _uniq(values: Any) -> list[str]:

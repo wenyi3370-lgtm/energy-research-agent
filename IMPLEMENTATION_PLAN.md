@@ -28,3 +28,14 @@
 ## Remaining acceptance condition
 
 A formal release is complete only after a live company run produces all seven output directories and the research, visual, image, validation and cross-artifact reports pass. Adapter unavailability, missing credentials, missing benchmark binaries or unrendered Word/HTML artifacts must be reported as blockers, not converted to success.
+
+## P0 decision-intelligence refactor status
+
+- [x] ClientProfile configuration, status taxonomy and RunManifest snapshot.
+- [x] StrategicInterpretation models/engine with evidence lineage and competition/customer/risk gates.
+- [x] CooperationHypothesis contract with priority/potential/rejected outcomes.
+- [x] Business-led 30/60/90 and single PublicationNarrative 4.0 for Word/HTML.
+- [x] Latest valid KPI selection, honest source-grade labels and gap deduplication.
+- [x] DecisionIntelligenceValidator and focused regression suite.
+- [x] Full recorded regression, recorded eval, render QA and live CATL acceptance passed on 2026-08-23. The final CATL run used direct network mode (proxy variables cleared), froze 227 verified used claims under `FREEZE-01M0Q8T8E4JDTGPMG5JE4FC60K`, published six distinct official-site product images, passed Word/HTML QA with zero errors, and retained only two explicitly disclosed medium-priority evidence gaps.
+- [x] Plain-business-language publication pass completed on 2026-08-23: removed framework recitals and abstract gate chains from Word/HTML, added fail-closed AI-tone regression checks, filtered negative/mitigation disclosures from enterprise risks, and separated public factory records from independently verified physical sites.

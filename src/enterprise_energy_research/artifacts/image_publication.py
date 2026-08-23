@@ -155,10 +155,10 @@ def _decoded_metadata(path: Path) -> tuple[int, int, str]:
 
 
 def _caption(image: ImageEvidence, bundle: FrozenResearchBundle) -> str:
-    if image.visual_description:
-        return image.visual_description.strip()
-    if image.alt_text:
-        return image.alt_text.strip()
+    # The vision gateway returns an audit answer (category / description /
+    # confidence).  It is evidence metadata, not reader-facing caption copy.
+    # Prefer the frozen entity name and never leak the model questionnaire,
+    # Markdown emphasis or confidence discussion into Word/HTML.
     if image.product_id:
         product = next((item for item in bundle.products if item.product_id == image.product_id), None)
         if product:
@@ -167,6 +167,12 @@ def _caption(image: ImageEvidence, bundle: FrozenResearchBundle) -> str:
         factory = next((item for item in bundle.factories if item.factory_id == image.factory_id), None)
         if factory:
             return f"{factory.name or '生产基地'}实景"
+    if image.alt_text:
+        return image.alt_text.strip()
+    if image.visual_description and not any(token in image.visual_description for token in (
+        "图中主体属于", "主体类别", "置信度", "是否能支撑", "客观描述",
+    )):
+        return re.sub(r"[*_#]+", "", image.visual_description).strip()
     return TYPE_LABEL.get(image.image_type, "企业图片证据")
 
 

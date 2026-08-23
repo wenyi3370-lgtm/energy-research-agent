@@ -35,6 +35,7 @@ MANUFACTURING_FIELDS = {
 RAW_ENUMS = {
     "requires_site_due_diligence", "SEARCH_FAILED", "NORMALIZED_NOT_VERIFIED",
     "SOURCE_A", "SOURCE_B", "SOURCE_C", "SOURCE_D",
+    "PRIORITY_OPPORTUNITY", "POTENTIAL_HYPOTHESIS", "REJECTED",
 }
 RAW_FIELDS = {
     "electricity_consumption", "transformer_capacity", "load_curve", "roof_area",
@@ -210,6 +211,11 @@ class VisualSemanticValidator:
 class PublicationVisibleTextValidator:
     def validate_text(self, text: str) -> list[str]:
         findings = [f"visible raw token: {token}" for token in sorted(RAW_ENUMS | RAW_FIELDS) if token in text]
+        findings.extend(
+            f"visible vision-audit prompt: {token}"
+            for token in ("图中主体属于", "主体类别", "是否能支撑将其绑定", "置信度：**")
+            if token in text
+        )
         if re.search(r"\{\s*['\"]?[A-Za-z][A-Za-z0-9_]*['\"]?\s*:", text):
             findings.append("visible serialized internal mapping")
         findings.extend(
@@ -240,7 +246,7 @@ class SourceOwnershipValidator:
 
 
 class TOCValidator:
-    def validate(self, docx_path: Path) -> list[str]:
+    def validate(self, docx_path: Path, *, require_page_numbers: bool = False) -> list[str]:
         visible = PublicationVisibleTextValidator().extract_docx(docx_path)
         findings = []
         if "更新域以显示" in visible:
@@ -252,6 +258,31 @@ class TOCValidator:
             findings.append("settings.xml does not request field refresh")
         if "TOC \\o" not in document:
             findings.append("TOC field is missing")
+        root = ElementTree.fromstring(document.encode("utf-8"))
+        namespace = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+        toc_paragraphs = []
+        for paragraph in root.findall(f".//{namespace}body/{namespace}p"):
+            style = paragraph.find(f"./{namespace}pPr/{namespace}pStyle")
+            style_id = style.get(namespace + "val") if style is not None else ""
+            if style_id in {"TOC1", "TOC2", "TOC 1", "TOC 2"}:
+                toc_paragraphs.append(paragraph)
+        if len(toc_paragraphs) < 2:
+            findings.append("TOC field result is empty; visible directory entries are missing")
+        if require_page_numbers and toc_paragraphs:
+            missing_pages = 0
+            for paragraph in toc_paragraphs:
+                after_tab = False
+                page_found = False
+                for node in paragraph.iter():
+                    if node.tag == namespace + "tab":
+                        after_tab = True
+                    elif after_tab and node.tag == namespace + "t" and (node.text or "").strip().isdigit():
+                        page_found = True
+                        break
+                if not page_found:
+                    missing_pages += 1
+            if missing_pages:
+                findings.append(f"TOC page numbers are missing from {missing_pages} visible entries")
         return findings
 
 

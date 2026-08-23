@@ -168,13 +168,19 @@ def parse_vision_text(text: str) -> VisionVerdict:
     category_match = re.search(r"(产品|工厂|办公楼|设备|证书|项目现场|其他)", text)
     category = category_match.group(1) if category_match else "其他"
     score = 0.0
-    score_match = re.search(r"置信度[：:]?\s*([0-9]+(?:\.[0-9]+)?)", text)
+    # Providers commonly add Markdown emphasis around the score and a
+    # parenthetical explanation after it. Accept ``置信度：**1.0**`` and
+    # section-3 answers without requiring the number to be the final token.
+    score_match = re.search(r"置信度[：:]?\s*\**\s*([0-9]+(?:\.[0-9]+)?)", text)
     if score_match:
         score = float(score_match.group(1))
     else:
-        trailing = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*$", text.strip())
-        if trailing and re.search(r"3\)\s*[0-9]", text):
-            score = float(trailing.group(1))
+        section_three = re.search(
+            r"(?:^|\n)\s*3\)\s*[^\n]*?\**\s*([01](?:\.\d+)?)\s*\**",
+            text,
+        )
+        if section_three:
+            score = float(section_three.group(1))
     if score > 1.0:
         score = score / 100.0 if score <= 100.0 else score / 10.0
     score = max(0.0, min(1.0, score))

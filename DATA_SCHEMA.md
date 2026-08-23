@@ -358,3 +358,12 @@ Export deterministic UTF-8 files with stable ordering:
 - `validation_report.json`.
 
 Never export credentials, session cookies, raw authorization headers or unrestricted personal data.
+
+## Decision-intelligence DTOs
+
+- `RunManifest.client_profile/client_profile_hash`: frozen commissioning-party configuration.
+- `ClientProfile -> ClientCapability[]`: capability status is VERIFIED, CONFIGURED, ASSUMED or UNKNOWN; verified capabilities require evidence refs.
+- `StrategicInterpretation`: trajectories, turning points, drivers, priorities, competitive positions, customer/market proof, dependencies, enterprise risks, scenarios and decision saturation.
+- `InterpretationLineage`: claim/source IDs, reasoning and counterevidence claim IDs for every interpretation.
+- `CooperationHypothesis`: target problem, why now, client capability match/status, value logic, target department, recommended action, evidence/counterevidence, assumptions, disconfirming conditions, rejection reasons and status.
+- `ResearchNarrative` 4.0 is the shared PublicationNarrative. Full `DueDiligenceRequirement[]` remains appendix-owned; the body may show only decision-changing unknowns.

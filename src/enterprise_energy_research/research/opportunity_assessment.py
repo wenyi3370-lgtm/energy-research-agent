@@ -11,6 +11,13 @@ from typing import Any
 from pydantic import BaseModel, Field, model_validator
 
 from enterprise_energy_research.domain.models import FrozenResearchBundle, Solution
+from enterprise_energy_research.research.client_profile import client_profile_from_manifest
+from enterprise_energy_research.research.cooperation_hypothesis import (
+    CooperationHypothesisEngine, CooperationHypothesisStatus,
+)
+from enterprise_energy_research.research.strategic_interpretation import (
+    StrategicInterpretation, StrategicInterpretationEngine,
+)
 
 
 SYNONYM_MAP = {
@@ -65,6 +72,19 @@ class OpportunityAssessment(BaseModel):
     success_kpi: str
     go_no_go_gate: str
     confidence: float = Field(ge=0.0, le=1.0)
+    hypothesis_status: str = "POTENTIAL_HYPOTHESIS"
+    target_problem: str = ""
+    why_now: str = ""
+    client_name: str = ""
+    client_capability_match: list[str] = Field(default_factory=list)
+    client_capability_statuses: list[str] = Field(default_factory=list)
+    value_creation_logic: str = ""
+    target_department: str = ""
+    recommended_action: str = ""
+    counterevidence: list[str] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    disconfirming_conditions: list[str] = Field(default_factory=list)
+    rejection_reasons: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def evidence_and_gate_required(self) -> "OpportunityAssessment":
@@ -78,28 +98,42 @@ class OpportunityAssessment(BaseModel):
 class OpportunityAssessmentEngine:
     """Deduplicate before analysis, merge evidence, then score and rank."""
 
-    def assess(self, bundle: FrozenResearchBundle) -> list[OpportunityAssessment]:
+    def assess(
+        self, bundle: FrozenResearchBundle,
+        strategic: StrategicInterpretation | None = None,
+    ) -> list[OpportunityAssessment]:
+        strategic = strategic or StrategicInterpretationEngine().interpret(bundle)
+        client = client_profile_from_manifest(bundle.run_manifest)
+        hypotheses = CooperationHypothesisEngine().build(bundle, strategic, client)
         claims = {claim.claim_id: claim for claim in bundle.claims}
-        grouped: dict[str, list[Solution]] = defaultdict(list)
-        for solution in bundle.solutions:
-            if not solution.claim_ids:
-                continue
-            grouped[opportunity_canonical_key(solution)].append(solution)
+        solutions_by_id = {solution.solution_id: solution for solution in bundle.solutions}
         assessments: list[OpportunityAssessment] = []
-        for index, (canonical_key, solutions) in enumerate(grouped.items(), start=1):
-            primary = sorted(solutions, key=lambda item: self._priority_score(item.priority), reverse=True)[0]
-            claim_ids = list(dict.fromkeys(claim_id for solution in solutions for claim_id in solution.claim_ids if claim_id in claims))
+        seen_keys: set[str] = set()
+        for index, hypothesis in enumerate(hypotheses, start=1):
+            solutions = [solutions_by_id[item] for item in hypothesis.candidate_solution_ids if item in solutions_by_id]
+            if not solutions:
+                continue
+            primary = solutions[0]
+            canonical_key = opportunity_canonical_key(primary)
+            if canonical_key in seen_keys:
+                continue
+            seen_keys.add(canonical_key)
+            claim_ids = list(dict.fromkeys(hypothesis.evidence_claim_ids))
             source_ids = list(dict.fromkeys(claims[claim_id].source_id for claim_id in claim_ids))
             if not claim_ids or not source_ids:
                 continue
             evidence_strength = min(5, max(1, 1 + len(source_ids) + (1 if len(claim_ids) >= 3 else 0)))
             feasibility = self._feasibility(primary)
-            strategic_fit = 5 if primary.priority == "A" else 4 if primary.priority == "B" else 3
+            strategic_fit = 5 if hypothesis.status == CooperationHypothesisStatus.PRIORITY_OPPORTUNITY else 3 if hypothesis.status == CooperationHypothesisStatus.POTENTIAL_HYPOTHESIS else 1
             commercial = max(1, min(5, round((strategic_fit + feasibility + evidence_strength) / 3)))
             priority = self._priority(strategic_fit, feasibility, evidence_strength, commercial)
+            if hypothesis.status == CooperationHypothesisStatus.POTENTIAL_HYPOTHESIS:
+                priority = "C"
+            elif hypothesis.status == CooperationHypothesisStatus.REJECTED:
+                priority = "HOLD"
             prerequisites = list(dict.fromkeys(
                 requirement for solution in solutions for requirement in solution.data_requirements
-            )) or ["目标场景原始数据", "技术与商务责任边界"]
+            )) or ["对方业务部门确认的具体需求", "双方认可的计算口径和验证结果"]
             risks = list(dict.fromkeys(risk for solution in solutions for risk in solution.risks))
             target_scenario = self._target_scenario(primary)
             entry = self._entry_point(primary)
@@ -107,34 +141,43 @@ class OpportunityAssessmentEngine:
                 opportunity_id=f"OA-{index:03d}", canonical_key=canonical_key,
                 opportunity_name=primary.opportunity,
                 target_scenario=target_scenario,
-                strategic_rationale=(
-                    f"该方向由 {len(claim_ids)} 条已核验事实和 {len(source_ids)} 个来源触发，"
-                    f"事实基础为：{primary.proposed_solution}"
-                ),
+                strategic_rationale=f"业务事项：{hypothesis.target_problem} 近期变化：{hypothesis.why_now}",
                 evidence_basis=primary.proposed_solution,
                 supporting_claim_ids=claim_ids, supporting_source_ids=source_ids,
-                target_need=self._target_need(primary),
-                our_value_proposition=(
-                    f"围绕{primary.opportunity}提供场景诊断、数据边界梳理、技术适配与预可研服务。"
-                ),
-                entry_point=entry,
+                target_need=hypothesis.target_problem,
+                our_value_proposition=hypothesis.value_creation_logic,
+                entry_point=hypothesis.target_department,
                 strategic_fit=strategic_fit,
                 implementation_feasibility=feasibility,
                 evidence_strength=evidence_strength,
                 commercial_potential=commercial,
                 priority=priority,
                 key_prerequisites=prerequisites,
-                key_risks=risks or ["数据口径不一致", "责任边界未确认"],
-                first_30_day_action=f"由联合项目组对接{entry}，确认场景、资料清单和一处优先验证对象。",
-                day_60_action=f"完成{primary.opportunity}场景的资料清洗、现场核验、技术适配与初步价值测算，并形成问题闭环清单。",
-                day_90_milestone=f"提交{primary.opportunity}的预可研结论和 Go / No-Go 评审材料，决定进入方案设计、继续补数或停止。",
-                owner="联合项目组",
-                success_kpi=f"关键资料齐套率 100%，完成{primary.opportunity}一处场景预可研并形成书面决策结论",
-                go_no_go_gate=(
-                    "关键数据完整、技术接口可行、责任主体明确且价值测算通过敏感性检验后方可 Go；"
-                    "任何一项不满足则 No-Go 或返回补数。"
+                key_risks=risks,
+                first_30_day_action=(
+                    f"与{hypothesis.target_department}确认是否有与“{primary.opportunity}”相关的当前需求，"
+                    "并确定一名业务负责人。"
                 ),
-                confidence=min(0.95, 0.45 + evidence_strength * 0.08 + feasibility * 0.03),
+                day_60_action=(
+                    f"由{client.client_name}与对方围绕“{primary.opportunity}”选择一个具体课题，"
+                    "明确技术指标、所需数据、双方分工和知识产权边界。"
+                ),
+                day_90_milestone=f"根据课题验证结果决定立项、缩小范围或结束“{primary.opportunity}”接洽。",
+                owner=f"{client.client_name}与{hypothesis.target_department}",
+                success_kpi="对方需求、课题指标、双方分工和下一步投入均有书面结论",
+                go_no_go_gate="仅在对方确认需求、课题可量化且双方能够落实资源时立项；任一条件不满足则缩小范围或结束接洽。",
+                confidence=hypothesis.confidence,
+                hypothesis_status=hypothesis.status.value,
+                target_problem=hypothesis.target_problem, why_now=hypothesis.why_now,
+                client_name=client.client_name,
+                client_capability_match=hypothesis.client_capability_match,
+                client_capability_statuses=hypothesis.client_capability_statuses,
+                value_creation_logic=hypothesis.value_creation_logic,
+                target_department=hypothesis.target_department,
+                recommended_action=hypothesis.recommended_action,
+                counterevidence=hypothesis.counterevidence, assumptions=hypothesis.assumptions,
+                disconfirming_conditions=hypothesis.disconfirming_conditions,
+                rejection_reasons=hypothesis.rejection_reasons,
             ))
         assessments.sort(
             key=lambda item: (
@@ -194,4 +237,3 @@ class OpportunityAssessmentEngine:
         if solution.engine in {"PRODUCT_COOPERATION", "JOINT_RND", "ODM"}:
             return "缩短技术适配与商业验证周期，明确产品接口和责任边界"
         return "把已披露能力转化为可验证、可决策的合作场景"
-

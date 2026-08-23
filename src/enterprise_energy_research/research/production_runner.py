@@ -37,6 +37,7 @@ from enterprise_energy_research.graph.phase3_runner import Phase3Runner
 from enterprise_energy_research.graph.runner import Phase2Runner
 from enterprise_energy_research.graph.state import ResearchState
 from enterprise_energy_research.research.claim_validator import ClaimValidator
+from enterprise_energy_research.research.client_profile import load_client_profile
 from enterprise_energy_research.research.claim_utilization import ClaimUtilizationAuditor
 from enterprise_energy_research.research.content_contract import (
     CHAPTER_CONTRACTS, CoreResearchReadinessGate, PlaceholderContentGate,
@@ -54,7 +55,7 @@ from enterprise_energy_research.research.identity_evidence import IdentityEviden
 from enterprise_energy_research.research.ingestor import EvidenceIngestor
 from enterprise_energy_research.research.normalizer import EvidenceNormalizer, NormalizedEvidence
 from enterprise_energy_research.research.pipeline_trace import GapReasonClassifier, GoalPipelineTrace
-from enterprise_energy_research.research.planner import GOAL_FAMILIES, ResearchPlanner
+from enterprise_energy_research.research.planner import ANALYTICAL_FIELDS, GOAL_FAMILIES, ResearchPlanner
 from enterprise_energy_research.research.product_detector import ProductDetector
 from enterprise_energy_research.research.product_detail_frontier import (
     BoundedBrowserWorkerPool,
@@ -136,6 +137,7 @@ class AdaptiveResearchRunner:
         max_product_detail_pages: int = 12,
         browser_workers: int = 3,
         max_image_candidates_per_round: int = 48,
+        baseline_budget_is_per_round: bool = False,
     ) -> None:
         self.adapters = adapters
         self.gateway = gateway
@@ -152,6 +154,7 @@ class AdaptiveResearchRunner:
         self.fulltext_pages_per_query = fulltext_pages_per_query
         self.max_product_detail_pages = max_product_detail_pages
         self.max_image_candidates_per_round = max(5, max_image_candidates_per_round)
+        self.baseline_budget_is_per_round = baseline_budget_is_per_round
         if not 1 <= browser_workers <= 4:
             raise ValueError("browser_workers must be between 1 and 4")
         self.browser_workers = browser_workers
@@ -174,6 +177,7 @@ class AdaptiveResearchRunner:
         store = self.store or EvidenceStore(output_dir / "evidence.sqlite3")
         run_id = new_sortable_id("RUN")
         request_id = new_sortable_id("REQ")
+        client_profile = load_client_profile()
         store.create_run(RunManifest(
             run_id=run_id,
             request_id=request_id,
@@ -181,11 +185,22 @@ class AdaptiveResearchRunner:
             config_hash="adaptive-runner",
             code_version="0.9.1",
             model_gateway={"mode": "adaptive-production"},
+            client_profile=client_profile.model_dump(mode="json"),
+            client_profile_hash=client_profile.stable_hash,
         ))
         self.cumulative = NormalizedEvidence()
         telemetry = KimiUsageTelemetry()
         planner = ResearchPlanner()
-        plan = planner.build(run_id, "PENDING-ENTITY", raw_company_name, complexity, budget)
+        # ``ResearchPlanner`` declares R1/R2/R3 contracts for each goal, while
+        # this adaptive runner executes only its R1 entries and creates real
+        # gap/conflict-driven R2/R3 queries later.  Give planning three slots
+        # per requested baseline goal so the user-facing max_queries budget is
+        # not accidentally divided by three before R1 begins.
+        planning_budget = {
+            **budget,
+            "max_queries": int(budget.get("max_queries", 80)) * (3 if self.baseline_budget_is_per_round else 1),
+        }
+        plan = planner.build(run_id, "PENDING-ENTITY", raw_company_name, complexity, planning_budget)
         trace = GoalPipelineTrace.blank(run_id, [family for family, _ in GOAL_FAMILIES])
         trace.record_plan(plan.queries)
 
@@ -281,7 +296,14 @@ class AdaptiveResearchRunner:
         ))
 
         # ---- R2 gap-driven depth -----------------------------------------
-        r2_drivers = [gap for gap in pending_gaps if gap.reason in SEARCHABLE_GAP_REASONS]
+        r2_drivers = [
+            gap for gap in pending_gaps
+            if gap.reason in SEARCHABLE_GAP_REASONS
+            # Analytical questions are researched explicitly in R1 and
+            # revisited when evidence changes; their missing fields are not
+            # generic field-completeness gaps for the R2 crawler.
+            and gap.field_name not in ANALYTICAL_FIELDS
+        ]
         r2_queries = planner.gap_queries(plan, raw_company_name, r2_drivers)[: self.max_gap_queries] if r2_drivers else []
         if not r2_queries and pending_gaps:
             diagnostics.append(f"{len(pending_gaps)} gap(s) are not web-searchable; R2 depth round skipped")

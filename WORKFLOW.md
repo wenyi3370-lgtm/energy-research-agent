@@ -193,6 +193,12 @@ Request review only for decisions that cannot be made safely:
 
 Save checkpoints and provide candidate choices with evidence. Do not discard completed research.
 
+## Decision-driven research loop
+
+After identity coverage, plan analytical questions as first-class Goal Families: strategic trajectory, business drivers, customer/market proof, competitive position, enterprise risks and cooperation timing. Each query carries `interpretation_goal`, evidence/counterevidence patterns, time scope, comparison requirement and history requirement. Continue research while a new batch can change a strategic conclusion or cooperation hypothesis; stop when decision saturation is reached, not when every public field has a value. Run the cooperation contract after every material evidence delta and explicitly retain rejected candidates.
+
+The 30/60/90 sequence is business-led: 30 days confirms the target problem and enterprise owner; 60 days validates the value mechanism and critical relationships; 90 days makes an invest/adjust/stop resource decision. Data requests are supporting inputs, never milestones by themselves.
+
 ## 6. Resume and idempotency
 
 - Key node results by `run_id`, node version, input hash and effective config hash.

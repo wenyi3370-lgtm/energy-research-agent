@@ -32,6 +32,12 @@ GOAL_FAMILIES: tuple[tuple[str, str], ...] = (
     ("technology", "核心技术 研发平台 技术路线"),
     ("patents", "专利 发明专利 知识产权"),
     ("industry_position", "行业地位 市占率 排名 竞争力"),
+    ("strategic_trajectory", "最近5年 战略变化 业务重心 投资 产能 技术路线 转折"),
+    ("business_drivers", "增长驱动 利润驱动 需求变化 政策 客户 技术路线"),
+    ("customer_market_proof", "具名客户 合同 订单 市场份额 应用证明 时间"),
+    ("competitive_position", "同口径 市场份额 排名 可比企业 竞争位置"),
+    ("enterprise_risks", "年报 风险因素 监管 客户集中 供应链 减值"),
+    ("cooperation_timing", "战略优先级 当前时点 资源投向 合作窗口 反证"),
     ("energy_consumption", "综合能耗 用电量 能源消费"),
     ("energy_equipment", "变压器 锅炉 空压机 冷机 设备"),
     ("electricity_load", "电力负荷 峰谷 需量 负荷曲线"),
@@ -70,6 +76,16 @@ BROWSER_DEPTH_TOPICS = {
     "products", "product_series", "product_models", "product_parameters",
 }
 
+ANALYTICAL_TOPICS = {
+    "strategic_trajectory", "business_drivers", "customer_market_proof",
+    "competitive_position", "enterprise_risks", "cooperation_timing",
+}
+ANALYTICAL_FIELDS = {
+    field_name
+    for topic in ANALYTICAL_TOPICS
+    for field_name in contract_for(topic).expected_fields
+}
+
 
 class ResearchPlanner:
     def build(self, run_id: str, entity_id: str, canonical_name: str, complexity: EnterpriseComplexity, budget: dict[str, int], *, only_topics: list[str] | None = None) -> ResearchPlan:
@@ -84,7 +100,9 @@ class ResearchPlanner:
         families = (
             [topic for topic in GOAL_FAMILIES if topic[0] == "image_evidence"]
             + [topic for topic in GOAL_FAMILIES if topic[0] in browser_priority[1:]]
-            + [topic for topic in GOAL_FAMILIES if topic[0] not in browser_priority]
+            + [topic for topic in GOAL_FAMILIES if topic[0] == "company_identity"]
+            + [topic for topic in GOAL_FAMILIES if topic[0] in ANALYTICAL_TOPICS]
+            + [topic for topic in GOAL_FAMILIES if topic[0] not in set(browser_priority) | ANALYTICAL_TOPICS | {"company_identity"}]
         )
         if only_topics is not None:
             allowed = set(only_topics)
@@ -124,6 +142,12 @@ class ResearchPlanner:
                     trigger=("official_discovery" if round_name == "R1" else "catalog_enumeration" if topic in {"products", "product_series", "product_models", "product_parameters"} else "triangulation" if round_name == "R3" else "baseline"),
                     canonical_company_name=canonical_name,
                     expected_fields=list(contract_for(topic).expected_fields),
+                    interpretation_goal=contract_for(topic).interpretation_goal,
+                    evidence_patterns=list(contract_for(topic).evidence_patterns),
+                    counter_evidence_patterns=list(contract_for(topic).counter_evidence_patterns),
+                    time_scope=contract_for(topic).time_scope,
+                    comparison_required=contract_for(topic).comparison_required,
+                    historical_required=contract_for(topic).historical_required,
                 ))
         return ResearchPlan(
             plan_id=new_sortable_id("PLAN"), run_id=run_id, complexity=complexity,

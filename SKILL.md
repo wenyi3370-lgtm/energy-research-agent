@@ -7,6 +7,18 @@ description: Evidence-first enterprise industry, energy cooperation and decision
 
 Build every run around one rule: research produces evidence, validation freezes data, and publishers consume only the frozen snapshot. Never let an artifact publisher browse, infer new facts, or silently repair missing data.
 
+## Decision-intelligence contract (P0)
+
+The management deliverable is an Enterprise Decision Intelligence System, not an evidence-collection status report. The mandatory chain is `Evidence -> ResearchAnalysis -> StrategicInterpretation -> CooperationHypothesis -> DecisionSynthesis -> PublicationNarrative -> Word/HTML`.
+
+- Every run carries a versioned `ClientProfile`. The default configuration is `config/client_profiles/sichuan_power_battery_innovation_center.yaml`; Python code must never invent client capabilities. `UNKNOWN_CLIENT_CAPABILITY` and `ASSUMED_CLIENT_CAPABILITY` cannot support a high-confidence recommendation.
+- `OpportunityRegistry` discovers candidates only. A formal opportunity must pass Need, Why Now, client capability match, value-creation logic, target department, evidence, counterevidence and disconfirming-condition gates. Product, factory, customer or storage-product signals alone remain potential hypotheses or are rejected.
+- Strategic conclusions require `InterpretationLineage`. Competition appears only with same-scope comparables, customers are graded by relationship proof, risks come from enterprise evidence, and DataGap never becomes EnterpriseRisk.
+- The executive summary answers exactly five questions: enterprise essence, strategic change, implication for the client, risk/counterevidence, and action/resource decision. Data collection, cleaning and report production are not business outcomes.
+- Full gaps stay in appendices. Only deduplicated unknowns that can change a decision may appear briefly in the body.
+- Formal publishers run `DecisionIntelligenceValidator`: process-language ratio <5%, gap narrative <10% (large listed enterprises <5%), enterprise-specific target >70%, strategic trajectory when historical evidence exists, competition gate, cooperation-hypothesis contract, generic-template rejection and management-usefulness gate.
+- Internal reasoning fields are not publication language. Word/HTML must state company facts, the recommended contact, the concrete task and the conditions for proceeding in ordinary business Chinese. Do not publish framework recitals such as “目标问题—合作时点—委托方能力—价值机制—反证条件”, “每一步允许证伪”, “不以工作量证明机会成立”, or “这些事实回答企业靠什么经营”.
+
 ## Start a run
 
 1. Accept a company name plus optional scope constraints. Do not require step-by-step user operation during the normal path.
@@ -105,6 +117,9 @@ These fixes are part of the Skill source and regression suite, not local-run pat
 - Official page hostnames are normalized with URL parsing. Product images require exact product-ID binding plus pixel verification. Shared catalog pages carry no page-level product ID; their images bind only when the image card/DOM context names one verified product.
 - The normal production path and `research/deep_retry.py` reuse the same image handoff. One-off recovery scripts may orchestrate a run but must not contain a looser second binding implementation.
 - Every Word paragraph containing an inline image overrides the fixed body leading with automatic single-line spacing. Portrait tables compact prose-heavy schemas to at most four columns; full ledgers remain in appendices.
+- A formal Word handoff must contain a real TOC field **and** materialized visible Heading 1/2 entries. An empty cached TOC field is a missing directory, even when `updateFields` is present; final render QA also requires page numbers.
+- A year embedded in a report title, project name or target statement is never a quantitative energy value. Enterprise own-energy KPIs require a numeric value plus a field-compatible physical or monetary unit. A title such as “2023年度碳排放核算报告” proves only that the disclosure exists; it must not render as “综合能源消费量 2023” or create an energy chart.
+- The energy chapter must state the decision supported by the available dataset. When single-base electricity, load, tariff, distribution and site-condition inputs are incomplete, the conclusion is limited to whether one base should enter data verification; capacity design, economics and quotation remain out of scope.
 - Release on another computer requires `python scripts/vendor_skills.py verify`, the full pytest suite, a source scan with no machine-specific absolute paths, and rendered Word inspection. See `references/fifth-round-quality-contract.md`.
 
 ## Decision synthesis and consulting narrative contract (P0)

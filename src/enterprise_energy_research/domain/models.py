@@ -382,6 +382,12 @@ class ResearchQuery(StrictModel):
     # P0-2: goal context declared at planning time so extraction never loses it.
     canonical_company_name: str | None = None
     expected_fields: list[str] = Field(default_factory=list)
+    interpretation_goal: str | None = None
+    evidence_patterns: list[str] = Field(default_factory=list)
+    counter_evidence_patterns: list[str] = Field(default_factory=list)
+    time_scope: str | None = None
+    comparison_required: bool = False
+    historical_required: bool = False
     status: QueryStatus = QueryStatus.PLANNED
 
 
@@ -619,6 +625,8 @@ class RunManifest(StrictModel):
     evidence_version: int = Field(default=1, ge=1)
     freeze_id: str | None = None
     validation_status: ValidationStatus | None = None
+    client_profile: dict[str, Any] | None = None
+    client_profile_hash: str | None = None
 
 
 class FrozenResearchBundle(StrictModel):

@@ -97,7 +97,7 @@ class VisualSpec(BaseModel):
     unit: str | None = None
     period: str | None = None
     scope: str | None = None
-    transformation: str = "直接映射冻结证据，不新增假设。"
+    transformation: str = "直接使用已核验数据。"
     assumption_status: Literal["evidence", "analytical_inference", "to_be_confirmed"] = "evidence"
     verified: bool = True
     destination: Literal["html", "word", "both"] = "both"

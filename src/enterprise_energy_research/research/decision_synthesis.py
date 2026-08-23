@@ -32,6 +32,13 @@ from enterprise_energy_research.research.research_analysis import (
     ResearchAnalysis,
     ResearchAnalysisEngine,
 )
+from enterprise_energy_research.research.client_profile import ClientProfile, client_profile_from_manifest
+from enterprise_energy_research.research.cooperation_hypothesis import (
+    CooperationHypothesis, CooperationHypothesisEngine, CooperationHypothesisStatus,
+)
+from enterprise_energy_research.research.strategic_interpretation import (
+    StrategicInterpretation, StrategicInterpretationEngine,
+)
 
 FINANCIAL_FIELDS = {"revenue", "profit", "gross_margin", "rnd_expense", "rnd_expense_ratio"}
 PRODUCT_FIELDS = {
@@ -151,6 +158,9 @@ class DecisionSynthesisEngine:
         bundle: FrozenResearchBundle,
         analysis: ResearchAnalysis | None = None,
         synthesis: Any | None = None,
+        strategic: StrategicInterpretation | None = None,
+        hypotheses: list[CooperationHypothesis] | None = None,
+        client: ClientProfile | None = None,
     ) -> DecisionSynthesis:
         entity = next(
             (item for item in bundle.entities if item.entity_id == bundle.run_manifest.canonical_entity_id),
@@ -159,6 +169,9 @@ class DecisionSynthesisEngine:
         if entity is None:
             raise ValueError("Frozen bundle contains no canonical enterprise")
         analysis = analysis or ResearchAnalysisEngine().analyze(bundle)
+        strategic = strategic or StrategicInterpretationEngine().interpret(bundle, analysis)
+        client = client or client_profile_from_manifest(bundle.run_manifest)
+        hypotheses = hypotheses if hypotheses is not None else CooperationHypothesisEngine().build(bundle, strategic, client)
         verified = [claim for claim in bundle.claims if claim.verification_status == VerificationStatus.VERIFIED]
         by_domain: dict[str, list[Claim]] = defaultdict(list)
         for claim in verified:
@@ -176,34 +189,46 @@ class DecisionSynthesisEngine:
         findings.append(self._energy_finding(analysis, by_domain))
 
         due_diligence = self._due_diligence(bundle.gaps)
-        blocker_count = sum(item.decision_blocker for item in due_diligence)
-        priority_solutions = [item for item in bundle.solutions if item.priority in {"A", "B"} and item.claim_ids]
-        concrete_energy = [claim for claim in by_domain["energy"] if claim.field_name in ENERGY_FIELDS]
-        if priority_solutions and len(concrete_energy) >= 2 and blocker_count == 0:
-            judgement = "推进"
-            rationale = "公开事实已覆盖合作能力、目标场景与关键能源边界，可进入方案共创与项目预可研。"
-        elif priority_solutions and verified:
-            judgement = "有条件推进"
-            rationale = "公开事实支持进入技术交流与数据获取阶段，尚不足以直接支持项目报价或收益承诺。"
+        priority_hypotheses = [item for item in hypotheses if item.status == CooperationHypothesisStatus.PRIORITY_OPPORTUNITY]
+        potential_hypotheses = [item for item in hypotheses if item.status == CooperationHypothesisStatus.POTENTIAL_HYPOTHESIS]
+        if priority_hypotheses:
+            judgement = "建议接洽"
+            top = priority_hypotheses[0]
+            rationale = (
+                f"可先讨论“{top.opportunity_name}”，但不宜直接立项。"
+                f"由{top.target_department}确认具体需求和合作范围后，再决定是否设计课题。"
+            )
+        elif potential_hypotheses:
+            judgement = "保留接洽"
+            rationale = "现有资料只显示可能的合作方向，尚未确认对方需求、负责人和项目条件。"
         else:
             judgement = "暂缓"
-            rationale = "当前公开资料尚未形成可核验的合作场景与价值链闭环，应先补齐关键事实再决定是否投入商务资源。"
+            rationale = "现有资料不足以支持主动接洽；待出现明确需求或新的合作条件后再评估。"
 
-        solution_names = list(dict.fromkeys(item.opportunity for item in priority_solutions))
+        ranked: list[CooperationHypothesis] = []
+        seen_directions: set[str] = set()
+        for item in [*priority_hypotheses, *potential_hypotheses]:
+            if item.opportunity_name in seen_directions:
+                continue
+            seen_directions.add(item.opportunity_name)
+            ranked.append(item)
+        solution_names = list(dict.fromkeys(item.opportunity_name for item in ranked))
         priority_summary = (
-            "优先围绕" + "、".join(solution_names[:3]) + "开展场景核验。"
-            if solution_names else "优先补齐目标场景和项目边界数据。"
+            "优先联系相关业务部门，讨论" + "、".join(solution_names[:3]) + "中的一个具体课题。"
+            if solution_names else "当前没有足够依据支持主动接洽。"
         )
-        key_risks = self._key_risks(bundle, due_diligence)
+        key_risks = list(dict.fromkeys(item.risk for item in strategic.enterprise_risks))[:8]
         decision_questions = [
             "该企业是否值得推进，以及当前可以推进到哪一阶段？",
             "哪些合作方向具备已核验事实基础，优先从什么场景切入？",
-            "哪些信息缺口会阻断项目经济性和 Go / No-Go 判断？",
-            "未来 90 天应完成哪些验证动作？",
+            "企业正在发生什么战略变化，哪些驱动和风险会改变合作窗口？",
+            "创新中心能够提供哪些资源，双方合作还需确认哪些条件？",
+            "未来 90 天应完成哪些接洽和验证工作，何时决定是否立项？",
         ]
         executive = self._executive_summary(
             entity.canonical_name, judgement, rationale, analysis, findings,
             priority_summary, due_diligence, key_risks, synthesis,
+            strategic=strategic, hypotheses=hypotheses, client=client,
         )
         return DecisionSynthesis(
             run_id=bundle.run_manifest.run_id,
@@ -310,10 +335,10 @@ class DecisionSynthesisEngine:
         source_ids = [claim.source_id for claim in bundle.claims if claim.claim_id in claim_ids]
         return DecisionFinding(
             finding_id="DF-MANUFACTURING", decision_question="生产布局如何影响合作切入顺序？",
-            conclusion=f"已核验生产基地 {site_count} 处" + (f"，主要分布在{region_text}" if region_text else ""),
+            conclusion=f"公开资料收录基地记录 {site_count} 条" + (f"，按披露地址归类为{region_text}" if region_text else ""),
             supporting_claim_ids=claim_ids, supporting_source_ids=list(dict.fromkeys(source_ids)),
-            fact_summary=f"公开资料识别生产基地 {site_count} 处（按地域去重口径）。",
-            analysis=(f"基地地域分布为{region_text}。" if region_text else "基地名录已入附录。")
+            fact_summary=f"公开资料收录基地记录 {site_count} 条；地址不完整的记录单列待核验。",
+            analysis=(f"基地记录按披露地址归类为{region_text}。" if region_text else "基地名录已入附录。")
                     + "制造布局可用于筛选首批接触基地；产能口径反映制造输出，与企业自身用电规模是两类指标。",
             business_implication="首批基地应按业务相关性、数据可得性与决策链路筛选。",
             recommendation="选择一处资料完整、场景明确的基地做预可研，再决定是否复制。",
@@ -332,27 +357,36 @@ class DecisionSynthesisEngine:
             labels = "、".join(item.label for item in own)
             return DecisionFinding(
                 finding_id="DF-ENERGY", decision_question="公开资料能否形成基地级用能画像？",
-                conclusion=f"公开资料可识别{labels}等企业自身能源语义数据，但仍需按基地范围核验",
+                conclusion=f"公开资料披露了{labels}等量化数据，可用于场景初筛但不能替代基地测算",
                 supporting_claim_ids=ids, supporting_source_ids=sources,
                 fact_summary=f"已核验企业自身能源语义数据 {len(own)} 项。",
-                analysis=f"已识别{labels}等能源语义事实。进入测算前，仍需确认统计期间、基地范围与计费口径。",
-                business_implication="自身用能数据是项目价值测算的输入；产品与项目能力是合作范围证据，两者分开评估。",
-                recommendation="进入报价前完成基地级电量、负荷、电价与配电条件核验。",
-                limitations=["现有能源事实的时间粒度与基地范围待现场核验。"],
+                analysis=f"已识别{labels}等量化事实，但公开口径通常不能同时覆盖单基地电量、负荷、电价、屋顶和配电约束。",
+                business_implication="现有数据只能帮助判断是否值得进入基地预可研，不能据此确定装机规模、储能时长或项目收益。",
+                recommendation="选择一处责任部门明确的基地，取得连续电量、负荷、电价、配电和屋顶数据后再决定是否报价。",
+                limitations=["单基地统计边界和计费口径尚未形成完整、可比的数据组。"],
                 confidence=min(0.92, 0.55 + 0.04 * len(own)),
                 statement_type=DecisionStatementType.ANALYTICAL_INFERENCE,
                 semantic_domain="energy",
             )
+        report_titles = list(dict.fromkeys(
+            str(claim.value).strip() for claim in energy_claims
+            if "碳排放核算报告" in str(claim.value) and str(claim.value).strip()
+        ))
+        disclosure_fact = (
+            f"公开页面列示{'、'.join(report_titles[:3])}，但报告标题没有给出可用于项目测算的能耗数值。"
+            if report_titles else
+            "当前未取得可独立核验的年度用电量、峰值负荷、电价、配电容量或负荷曲线。"
+        )
         return DecisionFinding(
             finding_id="DF-ENERGY", decision_question="公开资料能否形成基地级用能画像？",
-            conclusion="现有公开资料尚未形成基地级用能画像，用能测算需以现场数据为准",
+            conclusion="公开资料尚不足以判断单个基地的光伏或储能项目经济性",
             supporting_claim_ids=list(dict.fromkeys(claim.claim_id for claim in energy_claims)),
             supporting_source_ids=list(dict.fromkeys(claim.source_id for claim in energy_claims)),
-            fact_summary="当前未取得可独立核验的年度用电量、峰值负荷、电价或负荷曲线。",
-            analysis="公开披露中的制造产能与产品容量属于生产与产品能力，不能转换为企业自身能源消费。",
-            business_implication="现阶段支持技术交流与数据获取，不支持直接进入商业报价。",
-            recommendation="把基地级电量、负荷曲线、电价账单与配电容量作为预可研必备输入。",
-            limitations=["缺少基地级能源事实。"],
+            fact_summary=disclosure_fact,
+            analysis="年度碳核算报告入口说明企业有相关披露，但报告名称不是综合能源消费量。没有基地级数据，就不能比较基地优先级、配置设备容量或估算收益。",
+            business_implication="当前只能决定是否启动一处基地的数据核验，不能据此进入容量设计或商业报价。",
+            recommendation="由基地能源管理或设施部门提供近12至24个月电量账单、分时负荷、电价、配电容量、屋顶条件及既有光储设施资料。",
+            limitations=["缺少能够落到单一基地和统一期间的完整测算输入。"],
             confidence=0.9 if energy_claims else 0.75,
             statement_type=DecisionStatementType.ANALYTICAL_INFERENCE if energy_claims else DecisionStatementType.TO_BE_CONFIRMED,
             semantic_domain="energy",
@@ -361,18 +395,26 @@ class DecisionSynthesisEngine:
     # ── due diligence / risks ──────────────────────────────────────────────
     def _due_diligence(self, gaps: list[DataGap]) -> list[DueDiligenceRequirement]:
         requirements: list[DueDiligenceRequirement] = []
-        for index, gap in enumerate(gaps, start=1):
-            item = field_label(gap.field_name)
+        grouped: dict[tuple[str | None, str, str], list[DataGap]] = defaultdict(list)
+        for gap in gaps:
+            affected = "项目经济性与是否进入方案设计" if gap.importance == "critical" else "合作范围与实施优先级"
+            # Several internal field names can intentionally share one public
+            # label (for example miscellaneous disclosure gaps).  Group on
+            # that publication label so the appendix does not repeat the same
+            # heading and boilerplate under different schema keys.
+            grouped[(gap.entity_id, field_label(gap.field_name), affected)].append(gap)
+        for index, ((_, public_item, affected), duplicates) in enumerate(grouped.items(), start=1):
+            gap = sorted(duplicates, key=lambda item: {"critical": 3, "major": 2, "minor": 1}[item.importance], reverse=True)[0]
             blocker = gap.importance == "critical" or gap.field_name in {
                 "electricity_consumption", "load_curve", "electricity_cost", "peak_load", "transformer_capacity",
             }
             requirements.append(DueDiligenceRequirement(
-                requirement_id=f"DDR-{index:03d}", item=item,
+                requirement_id=f"DDR-{index:03d}", item=public_item,
                 why_it_matters=f"{reason_label(gap.reason)}。该事项决定相关方案能否建立可审计的事实和测算边界。",
-                affected_decision="项目经济性与是否进入方案设计" if blocker else "合作范围与实施优先级",
+                affected_decision=affected,
                 requested_materials=self._requested_materials(gap.field_name),
                 timing="项目预可研阶段" if blocker else "首轮技术交流后 30 天内",
-                decision_blocker=blocker, source_gap_ids=[gap.gap_id],
+                decision_blocker=blocker, source_gap_ids=[item.gap_id for item in duplicates],
             ))
         return requirements
 
@@ -391,10 +433,6 @@ class DecisionSynthesisEngine:
     @staticmethod
     def _key_risks(bundle: FrozenResearchBundle, requirements: list[DueDiligenceRequirement]) -> list[str]:
         risks = [str(claim.value) for claim in bundle.claims if claim.verification_status == VerificationStatus.VERIFIED and "risk" in claim.field_name]
-        if any(item.decision_blocker for item in requirements):
-            risks.append("关键现场数据缺失可能导致容量设计、收益估算和投资边界失真。")
-        if not bundle.solutions:
-            risks.append("公开资料尚未形成可核验的合作场景。")
         return list(dict.fromkeys(risks))[:8]
 
     # ── executive summary: data-first, 800-1500 chars ──────────────────────
@@ -409,6 +447,10 @@ class DecisionSynthesisEngine:
         requirements: list[DueDiligenceRequirement],
         risks: list[str],
         synthesis: Any,
+        *,
+        strategic: StrategicInterpretation | None = None,
+        hypotheses: list[CooperationHypothesis] | None = None,
+        client: ClientProfile | None = None,
     ) -> list[str]:
         profile = getattr(synthesis, "company_profile", None) if synthesis is not None else None
         business = profile.core_business if profile and profile.core_business else None
@@ -416,117 +458,45 @@ class DecisionSynthesisEngine:
         revenue = analysis.trend("revenue")
         profit = analysis.trend("profit")
 
-        # 1. 企业是什么（100-200字）
-        business_text = business or ("、".join(segments) if segments else "以新能源业务为主的综合性企业")
-        founded = profile.founded_date if profile and profile.founded_date else ""
-        first = (
-            f"总体判断：{entity_name}为{judgement}对象。"
-            f"公司以{business_text}为核心业务"
-            + (f"，成立于{founded}" if founded else "")
-            + (f"，总部位于{profile.headquarters}" if profile and profile.headquarters else "")
-            + ("，覆盖" + "、".join(segments) + "等板块" if segments else "")
-            + f"。本报告基于公开渠道已核验事实，对公司经营、产品、制造布局与能源相关能力作客观研究，"
-            "再回答与委托方的合作价值与切入方式；研究范围覆盖集团口径与主要经营实体，"
-            "全篇事实均标注期间、范围与来源，分析与建议部分与事实部分明确区分。"
-            "报告正文覆盖经营、产品、制造、能源与合作五个维度，附录保留来源清单、基地与产品名录。"
-        )
-
-        # 2. 关键经营事实（真实数据）
-        facts: list[str] = []
-        if revenue is not None:
-            last = revenue.points[-1]
-            facts.append(f"营业收入 {last.value_display}{last.unit or ''}（{last.period}）")
-        if profit is not None:
-            last = profit.points[-1]
-            facts.append(f"归母净利润 {last.value_display}{last.unit or ''}（{last.period}）")
-        margin_insight = next((item for item in analysis.insights if item.insight_id == "INS-NET-MARGIN"), None)
-        if margin_insight is not None:
-            facts.append(margin_insight.findings[0].rstrip("。"))
-        cash_flow = analysis.trend("operating_cash_flow")
-        if cash_flow is not None:
-            facts.append(f"经营活动现金流 {cash_flow.points[-1].value_display}{cash_flow.points[-1].unit or ''}（{cash_flow.points[-1].period}）")
-        assets = analysis.trend("total_assets")
-        if assets is not None:
-            facts.append(f"总资产 {assets.points[-1].value_display}{assets.points[-1].unit or ''}（{assets.points[-1].period}）")
-        sales = analysis.trend("battery_sales_volume")
-        if sales is not None:
-            facts.append(f"动力电池销量 {sales.points[-1].value_display}{sales.points[-1].unit or ''}（{sales.points[-1].period}）")
-        if analysis.zero_carbon_metrics:
-            facts.append("零碳披露" + "；".join(
-                f"{item.label} {item.value_display}{item.unit or ''}" for item in analysis.zero_carbon_metrics[:2]
-            ))
-        position = next((item for item in analysis.kpis if item.label == "市场地位"), None)
-        if position is not None:
-            facts.append(f"市场地位：{position.value}")
-        family_kpi = next((item for item in analysis.kpis if item.label == "已核验产品族"), None)
-        factory_kpi = next((item for item in analysis.kpis if item.label == "已核验生产基地"), None)
-        if family_kpi is not None:
-            facts.append(f"已核验产品族 {family_kpi.value} 个")
-        if factory_kpi is not None:
-            facts.append(f"生产基地 {factory_kpi.value} 处")
-        if analysis.own_energy_metrics:
-            facts.append("企业自身能源数据" + "；".join(
-                f"{item.label} {item.value_display}{item.unit or ''}" for item in analysis.own_energy_metrics[:3]
-            ))
-        second = (
-            "核心依据：" + ("；".join(facts) if facts else "已核验公开披露覆盖企业身份、业务与产品制造能力") + "。"
-            + ((revenue.statement + "。") if revenue is not None and revenue.year_count >= 3 else "")
-            + "这些数据构成判断合作资源基础的客观依据，经营规模反映资源投入能力，产品与基地反映交付能力；"
-            "对应证据在后续章节逐项展开并配有图表。跨期可比性方面，年度数据以公开年报与定期报告口径为准，"
-            "不同披露来源的币种与合并范围差异在相应章节注明。"
-        )
-
-        # 3. 产业与技术能力（2-4点）
-        capabilities: list[str] = []
-        product_finding = next((item for item in findings if item.semantic_domain == "product"), None)
-        manufacturing_finding = next((item for item in findings if item.semantic_domain == "manufacturing"), None)
-        energy_finding = next((item for item in findings if item.semantic_domain == "energy"), None)
-        rnd_insight = next((item for item in analysis.insights if item.insight_id == "INS-RND"), None)
-        if product_finding is not None:
-            capabilities.append(product_finding.conclusion)
-        if manufacturing_finding is not None:
-            capabilities.append(manufacturing_finding.conclusion)
-        if energy_finding is not None:
-            capabilities.append(energy_finding.conclusion)
-        if rnd_insight is not None:
-            capabilities.append(rnd_insight.findings[0])
-        if position is not None:
-            capabilities.append(f"市场地位：{position.value}")
-        third = (
-            "产业与技术能力方面，" + ("；".join(capabilities) + "。" if capabilities else "现有公开资料对产业技术能力的披露有限。")
-            + f"优先切入：{priority_summary}"
-        )
-        if analysis.energy_product_metrics:
-            third += "能源相关能力方面，公司披露" + "、".join(
-                f"{item.label} {item.value_display}{item.unit or ''}" for item in analysis.energy_product_metrics[:3]
-            ) + "等产品/项目能力，属于合作范围证据而非企业用能数据。"
-        if analysis.zero_carbon_metrics:
-            third += "零碳披露方面，" + "；".join(
-                f"{item.label} {item.value_display}{item.unit or ''}" for item in analysis.zero_carbon_metrics[:2]
-            ) + "，构成绿电与零碳合作议题的事实起点。"
-        third += "上述能力构成联合验证的事实起点，具体以第 3 至第 5 章数据为准。"
-
-        # 4. 主要机会与限制
-        blockers = [item.item for item in requirements if item.decision_blocker]
-        limitation = (
-            "限制条件：当前尚不能判断的关键事项包括" + "、".join(blockers[:6]) + "。"
-            if blockers else "限制条件：关键前置资料整体可控，具体口径需在预可研中复核。"
-        )
-        risk_text = ("主要风险还包括" + "；".join(risks[:3]) + "。") if risks else ""
-        fourth = (
-            limitation + risk_text + "缺少基地级电量和负荷时，不估算削峰或自消纳收益；缺少配电和权属条件时，不承诺可实施容量。"
-            + "机会与限制共同决定资源配置：资源投入随证据成熟度逐步增加，避免在关键事实缺失时过早承诺容量、收益或工期。"
-        )
-
-        # 5. 最终建议
-        fifth = (
-            "行动建议：未来 30 天完成对接主体确认、资料清单发放与优先场景选择；"
-            "60 天完成现场踏勘、数据清洗与技术接口验证；90 天提交预可研结论并召开 Go / No-Go 评审。"
-            "评审材料覆盖价值来源、技术约束、责任主体、投资边界、关键风险与退出条件六个方面；"
-            "只有当关键资料齐套、技术边界可控、责任主体明确且价值测算通过敏感性检验时，才进入方案设计或报价阶段，"
-            "同时明确返回补数或停止投入的触发条件；评审结论连同数据台账一并归档，作为后续轮次复核与口径一致的基线。"
-        )
-        return [first, second, third, fourth, fifth]
+        strategic = strategic or StrategicInterpretationEngine().interpret
+        hypotheses = hypotheses or []
+        client_name = client.client_name if client else "委托方"
+        business_text = business or ("、".join(segments) if segments else "已核验主营业务")
+        trajectory_text = "；".join(
+            f"{item.title}已收录{'、'.join(item.periods)}年度数据，可用于观察这些年份的变化"
+            for item in strategic.trajectories[:2]
+        ) if isinstance(strategic, StrategicInterpretation) and strategic.trajectories else "现有年度数据不足以判断长期变化"
+        turning_text = "；".join(f"{item.period}年{item.event}" for item in strategic.turning_points[:2]) if isinstance(strategic, StrategicInterpretation) and strategic.turning_points else "尚未识别足以改变业务边界的具名战略转折"
+        priority_items = [item for item in hypotheses if item.status == CooperationHypothesisStatus.PRIORITY_OPPORTUNITY]
+        potential_items = [item for item in hypotheses if item.status == CooperationHypothesisStatus.POTENTIAL_HYPOTHESIS]
+        ranked = [*priority_items, *potential_items]
+        opportunity_text = "；".join(
+            f"{item.opportunity_name}：{item.recommended_action.rstrip('。；;')}"
+            for item in ranked[:3]
+        ) or "暂无建议主动接洽的方向"
+        risks_text = "；".join(risks[:3]) if risks else "未从已核验披露中识别需要单列的企业特定风险"
+        unknowns = [item.item for item in requirements if item.decision_blocker][:4]
+        operating_fact_items = [
+            item.conclusion for item in findings
+            if item.semantic_domain in {"financial", "product", "manufacturing"}
+        ]
+        operating_facts = "；".join(operating_fact_items)
+        strength_labels = {"strong": "强", "medium": "中", "weak": "弱"}
+        customer_text = "；".join(
+            f"{item.customer_or_market}（资料支持程度：{strength_labels.get(item.strength, '待确认')}）"
+            for item in strategic.customer_market_proofs[:3]
+        ) if isinstance(strategic, StrategicInterpretation) else ""
+        capability_text = "、".join(item.name for item in (client.capabilities if client else []) if item.supports_formal_recommendation)
+        top = ranked[0] if ranked else None
+        contact_department = top.target_department if top else "相关业务部门"
+        top_direction = top.opportunity_name if top else "候选合作方向"
+        return [
+            f"企业定位：{entity_name}以{business_text}为核心业务。{operating_facts or '公开资料已覆盖公司的主要经营、产品和制造情况'}。这些信息反映了公司的主营方向和现有交付基础，首轮沟通宜聚焦具体产品或工艺课题。据现有资料，{rationale}",
+            f"经营与战略：{trajectory_text}；{turning_text}。{('已披露的客户与市场信息包括' + customer_text + '。') if customer_text else '公开资料尚未充分说明持续订单、排他关系或稳定收入。'}",
+            f"合作建议：{opportunity_text}。{client_name}可投入的相关能力包括{capability_text or '尚无已确认的专项能力'}。当前建议先聚焦{top_direction}，与{contact_department}确认一项具体课题，不同时铺开多个方向。",
+            f"主要限制：{risks_text}。" + (f"立项前还需取得{'、'.join(unknowns)}。" if unknowns else "当前没有发现会立即推翻上述判断的重大信息缺口。") + "如对方没有明确需求、双方技术路线或交付范围无法对齐，建议停止接洽。",
+            f"下一步：30 天内与{contact_department}确认需求和负责人；60 天内由{client_name}与对方选定一个课题，明确指标、分工、数据和知识产权边界；90 天根据验证结果决定立项、缩小范围或结束接洽。",
+        ]
 
     @staticmethod
     def _lineage(claims: list[Claim]) -> tuple[list[str], list[str]]:

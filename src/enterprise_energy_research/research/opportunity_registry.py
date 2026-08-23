@@ -258,7 +258,7 @@ class EvidenceOpportunityEngine:
                     target_ids=[entity.entity_id],
                     opportunity=definition.title,
                     proposed_solution=definition.description_template,
-                    benefit_logic="价值取决于经核验的现场数据与可审计基线，公开信息不足时不承诺收益",
+                    benefit_logic=self._value_logic(definition),
                     data_requirements=["经核验的运营数据", "商务与责任边界"],
                     risks=["证据不足", "范围不确定", "数据质量"],
                     next_step=definition.next_step_template,
@@ -268,3 +268,33 @@ class EvidenceOpportunityEngine:
                     assumptions=[],
                 ))
         return solutions
+
+    @staticmethod
+    def _value_logic(definition: OpportunityDefinition) -> str:
+        """Describe the commercial contribution in ordinary business language.
+
+        The previous release repeated one abstract sentence for every
+        opportunity.  Besides sounding machine-written, it concealed the
+        material difference between a technical-development discussion, an
+        energy project and a market-access proposal.
+        """
+        if definition.code in {"JOINT_RND", "PRODUCT_COOPERATION", "ODM", "SUPPLY_CHAIN"}:
+            return (
+                "通过联合技术验证、产品适配或供应链协同缩短开发与导入周期；"
+                "具体贡献需由双方在明确课题、指标和交付边界后确认"
+            )
+        if definition.code in {
+            "PV_EPC", "STORAGE", "ENERGY_EFFICIENCY", "COMPRESSED_AIR",
+            "WASTE_HEAT", "HVAC", "GREEN_POWER", "ENERGY_MANAGEMENT",
+            "CARBON_MANAGEMENT", "ZERO_CARBON_FACTORY", "MICROGRID",
+            "ENERGY_DIGITALIZATION", "V2G", "CHARGING",
+        }:
+            return (
+                "通过降低用能成本、提高供能稳定性或减少碳排放形成项目价值；"
+                "容量和收益须按具体基地的实际数据测算"
+            )
+        if definition.code == "OVERSEAS":
+            return "通过市场准入、本地资源和交付协同降低海外项目落地难度，合作范围按目标市场逐项确定"
+        if definition.code == "CHANNEL":
+            return "通过渠道覆盖和客户触达增加有效销售机会，合作前需明确客户归属、区域和分成规则"
+        return "双方围绕一个明确业务事项分工协作，合作价值以可量化的交付结果评价"
