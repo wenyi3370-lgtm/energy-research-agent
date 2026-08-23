@@ -26,6 +26,7 @@ from enterprise_energy_research.artifacts.image_publication import (
     write_image_publication_manifest,
 )
 from enterprise_energy_research.artifacts.narrative import NarrativeBuilder, ResearchNarrative, write_narrative
+from enterprise_energy_research.artifacts.publication_boilerplate import PublicationBoilerplateFilter
 from enterprise_energy_research.artifacts.qa_report import (
     QAFinding,
     QAVisualEntry,
@@ -35,12 +36,17 @@ from enterprise_energy_research.artifacts.qa_report import (
 from enterprise_energy_research.artifacts.visual_policy import colors as theme_colors
 from enterprise_energy_research.artifacts.visual_policy import word_policy
 from enterprise_energy_research.artifacts.visuals import VisualSpec, write_visual_manifest
-from enterprise_energy_research.domain.enums import ArtifactType
+from enterprise_energy_research.domain.enums import ArtifactType, VerificationStatus
 from enterprise_energy_research.domain.models import ArtifactBinding, FrozenResearchBundle
 from enterprise_energy_research.research.synthesis import ResearchSynthesizer
 from enterprise_energy_research.validation.consulting_narrative import (
     ConsultingNarrativeValidator, PublicationVisibleTextValidator, TOCValidator,
     VisualSemanticValidator, write_consulting_validation,
+)
+from enterprise_energy_research.validation.publication_quality import (
+    ProductImageCoverageValidator,
+    PublicationBoilerplateValidator,
+    ResearchValueValidator,
 )
 
 
@@ -82,6 +88,9 @@ class FrozenWordPublisher:
             solutions=bundle.solutions,
         )
         narrative = NarrativeBuilder().build(bundle, synthesis)
+        narrative = ResearchNarrative.model_validate(
+            PublicationBoilerplateFilter().filter_value(narrative.model_dump(mode="json"))
+        )
 
         asset_root = output_path.parent / f"{output_path.stem}_assets"
         figures = asset_root / "figures"
@@ -94,6 +103,15 @@ class FrozenWordPublisher:
                 qa.record_finding(QAFinding(
                     code=check.code, severity="error", message=check.message,
                 ))
+        for check in [
+            *PublicationBoilerplateValidator().validate(narrative),
+            *ResearchValueValidator().validate(narrative, bundle),
+            *ProductImageCoverageValidator().validate(narrative),
+        ]:
+            if check.status == "FAIL":
+                qa.record_finding(QAFinding(code=check.code, severity="error", message=check.message))
+            elif check.status == "WARN":
+                qa.record_finding(QAFinding(code=check.code, severity="warn", message=check.message))
 
         render_results: dict[str, VisualRenderResult] = {}
         for spec in narrative.visuals:
@@ -149,6 +167,16 @@ class FrozenWordPublisher:
         visible_validator = PublicationVisibleTextValidator()
         for message in [*visible_validator.validate_text(visible_validator.extract_docx(output_path)), *TOCValidator().validate(output_path)]:
             qa.record_finding(QAFinding(code="word_visible_text_or_toc", severity="error", message=message))
+        verified_products = [item for item in bundle.products if item.verification_status == VerificationStatus.VERIFIED]
+        image_backed_products = [
+            item for item in verified_products
+            if (narrative.product_images.get(item.product_id) or item.image_id) in publication_images
+        ]
+        if len(verified_products) >= 5 and len(image_backed_products) < 5:
+            qa.record_finding(QAFinding(
+                code="word_product_image_gate", severity="error",
+                message="正式 Word 报告至少需要 5 个图片、参数和场景完整绑定的重点产品。",
+            ))
         write_qa_report(qa, asset_root / "publication_qa_report.json")
 
         digest = hashlib.sha256(output_path.read_bytes()).hexdigest()
@@ -156,8 +184,8 @@ class FrozenWordPublisher:
         return ArtifactResult(
             adapter=self.name, artifact_id=binding.artifact_id, artifact_type=binding.type,
             path=output_path, content_sha256=digest, used_claim_ids=used_claims,
-            used_image_ids=selected_word_image_ids, status="published",
-            diagnostics=image_manifest.diagnostics,
+            used_image_ids=selected_word_image_ids, status="published" if qa.status != "fail" else "failed",
+            diagnostics=[*image_manifest.diagnostics, *([] if qa.status != "fail" else ["publication_qa_failed"])],
         )
 
     @staticmethod
@@ -265,7 +293,7 @@ class FrozenWordPublisher:
         settings.append(update_fields)
 
         header = section.header.paragraphs[0]
-        header.text = "企业产业与能源合作智能调研"
+        header.text = "企业产业与能源合作研究报告"
         header.runs[0].font.size = Pt(9)
         header.runs[0].font.color.rgb = RGBColor.from_string(cool_gray_hex)
         today = date.today()
@@ -292,7 +320,7 @@ class FrozenWordPublisher:
         tr.font.name = "Microsoft YaHei"
         tr.font.size = Pt(26)
         tr.font.color.rgb = RGBColor.from_string("1B1F26")
-        subtitle = document.add_paragraph("企业产业与能源合作智能调研报告")
+        subtitle = document.add_paragraph("企业产业与能源合作战略研究报告")
         subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
         subtitle.paragraph_format.space_after = Pt(26)
         subtitle.runs[0].font.size = Pt(16)
@@ -327,7 +355,7 @@ class FrozenWordPublisher:
 
         document.add_heading("目录", level=1)
         toc = document.add_paragraph()
-        self._field(toc, 'TOC \\o "1-3" \\h \\z \\u')
+        self._field(toc, 'TOC \\o "1-2" \\h \\z \\u')
         document.add_page_break()
 
         # ── narrative-driven chapters ──
@@ -342,7 +370,12 @@ class FrozenWordPublisher:
                 for run in takeaway.runs:
                     run.bold = True
                     run.font.color.rgb = RGBColor.from_string(navy_hex)
-            for paragraph in [*chapter.context_paragraphs, *chapter.analysis_paragraphs]:
+            analysis_budget = {
+                "executive_summary": 4, "operations": 6, "products": 4,
+                "factories": 4, "energy_profile": 3, "opportunities": 2,
+                "action_plan": 2, "risks_evidence": 0,
+            }.get(chapter.kind, 3)
+            for paragraph in [*chapter.context_paragraphs, *chapter.analysis_paragraphs[:analysis_budget]]:
                 document.add_paragraph(paragraph)
             if chapter.table_rows:
                 shown_rows = chapter.table_rows
@@ -357,8 +390,15 @@ class FrozenWordPublisher:
                 if result is None or spec is None:
                     continue
                 self._add_visual(document, spec, result, f"{index}-{figure_no}", figure_width, asset_root)
+            showcased_image_ids: set[str] = set()
+            if chapter.chapter_id == "products":
+                showcased_image_ids = self._add_product_showcase(
+                    document, bundle, narrative, publication_images, asset_root, index,
+                )
             image_counter = 0
             for image_id in chapter.image_ids:
+                if image_id in showcased_image_ids:
+                    continue
                 publication = publication_images.get(image_id)
                 if publication is None:
                     continue
@@ -367,7 +407,10 @@ class FrozenWordPublisher:
             self._add_statement_list(document, "业务含义", chapter.implications)
             self._add_statement_list(document, "建议", chapter.recommendations)
             self._add_statement_list(document, "反向证据", chapter.counter_evidence)
-            self._add_statement_list(document, "局限与待确认", chapter.limitations)
+            constraints = [*chapter.limitations]
+            if chapter.kind == "risks_evidence":
+                constraints = [*chapter.analysis_paragraphs, *constraints]
+            self._add_statement_list(document, "关键约束与待确认", constraints)
             self._add_statement_list(document, "行动项", chapter.action_items)
 
         # ── appendices ──
@@ -388,7 +431,10 @@ class FrozenWordPublisher:
             document.add_paragraph("本次研究未包含满足核验标准的实体图片。")
         document.add_heading("附录 D：待尽调事项", level=1)
         for item in narrative.appendices.due_diligence:
-            document.add_heading(item.item, level=2)
+            # Item-level entries remain navigable but stay outside the 1–2
+            # level executive TOC; otherwise a large due-diligence registry
+            # can turn the contents section into dozens of unusable pages.
+            document.add_heading(item.item, level=3)
             document.add_paragraph(item.why_it_matters)
             document.add_paragraph(f"建议材料：{'、'.join(item.requested_materials)}；获取时点：{item.timing}；是否阻断决策：{'是' if item.decision_blocker else '否'}")
         document.add_heading("附录 E：生产基地清单", level=1)
@@ -400,6 +446,79 @@ class FrozenWordPublisher:
         document.save(output_path)
 
     # ── figure/table helpers ──
+    @classmethod
+    def _add_product_showcase(
+        cls,
+        document,
+        bundle: FrozenResearchBundle,
+        narrative: ResearchNarrative,
+        publication_images: dict[str, PublicationImage],
+        asset_root: Path,
+        chapter_no: int,
+    ) -> set[str]:
+        """Pair 4—8 key products with official imagery, parameters and uses."""
+        from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+        from docx.shared import Cm, Pt, RGBColor
+
+        rows = []
+        for product in bundle.products:
+            if product.verification_status != VerificationStatus.VERIFIED:
+                continue
+            image_id = narrative.product_images.get(product.product_id) or product.image_id
+            publication = publication_images.get(image_id or "")
+            if publication is not None:
+                rows.append((product, image_id, publication))
+        rows = rows[:8]
+        if not rows:
+            return set()
+
+        document.add_heading("重点产品图谱", level=2)
+        used: set[str] = set()
+        for offset, (product, image_id, publication) in enumerate(rows, start=1):
+            used.add(image_id)
+            heading = document.add_heading(product.name, level=3)
+            heading.paragraph_format.keep_with_next = True
+            paragraph = document.add_paragraph()
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            paragraph.paragraph_format.keep_together = True
+            # Inline pictures inherit Normal's fixed 22 pt line height unless
+            # overridden.  Word/LibreOffice then clips the picture to a thin
+            # strip even though the binary itself is high resolution.  Every
+            # picture paragraph must use automatic single-line height.
+            paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+            paragraph.paragraph_format.line_spacing = 1.0
+            paragraph.paragraph_format.space_before = Pt(6)
+            paragraph.paragraph_format.space_after = Pt(6)
+            ratio = publication.width / publication.height if publication.height else 1.0
+            paragraph.add_run().add_picture(
+                str(asset_root / publication.publication_path),
+                width=Cm(12.8 if ratio >= 1.1 else 8.8),
+            )
+            meta_parts = [
+                f"产品族：{product.category or '未披露'}",
+                f"系列/型号：{' / '.join(item for item in (product.series, product.model) if item) or '未披露'}",
+                f"应用场景：{'、'.join(product.applications[:6]) or '未披露'}",
+            ]
+            meta = document.add_paragraph("；".join(meta_parts))
+            meta.paragraph_format.first_line_indent = Pt(0)
+            meta.paragraph_format.keep_together = True
+            parameters = "；".join(
+                f"{item.name}：{item.value if item.value is not None else ''}{item.unit or ''}"
+                for item in product.parameters[:8]
+            ) or "公开参数：未披露"
+            parameter_paragraph = document.add_paragraph(f"关键参数：{parameters}")
+            parameter_paragraph.paragraph_format.first_line_indent = Pt(0)
+            source = document.add_paragraph(
+                f"图 {chapter_no}-P{offset} {product.name}｜图片来源：{publication.source_page_url}｜产品来源编号：{'、'.join(product.source_ids) or '详见附录 F'}"
+            )
+            source.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            source.paragraph_format.first_line_indent = Pt(0)
+            source.paragraph_format.space_after = Pt(10)
+            for run in source.runs:
+                run.font.size = Pt(9)
+                run.font.color.rgb = RGBColor(74, 85, 104)
+        return used
+
     @classmethod
     def _add_visual(
         cls,
@@ -466,6 +585,7 @@ class FrozenWordPublisher:
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         paragraph.paragraph_format.keep_together = True
         paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        paragraph.paragraph_format.line_spacing = 1.0
         paragraph.paragraph_format.space_before = Pt(6)
         paragraph.paragraph_format.space_after = Pt(6)
         ratio = image.width / image.height if image.height else 1.0
@@ -491,6 +611,7 @@ class FrozenWordPublisher:
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         paragraph.paragraph_format.keep_together = True
         paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        paragraph.paragraph_format.line_spacing = 1.0
         paragraph.paragraph_format.space_before = Pt(6)
         paragraph.paragraph_format.space_after = Pt(6)
         paragraph.add_run().add_picture(str(png_path), width=width)
@@ -499,6 +620,7 @@ class FrozenWordPublisher:
     def _add_structured_table(cls, document, rows: list[dict], caption: str) -> None:
         if not rows:
             return
+        rows = cls._compact_table_rows(rows)
         table_caption = document.add_paragraph(caption)
         cls._format_caption(table_caption)
         columns = list(rows[0].keys())
@@ -510,9 +632,89 @@ class FrozenWordPublisher:
             cells = table.add_row().cells
             for cell, column in zip(cells, columns):
                 cell.text = str(row.get(column) or "")
-        cell_width = 9360 // max(len(columns), 1)
-        cls._table_geometry(table, [cell_width] * len(columns))
+        cls._table_geometry(table, cls._table_widths(columns))
         cls._style_three_line_table(table)
+
+    @staticmethod
+    def _compact_table_rows(rows: list[dict]) -> list[dict]:
+        """Keep Word tables readable without weakening the evidence appendix.
+
+        The shared narrative deliberately carries publication-complete rows.
+        A portrait Word page, however, cannot legibly render six prose-heavy
+        columns.  Compact only the Word projection: the HTML/shared narrative
+        remains unchanged, while the complete due-diligence registry is still
+        printed item-by-item in Appendix D.
+        """
+        if not rows:
+            return rows
+        columns = set(rows[0])
+        due_columns = {
+            "当前尚不能判断的关键事项", "为什么重要", "影响判断",
+            "建议获取资料", "获取时点", "是否阻断决策",
+        }
+        if due_columns.issubset(columns):
+            unique: list[dict] = []
+            seen: set[str] = set()
+            ordered = sorted(rows, key=lambda row: row.get("是否阻断决策") != "是")
+            for row in ordered:
+                item = str(row.get("当前尚不能判断的关键事项") or "").strip()
+                if not item or item in seen:
+                    continue
+                seen.add(item)
+                unique.append({
+                    "关键事项": item,
+                    "重要性与影响": (
+                        f"{row.get('为什么重要') or ''}；影响判断：{row.get('影响判断') or ''}"
+                    ).strip("；"),
+                    "建议获取资料": row.get("建议获取资料") or "",
+                    "时点与门槛": (
+                        f"{row.get('获取时点') or ''}｜"
+                        f"{'阻断项' if row.get('是否阻断决策') == '是' else '非阻断项'}"
+                    ),
+                })
+                if len(unique) == 12:
+                    break
+            return unique
+
+        product_columns = {"名称", "品牌", "型号", "产品族", "系列", "核心参数"}
+        if product_columns.issubset(columns):
+            compact = []
+            for row in rows:
+                name_parts = [str(row.get(key) or "").strip() for key in ("名称", "品牌", "型号")]
+                family_parts = [str(row.get(key) or "").strip() for key in ("产品族", "系列")]
+                compact.append({
+                    "产品 / 型号": "｜".join(dict.fromkeys(part for part in name_parts if part)),
+                    "产品族 / 系列": "｜".join(dict.fromkeys(part for part in family_parts if part)),
+                    "核心参数": row.get("核心参数") or "公开参数待原厂资料进一步核验",
+                })
+            return compact
+
+        opportunity_columns = {"合作方向", "优先级", "切入场景", "其他公开披露事项", "Go / No-Go Gate"}
+        if opportunity_columns.issubset(columns):
+            return [{
+                "合作方向 / 优先级": f"{row.get('合作方向') or ''}｜{row.get('优先级') or ''}",
+                "切入场景": row.get("切入场景") or "",
+                "公开依据与决策门槛": (
+                    f"{row.get('其他公开披露事项') or ''}；Go / No-Go：{row.get('Go / No-Go Gate') or ''}"
+                ).strip("；"),
+            } for row in rows]
+        return rows
+
+    @staticmethod
+    def _table_widths(columns: list[str]) -> list[int]:
+        """Return portrait-page widths tuned for the compact Word schemas."""
+        presets = {
+            ("关键事项", "重要性与影响", "建议获取资料", "时点与门槛"): [1500, 3300, 3000, 1560],
+            ("产品 / 型号", "产品族 / 系列", "核心参数"): [2800, 2400, 4160],
+            ("合作方向 / 优先级", "切入场景", "公开依据与决策门槛"): [2200, 2500, 4660],
+            ("来源名称", "来源类型", "发布日期", "网址"): [2100, 1500, 1500, 4260],
+            ("名称", "地区", "主要工艺", "运营状态"): [2500, 1700, 3460, 1700],
+        }
+        preset = presets.get(tuple(columns))
+        if preset is not None:
+            return preset
+        cell_width = 9360 // max(len(columns), 1)
+        return [cell_width] * len(columns)
 
     @staticmethod
     def _format_caption(paragraph) -> None:

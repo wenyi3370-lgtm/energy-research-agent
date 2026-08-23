@@ -9,8 +9,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "vendor" / "manifest.json"
-EXCLUDED_PARTS = {".git", ".pytest_cache", "__pycache__", "node_modules", "outputs"}
-EXCLUDED_SUFFIXES = {".pyc", ".pyo"}
+EXCLUDED_TOP_LEVEL = {
+    ".git", ".pytest_cache", ".venv",
+    "outputs", "build", "dist", "artifacts", "automation_work", "smoke_output",
+}
+EXCLUDED_ANY_PARTS = {"__pycache__", "node_modules"}
+EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".sqlite3", ".db", ".log", ".tmp", ".zip"}
+EXCLUDED_NAMES = {".env", ".coverage"}
 
 
 def project_files() -> list[Path]:
@@ -22,7 +27,12 @@ def project_files() -> list[Path]:
         if not path.is_file():
             continue
         relative = path.relative_to(ROOT)
-        if set(relative.parts) & EXCLUDED_PARTS or path.suffix.lower() in EXCLUDED_SUFFIXES:
+        if (
+            relative.parts[0] in EXCLUDED_TOP_LEVEL
+            or set(relative.parts) & EXCLUDED_ANY_PARTS
+            or path.suffix.lower() in EXCLUDED_SUFFIXES
+            or path.name in EXCLUDED_NAMES
+        ):
             continue
         if path.is_relative_to(vendor_root) and path not in trusted_vendor:
             continue
@@ -37,7 +47,7 @@ def build(output: Path) -> dict:
     files = [path for path in project_files() if path.resolve() != output]
     output.parent.mkdir(parents=True, exist_ok=True)
     prefix = "enterprise-energy-research/"
-    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         for path in files:
             name = prefix + path.relative_to(ROOT).as_posix()
             info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))

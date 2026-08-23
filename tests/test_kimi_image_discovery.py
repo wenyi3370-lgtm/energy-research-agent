@@ -146,6 +146,21 @@ class KimiImageDiscoveryTests(unittest.TestCase):
         self.assertEqual(telemetry.image_discovery_status, "BLOCKED")
         self.assertIn("browser extension disconnected", telemetry.reason or "")
 
+    def test_discovery_deduplicates_and_caps_browser_pages(self) -> None:
+        kimi = FakeKimiAdapter()
+        kimi.evaluate_payload = IMAGE_PAYLOAD
+        pages = [
+            {"url": "https://www.acme-corp.com/products"},
+            {"url": "https://www.acme-corp.com/products/"},
+            {"url": "https://www.acme-corp.com/factory"},
+            {"url": "https://www.acme-corp.com/news"},
+        ]
+        KimiImageDiscovery(kimi, KimiUsageTelemetry(), max_pages=2).discover(pages)
+        self.assertEqual(
+            [item["url"] for item in kimi.navigated],
+            ["https://www.acme-corp.com/products", "https://www.acme-corp.com/factory"],
+        )
+
     def test_kimi_image_discovery_extracts_src(self) -> None:
         kimi = FakeKimiAdapter()
         kimi.evaluate_payload = IMAGE_PAYLOAD
@@ -206,6 +221,7 @@ class KimiImageDiscoveryTests(unittest.TestCase):
         self.assertIsNotNone(image)
         self.assertEqual(image.product_id, "PROD-1")
         self.assertEqual(str(image.source_page_url), "https://www.acme-corp.com/products")
+        self.assertEqual(image.source_domain, "www.acme-corp.com")
 
     def test_factory_image_links_to_factory(self) -> None:
         kimi = FakeKimiAdapter()

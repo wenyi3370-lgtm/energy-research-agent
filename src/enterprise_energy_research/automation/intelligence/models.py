@@ -29,6 +29,7 @@ class RawIntelligenceItem(StrictModel):
     source_url: str = ""
     published_at: str = ""  # 原始来源显示的发布时间原文
     published_at_iso: datetime | None = None
+    publication_time_precision: Literal["EXACT", "DATE_ONLY", "UNKNOWN"] = "UNKNOWN"
     original_published_at: str = ""  # 转载/更新文章对应的原始发布时间
     original_source_name: str = ""
     original_source_url: str = ""
@@ -106,6 +107,10 @@ class DailyBrief(StrictModel):
     candidate_count: int = Field(default=0, ge=0)
     freshness_rejected_count: int = Field(default=0, ge=0)
     freshness_rejection_reasons: list[str] = Field(default_factory=list)
+    collection_status: Literal["OK", "DEGRADED", "FAILED"] = "OK"
+    extraction_attempt_count: int = Field(default=0, ge=0)
+    extraction_failure_count: int = Field(default=0, ge=0)
+    collection_failure_reasons: list[str] = Field(default_factory=list)
     breaking_count: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
@@ -155,7 +160,11 @@ class DailyBrief(StrictModel):
             marker = "🟥" if item.is_breaking else "🟦"
             sequence = _circled_number(index)
             effective_at = item.updated_at_iso if item.freshness_status == "UPDATED" else item.published_at_iso
-            age = _age_label(effective_at, cutoff)
+            precision = (
+                "EXACT" if item.freshness_status == "UPDATED"
+                else item.publication_time_precision
+            )
+            age = _age_label(effective_at, cutoff, precision=precision)
             category = _display_category(item.category)
             status = "最新进展" if item.freshness_status == "UPDATED" else "NEW"
             confidence = "｜低可信" if item.confidence_level == "LOW" else ""
@@ -210,11 +219,23 @@ def _display_category(category: str) -> str:
     }.get(category, category)
 
 
-def _age_label(published_at: datetime | None, current_time: datetime) -> str:
+def _age_label(
+    published_at: datetime | None,
+    current_time: datetime,
+    *,
+    precision: str = "EXACT",
+) -> str:
     if published_at is None:
         return "时间未核验"
     if published_at.tzinfo is None:
         published_at = published_at.replace(tzinfo=current_time.tzinfo)
+    if precision == "DATE_ONLY":
+        day_delta = (current_time.date() - published_at.date()).days
+        if day_delta == 0:
+            return "今日发布"
+        if day_delta == 1:
+            return "昨日发布"
+        return f"{published_at:%m月%d日}发布"
     elapsed = max(0, int((current_time - published_at).total_seconds()))
     if published_at.date() == current_time.date():
         minutes = elapsed // 60

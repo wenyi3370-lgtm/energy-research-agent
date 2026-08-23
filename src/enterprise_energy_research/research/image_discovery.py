@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import io
 import re
+from urllib.parse import urlparse
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +46,31 @@ IMAGE_DISCOVERY_JS = r"""
     let link = null;
     try { link = el.closest ? el.closest('a') : null; } catch (e) {}
     let surrounding = '';
-    try { surrounding = ((el.parentElement && el.parentElement.textContent) || '').trim().slice(0, 200); } catch (e) {}
+    let container = null;
+    try {
+      // Modern product sites frequently put the image and title in sibling
+      // nodes inside a card/slide.  The direct parent is often text-empty, so
+      // climb to the nearest semantic container and collect its heading,
+      // labels and visible text.  This is evidence context only; exact
+      // product binding still happens against known product names in Python.
+      container = el.closest && el.closest(
+        'a,li,article,section,[class*="product"],[class*="card"],[class*="item"],[class*="slide"]'
+      );
+      const scope = container || el.parentElement || el;
+      const heading = scope.querySelector && scope.querySelector(
+        'h1,h2,h3,h4,h5,h6,[class*="title"],[class*="name"],[aria-label]'
+      );
+      const parts = [
+        heading && (heading.innerText || heading.textContent),
+        scope.getAttribute && scope.getAttribute('aria-label'),
+        scope.getAttribute && scope.getAttribute('data-title'),
+        scope.innerText || scope.textContent
+      ].filter(Boolean).map(v => String(v).trim()).filter(Boolean);
+      surrounding = Array.from(new Set(parts)).join(' | ').slice(0, 500);
+    } catch (e) {}
+    if (!link && container) {
+      try { link = container.matches('a') ? container : container.querySelector('a'); } catch (e) {}
+    }
     out.push({
       url: abs(url), src_attr: srcAttr,
       alt: (el.alt || '').trim(), title: (el.title || '').trim(),
@@ -150,9 +175,10 @@ class KimiImageDiscovery:
     DOM is inspected with ``evaluate`` — never only a search-result page.
     """
 
-    def __init__(self, adapter, telemetry: KimiUsageTelemetry | None = None) -> None:
+    def __init__(self, adapter, telemetry: KimiUsageTelemetry | None = None, *, max_pages: int = 12) -> None:
         self.adapter = adapter
         self.telemetry = telemetry or KimiUsageTelemetry()
+        self.max_pages = max(1, max_pages)
 
     def discover(self, pages: list[dict]) -> list[ImageCandidate]:
         """Visit pages and return image candidates with page context.
@@ -169,7 +195,20 @@ class KimiImageDiscovery:
             return []
         self.telemetry.kimi_status = "AVAILABLE"
         candidates: list[ImageCandidate] = []
+        # A search round frequently returns the same canonical page through
+        # several queries.  Browser navigation is the slowest stage, so visit
+        # each normalized URL once and keep a hard per-round ceiling.
+        unique_pages: list[dict] = []
+        seen_urls: set[str] = set()
         for page in pages:
+            normalized = str(page.get("url") or "").strip().rstrip("/").lower()
+            if not normalized or normalized in seen_urls:
+                continue
+            seen_urls.add(normalized)
+            unique_pages.append(page)
+            if len(unique_pages) >= self.max_pages:
+                break
+        for page in unique_pages:
             url = page.get("url")
             if not url:
                 continue
@@ -322,7 +361,7 @@ class ImageEvidenceBuilder:
                 source_url=candidate.url,
                 source_page_url=candidate.page_url,
                 source_id=source_id,
-                source_domain=candidate.page_url.split("/", 2)[2] if "//" in candidate.page_url else "",
+                source_domain=(urlparse(candidate.page_url).hostname or "").lower(),
                 source_title=candidate.page_title,
                 image_type=candidate.image_type,  # type: ignore[arg-type]
                 sha256=hashlib.sha256(payload).hexdigest(),

@@ -94,9 +94,12 @@ class P0VisualSystemTests(unittest.TestCase):
     def test_03_router_maps_semantic_patterns(self) -> None:
         router = VisualRouter()
         expectations = {
-            "time_series": "line", "category_comparison": "bar",
+            "time_series": "area", "dual_metric_time_series": "dual_axis",
+            "category_comparison": "bar",
             "multi_dimension_score": "radar", "opportunity_priority": "quadrant",
-            "two_metric_distribution": "scatter", "part_to_whole": "treemap",
+            "two_metric_distribution": "bubble", "part_to_whole": "treemap",
+            "spatial_distribution": "map", "matrix_heatmap": "heatmap",
+            "network_relationship": "network",
             "technology_evolution": "timeline", "operational_process": "process",
             "value_flow": "sankey", "implementation_roadmap": "gantt",
             "hierarchy_or_conversion": "pyramid", "verified_relationship": "tree",
@@ -164,7 +167,7 @@ class P0VisualSystemTests(unittest.TestCase):
     # ── TEST 8-10: adapter rendering / single source / fallback ─────────────
     def test_08_adapter_renders_all_supported_types(self) -> None:
         adapter = DiagramDesignAdapter()
-        self.assertEqual(len(adapter.supported_types()), 18)
+        self.assertEqual(len(adapter.supported_types()), 24)
         with tempfile.TemporaryDirectory() as temp:
             out = Path(temp)
             for visual_type in sorted(adapter.supported_types()):
@@ -450,8 +453,8 @@ def _rich_proposal(pattern: str) -> VisualProposal:
         VisualDatum(label="丙", value=6, period="2025", x=3, y=4, weight=5, series="s3"),
     ]
     proposal.stages = [
-        VisualStage(id="a", label="步骤A", from_label="原料", to_label="成品", weight=10, start="2024-01", end="2024-03"),
-        VisualStage(id="b", label="步骤B", from_label="成品", to_label="交付", weight=10, start="2024-04", end="2024-06"),
+        VisualStage(id="a", label="步骤A", from_label="root", to_label="child1", weight=10, start="2024-01", end="2024-03"),
+        VisualStage(id="b", label="步骤B", from_label="child1", to_label="child2", weight=10, start="2024-04", end="2024-06"),
     ]
     proposal.nodes = [
         VisualNode(id="root", label="根", kind="focal"),

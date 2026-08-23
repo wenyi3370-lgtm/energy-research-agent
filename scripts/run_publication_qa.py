@@ -212,7 +212,7 @@ def _toc_entry_paragraph(level: int, heading: str, page: int, *, first: bool, la
         begin.set(W + "fldCharType", "begin")
         instruction = ElementTree.SubElement(run, W + "instrText")
         instruction.set(XML_SPACE, "preserve")
-        instruction.text = 'TOC \\o "1-3" \\h \\z \\u'
+        instruction.text = 'TOC \\o "1-2" \\h \\z \\u'
         separate = ElementTree.SubElement(run, W + "fldChar")
         separate.set(W + "fldCharType", "separate")
     run = ElementTree.SubElement(paragraph, W + "r")
@@ -275,7 +275,7 @@ def inject_static_toc_result(path: Path, entries: list[tuple[str, int] | tuple[s
     normalized_entries: list[tuple[str, int, int]] = [
         (heading, page, level) for heading, page, level in [
             (entry[0], entry[1], entry[2] if len(entry) > 2 else 1) for entry in entries
-        ]
+        ] if level <= 2
     ]
     with zipfile.ZipFile(path) as archive:
         members = {name: archive.read(name) for name in archive.namelist()}

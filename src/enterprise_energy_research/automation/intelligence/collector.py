@@ -10,13 +10,14 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 from ...adapters.base import SearchAdapter
 from ...domain.ids import new_sortable_id
 from ...gateway.base import ModelGateway, StructuredRequest
 from ...research.executor import SearchExecutor
 from ...domain.models import StrictModel
-from pydantic import Field
+from pydantic import ConfigDict, Field, model_validator
 
 from .freshness import content_sha256, normalize_current_time
 from .models import RawIntelligenceItem
@@ -41,6 +42,12 @@ DAILY_QUERIES = [
 
 class IntelligenceExtraction(StrictModel):
     """LLM 对单页的情报抽取输出（字段宽松，缺失由 collector 补全）。"""
+
+    # This is an external model-response boundary.  DeepSeek may emit
+    # harmless extra keys, null strings, date-only values in datetime slots,
+    # or numeric values inside ``numbers``.  Normalize those transport quirks
+    # here; the downstream RawIntelligenceItem remains strict.
+    model_config = ConfigDict(extra="ignore", validate_assignment=True)
 
     category: str = ""
     title: str = ""
@@ -75,6 +82,36 @@ class IntelligenceExtraction(StrictModel):
     company: str = ""
     entity: str = ""
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_model_response(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        payload = dict(value)
+        string_fields = {
+            "category", "title", "fact", "impact_company", "source", "source_name",
+            "source_url", "published_at", "original_published_at", "original_source_name",
+            "original_source_url", "discovery_url", "publication_time_evidence", "updated_at",
+            "update_time_evidence", "event_at", "event_time_evidence", "topic", "event_key",
+            "source_type", "search_layer", "content_hash", "update_facts", "company", "entity",
+        }
+        for field in string_fields:
+            if payload.get(field) is None:
+                payload[field] = ""
+            elif field in payload and not isinstance(payload[field], str):
+                payload[field] = str(payload[field])
+        iso_value = payload.get("published_at_iso")
+        if not iso_value or (isinstance(iso_value, str) and ":" not in iso_value):
+            payload["published_at_iso"] = None
+        numbers = payload.get("numbers")
+        if numbers is None:
+            payload["numbers"] = []
+        elif isinstance(numbers, list):
+            payload["numbers"] = [str(item) for item in numbers if item is not None]
+        else:
+            payload["numbers"] = [str(numbers)]
+        return payload
+
 
 class IntelligenceCollector:
     """Run daily queries through the search adapters and extract items via LLM."""
@@ -89,6 +126,8 @@ class IntelligenceCollector:
         self.gateway = gateway
         self.queries = queries or DAILY_QUERIES
         self.extraction_failures: list[str] = []
+        self.extraction_attempt_count = 0
+        self.extraction_success_count = 0
 
     def collect(
         self,
@@ -99,6 +138,9 @@ class IntelligenceCollector:
         from ...domain.enums import SourceLevel
 
         current_time = normalize_current_time(current_time)
+        self.extraction_failures = []
+        self.extraction_attempt_count = 0
+        self.extraction_success_count = 0
         primary_start = current_time - timedelta(hours=24)
         recovery_start = current_time - timedelta(hours=72)
         update_start = current_time - timedelta(days=7)
@@ -106,17 +148,17 @@ class IntelligenceCollector:
         for index, (query, topic) in enumerate(self.queries):
             query_specs.append((
                 f"IQ-P-{index:03d}", topic, "PRIMARY",
-                f"{query} 发布时间 {primary_start:%Y-%m-%d %H:%M %z} 至 {current_time:%Y-%m-%d %H:%M %z}",
+                _window_query(query, primary_start, current_time),
             ))
             query_specs.append((
                 f"IQ-R-{index:03d}", topic, "RECOVERY",
-                f"{query} 发布时间 {recovery_start:%Y-%m-%d %H:%M %z} 至 {current_time:%Y-%m-%d %H:%M %z}",
+                _window_query(query, recovery_start, current_time),
             ))
         for index, target in enumerate((update_targets or [])[:12]):
             target_text = " ".join(part for part in (target.entity, target.title, target.topic) if part)
             query_specs.append((
                 f"IQ-U-{index:03d}", target.topic or target.category, "UPDATE",
-                f"{target_text} 最新进展 更新 新增事实 {update_start:%Y-%m-%d %H:%M %z} 至 {current_time:%Y-%m-%d %H:%M %z}",
+                _window_query(f"{target_text} 最新进展 更新 新增事实", update_start, current_time),
             ))
         plan = ResearchPlan(
             plan_id=new_sortable_id("IPLAN"),
@@ -134,7 +176,10 @@ class IntelligenceCollector:
                         f"update_start={update_start.isoformat()}"
                     ),
                     preferred_source_levels=[SourceLevel.SOURCE_A, SourceLevel.SOURCE_B],
-                    adapter_preference="kimi_webbridge" if "产品" in query or "V2G" in query else "anysearch",
+                    # AnySearch discovers real result URLs.  Kimi is used only
+                    # as a target-page fallback during hydration; sending a
+                    # broad query directly to Kimi returns a Bing result page.
+                    adapter_preference="anysearch",
                     max_results=6 if layer == "PRIMARY" else 4,
                     requires_browser=False,
                     collection_round={"PRIMARY": "R1", "RECOVERY": "R2", "UPDATE": "R3"}[layer],
@@ -148,30 +193,74 @@ class IntelligenceCollector:
         )
         envelopes = SearchExecutor(self.adapters).execute(plan)
         items: list[Any] = []
-        failures: list[str] = []
+        seen_urls: set[str] = set()
         for envelope in envelopes:
             if envelope.status in ("blocked", "error"):
-                failures.append(f"{envelope.query_id}: {envelope.diagnostics[:1]}")
+                self.extraction_failures.append(f"{envelope.query_id}: {envelope.diagnostics[:1]}")
                 continue
-            for hit in envelope.hits:
+            for hit_index, hit in enumerate(envelope.hits):
                 if not hit.final_url or not hit.text or self.gateway is None:
                     continue
+                canonical_url = _canonical_url(hit.final_url)
+                if not canonical_url or canonical_url in seen_urls or _is_search_result_page(canonical_url):
+                    continue
+                seen_urls.add(canonical_url)
+                hydrated = self._hydrate_hit(envelope.query_id, hit_index, hit)
+                if hydrated is None:
+                    continue
+                final_url, final_title, final_text, retrieved_at = hydrated
+                self.extraction_attempt_count += 1
                 extracted = self._extract(
-                    hit.final_url, hit.title or "", hit.text,
+                    final_url, final_title, final_text,
                     current_time=current_time,
                     primary_start=primary_start,
                     recovery_start=recovery_start,
                     update_start=update_start,
                     search_layer=_layer_from_query_id(envelope.query_id),
                     topic=envelope.topic or "",
-                    crawl_at=_parse_crawl_at(hit.retrieved_at, current_time),
-                    content_hash=content_sha256(hit.text),
+                    crawl_at=_parse_crawl_at(retrieved_at, current_time),
+                    content_hash=content_sha256(final_text),
                 )
                 if extracted is not None:
                     items.append(extracted)
-        self.extraction_failures = failures
-        logger.info("intelligence collect: %d envelopes, %d items, %d failures", len(envelopes), len(items), len(failures))
+                    self.extraction_success_count += 1
+        logger.info(
+            "intelligence collect: %d envelopes, %d hydrated attempts, %d items, %d failures",
+            len(envelopes), self.extraction_attempt_count, len(items), len(self.extraction_failures),
+        )
         return items
+
+    def _hydrate_hit(self, query_id: str, hit_index: int, hit: Any) -> tuple[str, str, str, str] | None:
+        """Open a discovery hit as a real page before factual extraction."""
+        from ...adapters.base import SearchRequest
+
+        is_snippet = bool(getattr(hit, "metadata", {}).get("snippet"))
+        if not is_snippet:
+            return hit.final_url, hit.title or "", hit.text or "", hit.retrieved_at
+        diagnostics: list[str] = []
+        for adapter_name in ("anysearch", "kimi_webbridge"):
+            adapter = self.adapters.get(adapter_name)
+            if adapter is None:
+                continue
+            request = SearchRequest(
+                query_id=f"{query_id}-FULL-{hit_index:02d}", query="", entity_id="intel",
+                purpose="daily intelligence target-page hydration", max_results=1,
+                requires_browser=adapter_name == "kimi_webbridge",
+                metadata={"url": hit.final_url},
+            )
+            result = adapter.search(request)
+            if result.status not in ("blocked", "error"):
+                full = next((item for item in result.hits if item.final_url and item.text), None)
+                if full is not None and not _is_search_result_page(full.final_url):
+                    return (
+                        full.final_url, full.title or hit.title or "", full.text or "",
+                        full.retrieved_at or hit.retrieved_at,
+                    )
+            diagnostics.extend(result.diagnostics[:1])
+        self.extraction_failures.append(
+            f"{query_id} {hit.final_url}: target-page hydration failed: {diagnostics[:2]}"
+        )
+        return None
 
     def _extract(
         self,
@@ -226,7 +315,9 @@ class IntelligenceCollector:
                 metadata={"query_id": "intel", "adapter": "intelligence"},
             ))
         except Exception as exc:  # noqa: BLE001 - one page must not sink the daily run
-            logger.warning("intelligence extraction failed for %s: %s", url, str(exc)[:120])
+            detail = str(exc)[:480]
+            self.extraction_failures.append(f"{url}: {detail}")
+            logger.warning("intelligence extraction failed for %s: %s", url, detail)
             return None
         return self._complete(
             extracted, url, title, search_layer=search_layer, topic=topic,
@@ -297,3 +388,31 @@ def _parse_crawl_at(value: str, fallback: datetime) -> datetime:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=fallback.tzinfo)
     return parsed.astimezone(fallback.tzinfo)
+
+
+def _window_query(query: str, start: datetime, end: datetime) -> str:
+    """Use search-engine date operators instead of ambiguous clock prose."""
+    exclusive_end = (end + timedelta(days=1)).date()
+    return (
+        f"{query} 最新 发布 公告 after:{start.date().isoformat()} "
+        f"before:{exclusive_end.isoformat()}"
+    )
+
+
+def _canonical_url(value: str) -> str:
+    try:
+        parsed = urlparse(value.strip())
+    except ValueError:
+        return ""
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return ""
+    return parsed._replace(fragment="", query="").geturl().rstrip("/")
+
+
+def _is_search_result_page(value: str) -> bool:
+    parsed = urlparse(value)
+    host = parsed.netloc.lower().split(":", 1)[0]
+    return (
+        host in {"bing.com", "www.bing.com", "google.com", "www.google.com"}
+        and parsed.path.rstrip("/") in {"/search", ""}
+    )

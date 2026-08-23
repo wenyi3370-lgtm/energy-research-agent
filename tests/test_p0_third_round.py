@@ -218,6 +218,21 @@ class ThirdRoundP0Tests(unittest.TestCase):
             tabs = entry.findall(f".//{W}pPr/{W}tabs/{W}tab")
             self.assertTrue(any(tab.get(W + "leader") == "dot" for tab in tabs), "dot-leader tab stop required")
 
+    def test_word_inline_images_override_fixed_body_leading(self):
+        """A fixed 22 pt body line clips inline images to a narrow strip."""
+        with zipfile.ZipFile(self.word) as archive:
+            root = ElementTree.fromstring(archive.read("word/document.xml"))
+        picture_paragraphs = [
+            paragraph for paragraph in root.findall(f".//{W}p")
+            if paragraph.find(f".//{W}drawing") is not None
+        ]
+        self.assertTrue(picture_paragraphs, "fixture must contain embedded figures")
+        for paragraph in picture_paragraphs:
+            spacing = paragraph.find(f"./{W}pPr/{W}spacing")
+            self.assertIsNotNone(spacing, "picture paragraph must override Normal line spacing")
+            self.assertEqual(spacing.get(W + "lineRule"), "auto")
+            self.assertEqual(spacing.get(W + "line"), "240")
+
     # ── TEST 3–5: AI self-explanation boilerplate ──────────────────────────
     def test_03_no_frozen_facts_boilerplate(self):
         self.assertNotIn("基于当前冻结的公开事实", self.word_text + self.html_text)
@@ -230,6 +245,28 @@ class ThirdRoundP0Tests(unittest.TestCase):
         boilerplate = PublicationBoilerplateValidator().validate(self.narrative)
         zero_codes = [check for check in boilerplate if check.code == "boilerplate_zero"]
         self.assertTrue(all(check.status == "PASS" for check in zero_codes), zero_codes)
+
+    def test_fifth_round_dashboard_contract_and_zero_phrases(self):
+        raw = self.html.read_text(encoding="utf-8")
+        self.assertIn('data-dashboard-contract="1-judgement|3-6-kpi|1-3-visual|3-insight|collapsed-details"', raw)
+        self.assertNotIn("产品图片待补充", raw)
+        match = re.search(r'<script id="frozen-data" type="application/json">(.*?)</script>', raw, re.S)
+        self.assertIsNotNone(match)
+        payload = json.loads(match.group(1))
+        self.assertLessEqual(len(payload["kpis"]), 6)
+        for chapter in payload["chapters"]:
+            self.assertGreaterEqual(len(chapter["kpis"]), 3)
+            self.assertLessEqual(len(chapter["kpis"]), 6)
+            self.assertEqual(len(chapter["insights"]), 3)
+            self.assertLessEqual(len(chapter["visuals"]), 3)
+        for phrase in ("基于当前冻结公开事实", "证据边界", "本节判断由", "该信息用于判断", "不能替代", "不足以证明", "后续需要验证"):
+            self.assertNotIn(phrase, raw)
+
+    def test_fifth_round_word_title_and_toc_levels(self):
+        with zipfile.ZipFile(self.word) as archive:
+            xml = archive.read("word/document.xml").decode("utf-8")
+        self.assertIn('TOC \\o "1-2"', xml)
+        self.assertNotIn("智能调研", xml)
 
     # ── TEST 6–7: junk / fragment guard ────────────────────────────────────
     def test_06_hotline_never_enters_body(self):
@@ -393,13 +430,16 @@ class ThirdRoundP0Tests(unittest.TestCase):
         self.assertEqual(base.status, "GAPS")
         codes = {gap.gap_code for gap in base.gaps}
         self.assertIn("coverage-product-parameters", codes, "1-parameter catalog must trigger the parameter gap")
-        # Rich listed-company evidence (3-year series + segments + share +
-        # 3 parameterized products) clears the listed-company contract.
+        # Fifth-round contract is intentionally stricter: the old rich fixture
+        # still lacks 3-year operating cash flow, capacity and product images.
         rich = ResearchDataCoverageValidator().audit(
             entity_name="示例", claims=self.rich_bundle.claims, products=self.rich_bundle.products,
             factories=self.rich_bundle.factories, images=self.rich_bundle.images, has_stock_code=True,
         )
-        self.assertEqual(rich.status, "OK", [gap.gap_code for gap in rich.gaps])
+        self.assertEqual(rich.status, "GAPS")
+        self.assertTrue({"coverage-operating_cash_flow", "coverage-factory-capacity", "coverage-product-images"}.issubset(
+            {gap.gap_code for gap in rich.gaps}
+        ))
 
     def test_supporting_product_image_resolver_priority(self):
         resolved = ProductImageResolver().resolve(self.bundle)

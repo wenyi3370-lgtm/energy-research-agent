@@ -8,10 +8,9 @@ evidence and never invents a binding:
 
 Priority:
   1. ``product.image_id`` already set by extraction;
-  2. a VERIFIED image whose ``product_id`` equals the product;
-  3. a VERIFIED image from an official source whose alt/surrounding/page
-     text names the product (normalized name match);
-  4. no photo (renderers show a text-only card, never a fake image).
+  2. a VERIFIED and pixel-verified image whose exact target/product ID equals
+     the product;
+  3. no photo. Name-only/context-only matches never enter formal publication.
 """
 
 from __future__ import annotations
@@ -37,30 +36,29 @@ class ProductImageResolver:
         verified_images = [
             image for image in bundle.images
             if image.verification_status == VerificationStatus.VERIFIED
+            and image.visual_verified
+            and image.verification_method == "vision"
         ]
         by_product = {
-            image.product_id: image for image in verified_images if image.product_id
+            image.product_id: image
+            for image in verified_images
+            if image.target_entity_type == "product"
+            and image.product_id is not None
+            and image.target_entity_id == image.product_id
         }
-        official_images = [
-            image for image in verified_images
-            if image.source_domain and self._is_official_domain(image.source_domain, bundle)
-        ]
         products = [
             product for product in bundle.products
             if product.verification_status == VerificationStatus.VERIFIED
         ]
         resolved: dict[str, str] = {}
         for product in products:
-            if product.image_id:
+            direct = next((image for image in verified_images if image.image_id == product.image_id), None)
+            if direct is not None and self._is_official_domain(direct.source_domain, bundle):
                 resolved[product.product_id] = product.image_id
                 continue
             bound = by_product.get(product.product_id)
-            if bound is not None:
+            if bound is not None and self._is_official_domain(bound.source_domain, bundle):
                 resolved[product.product_id] = bound.image_id
-                continue
-            matched = self._match_by_name(product.name, official_images)
-            if matched is not None:
-                resolved[product.product_id] = matched.image_id
         return resolved
 
     @staticmethod

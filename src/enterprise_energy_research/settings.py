@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     deepseek_api_key: str | None = None
     openai_api_base: str | None = None
     openai_api_key: str | None = None
+    # Network controls for the provider-neutral HTTP gateway.  The proxy is
+    # opt-in so a healthy direct route stays untouched; live acceptance may
+    # explicitly point it at a local Clash/Mihomo listener (for example
+    # http://127.0.0.1:7897).
+    outbound_proxy: str | None = None
+    model_timeout_seconds: int = 45
+    model_max_attempts: int = 2
     # Vision-capable model used by the image pixel-verification pipeline; the
     # gateway credentials are shared with the research gateway (deepseek/openai).
     # DeepSeek-V4-Flash-Vision-Exp converts each image to at most 384 tokens.
@@ -49,6 +56,9 @@ class Settings(BaseSettings):
             "fallback_model": self.fallback_model,
             "deepseek_api_base": self.deepseek_api_base,
             "openai_api_base": self.openai_api_base,
+            "outbound_proxy": "configured" if self.outbound_proxy else None,
+            "model_timeout_seconds": self.model_timeout_seconds,
+            "model_max_attempts": self.model_max_attempts,
             "vision_provider": self.vision_provider,
             "deepseek_vision_model": self.deepseek_vision_model,
             "openai_vision_model": self.openai_vision_model,
@@ -68,4 +78,3 @@ def load_yaml(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"Expected mapping in {path}")
     return value
-

@@ -26,8 +26,11 @@ Requires-Dist: httpx<1,>=0.27; extra == "api"
 Provides-Extra: test
 Requires-Dist: pytest<9,>=8; extra == "test"
 Requires-Dist: pytest-asyncio<1,>=0.23; extra == "test"
+Requires-Dist: jsonschema<5,>=4.23; extra == "test"
 Provides-Extra: render
 Requires-Dist: PyMuPDF<2,>=1.24; extra == "render"
+Provides-Extra: visual
+Requires-Dist: playwright==1.60.0; extra == "visual"
 Provides-Extra: full
 Requires-Dist: langgraph<2,>=0.2; extra == "full"
 Requires-Dist: litellm<2,>=1.40; extra == "full"
@@ -40,3 +43,4 @@ Requires-Dist: httpx<1,>=0.27; extra == "full"
 Requires-Dist: pytest<9,>=8; extra == "full"
 Requires-Dist: pytest-asyncio<1,>=0.23; extra == "full"
 Requires-Dist: PyMuPDF<2,>=1.24; extra == "full"
+Requires-Dist: playwright==1.60.0; extra == "full"

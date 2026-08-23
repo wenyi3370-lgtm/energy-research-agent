@@ -78,8 +78,18 @@ class IntelligenceService:
             current_time=current_time,
             update_targets=self._update_targets(history, current_time),
         )
+        collection_failures = list(collector.extraction_failures)
+        if collector.extraction_attempt_count and collector.extraction_success_count == 0:
+            collection_status = "FAILED"
+        elif collection_failures:
+            collection_status = "DEGRADED"
+        else:
+            collection_status = "OK"
         if not raw_items:
-            logger.warning("no intelligence items collected for %s", brief_date)
+            logger.warning(
+                "no intelligence items collected for %s; collection_status=%s failures=%d",
+                brief_date, collection_status, len(collection_failures),
+            )
         gate = apply_freshness_gate(raw_items, history=history, current_time=current_time)
         recent_items = gate.accepted
         freshness_rejections = gate.rejected
@@ -109,6 +119,10 @@ class IntelligenceService:
             candidate_count=len(raw_items),
             freshness_rejected_count=len(freshness_rejections),
             freshness_rejection_reasons=freshness_rejections,
+            collection_status=collection_status,
+            extraction_attempt_count=collector.extraction_attempt_count,
+            extraction_failure_count=len(collection_failures),
+            collection_failure_reasons=collection_failures[:50],
             breaking_count=sum(1 for item in selected if item.is_breaking),
         )
         brief.judgment = self._judgment(brief)
@@ -123,6 +137,10 @@ class IntelligenceService:
 
     def _judgment(self, brief: DailyBrief) -> str:
         if not brief.items:
+            if brief.collection_status == "FAILED":
+                return "今日情报采集链路失败，无法确认是否存在新增信息；系统已记录故障，禁止将本次结果解释为无新增。"
+            if brief.collection_status == "DEGRADED":
+                return "今日部分来源采集或解析失败，暂未形成可发布情报；本次结果不能等同于确认无新增。"
             return "截至当前时间，未发现符合 NEW/UPDATED 标准的V2G及储能重大新增信息。"
         from ...gateway.base import ModelRequest
 
@@ -290,6 +308,10 @@ class IntelligenceService:
             "primary_window_start": brief.primary_window_start.isoformat() if brief.primary_window_start else None,
             "recovery_window_start": brief.recovery_window_start.isoformat() if brief.recovery_window_start else None,
             "update_window_start": brief.update_window_start.isoformat() if brief.update_window_start else None,
+            "collection_status": brief.collection_status,
+            "extraction_attempt_count": brief.extraction_attempt_count,
+            "extraction_failure_count": brief.extraction_failure_count,
+            "collection_failure_reasons": brief.collection_failure_reasons,
             "candidates": [item.model_dump(mode="json") for item in evaluated],
         }, ensure_ascii=False, indent=2), encoding="utf-8")
 

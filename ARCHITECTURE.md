@@ -24,6 +24,17 @@ The system has four planes:
 3. **Analysis plane**: industrial, energy and four cooperation engines reading only evidence.
 4. **Artifact plane**: adapter-backed publishers and validators reading only a frozen version.
 
+### Fifth-round publication control plane
+
+`ResearchDataCoverageValidator` runs before freezing and may trigger bounded,
+targeted retry. Remaining high-severity gaps set `RESEARCH_DATA_BLOCKED`.
+After freeze, `NarrativeBuilder` feeds one visual opportunity planner and one
+visual manifest shared by Word and HTML. `PublicationBoilerplateFilter` cleans
+publication DTOs without mutating evidence. HTML renders a collapsed
+chapter-dashboard; Word renders the consulting report and paired product
+showcase. Publisher QA errors propagate through `ArtifactResult.status` and
+block the production run.
+
 ## 2. System boundaries
 
 ### In scope

@@ -117,11 +117,14 @@ class ImageValidator:
             # in evidence), semantic score is context-derived, visual trust is
             # vision-only.
             target_entity_type = IMAGE_TYPE_TO_TARGET.get(image.image_type, "other")
-            target_entity_id = (
-                image.product_id or image.factory_id or image.entity_id
-                if target_entity_type not in {"editorial", "other"}
-                else None
-            )
+            if target_entity_type == "product":
+                target_entity_id = image.product_id
+            elif target_entity_type in {"factory", "production_line", "workshop"}:
+                target_entity_id = image.factory_id
+            elif target_entity_type in {"headquarters", "logo", "office"}:
+                target_entity_id = image.entity_id
+            else:
+                target_entity_id = None
             priority = IMAGE_TYPE_PRIORITY.get(image.image_type, 3)
             verification_method = "none"
             visual_verified = False
@@ -181,11 +184,9 @@ class ImageValidator:
         """
         if self._vision is None:
             return list(images)
-        verified: list[ImageEvidence] = []
-        for image in images:
+        def verify_one(image: ImageEvidence) -> ImageEvidence:
             if image.visual_verified:
-                verified.append(image)
-                continue
+                return image
             image_bytes = self._resolve_bytes(image, base_dir)
             verdict = None
             if image_bytes is not None:
@@ -196,13 +197,17 @@ class ImageValidator:
             if verdict is not None:
                 signals = list(image.entity_match_signals)
                 signals.append(f"vision_score:{verdict.score:.2f}")
-                verified.append(image.model_copy(update={
+                return image.model_copy(update={
                     "visual_verified": bool(verdict.verified),
                     "visual_description": verdict.description or image.visual_description,
                     "verification_method": "vision",
                     "semantic_score": max(image.semantic_score, min(1.0, verdict.score)),
                     "entity_match_signals": signals,
-                }))
-            else:
-                verified.append(image)
-        return verified
+                })
+            return image
+
+        # Pixel checks are independent network calls.  Preserve input order
+        # while bounding the wall time of a whole image batch.
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(6, len(images) or 1)) as pool:
+            return list(pool.map(verify_one, images))

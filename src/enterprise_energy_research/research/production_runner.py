@@ -20,6 +20,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
@@ -134,6 +135,7 @@ class AdaptiveResearchRunner:
         fulltext_pages_per_query: int = 4,
         max_product_detail_pages: int = 12,
         browser_workers: int = 3,
+        max_image_candidates_per_round: int = 48,
     ) -> None:
         self.adapters = adapters
         self.gateway = gateway
@@ -149,6 +151,7 @@ class AdaptiveResearchRunner:
         self.extraction_workers = extraction_workers
         self.fulltext_pages_per_query = fulltext_pages_per_query
         self.max_product_detail_pages = max_product_detail_pages
+        self.max_image_candidates_per_round = max(5, max_image_candidates_per_round)
         if not 1 <= browser_workers <= 4:
             raise ValueError("browser_workers must be between 1 and 4")
         self.browser_workers = browser_workers
@@ -208,6 +211,7 @@ class AdaptiveResearchRunner:
         def execute_round(round_name: str, queries: list[ResearchQuery], trigger: str) -> tuple[list[SearchResultEnvelope], list[ExtractedEvidenceBatch]]:
             if not queries:
                 return [], []
+            print(f"[{round_name}] search_start queries={len(queries)}", flush=True)
             mini_plan = ResearchPlan(
                 plan_id=new_sortable_id("PLAN"), run_id=run_id, complexity=complexity,
                 queries=queries,
@@ -217,11 +221,14 @@ class AdaptiveResearchRunner:
             )
             from enterprise_energy_research.research.executor import SearchExecutor
             envelopes = SearchExecutor(self.adapters).execute(mini_plan)
+            print(f"[{round_name}] search_done envelopes={len(envelopes)}", flush=True)
             # Search results -> AnySearch full-text extraction (fast HTTP).
             envelopes = self._fulltext_pass(envelopes, queries)
+            print(f"[{round_name}] fulltext_done hits={sum(len(item.hits) for item in envelopes)}", flush=True)
             # Product-catalog topics: Kimi opens the REAL official product
             # center/detail pages (SPA content plain HTTP cannot see) — P0-17.
             envelopes = self._browser_depth_pass(envelopes, queries, telemetry)
+            print(f"[{round_name}] browser_depth_done", flush=True)
             # Product detail pages: parameter tables and real product photos
             # live one level below the product center — follow the product
             # card links on the pages we already opened (P0-17 enumeration).
@@ -229,8 +236,10 @@ class AdaptiveResearchRunner:
                 envelopes, telemetry,
                 queue_path=output_dir / "02_research_quality" / "product_detail_queue.sqlite3",
             )
+            print(f"[{round_name}] product_detail_done hits={sum(len(item.hits) for item in envelopes)}", flush=True)
             # Kimi WebBridge is reserved for IMAGE discovery on real pages.
             self._image_pass(envelopes, telemetry)
+            print(f"[{round_name}] image_discovery_done candidates={telemetry.image_candidates_found}", flush=True)
             # Parallel structured extraction across pages (network-bound).
             batches: list[ExtractedEvidenceBatch] = []
             with ThreadPoolExecutor(max_workers=self.extraction_workers) as pool:
@@ -243,6 +252,7 @@ class AdaptiveResearchRunner:
                         envelope, len(extracted),
                         sum(len(batch.claims) for batch in extracted), 0,
                     )
+            print(f"[{round_name}] extraction_done batches={len(batches)}", flush=True)
             return envelopes, batches
 
         # ---- R1 discovery -------------------------------------------------
@@ -460,6 +470,12 @@ class AdaptiveResearchRunner:
             status = readiness["status"]
         if placeholder_gate["blocked"] and status == "COMPLETED":
             status = "RESEARCH_CONTENT_BLOCKED"
+        if remaining_high and status == "COMPLETED":
+            status = "RESEARCH_DATA_BLOCKED"
+            readiness["diagnostics"].append(
+                "formal publication blocked by unresolved high-value coverage gaps: "
+                + ", ".join(remaining_high)
+            )
         # A blocked run must RETAIN its evidence and diagnostics (fail-closed,
         # never evidence-less): ingest before the gates decide publication.
         EvidenceIngestor(store).ingest(run_id, 1, evidence)
@@ -975,8 +991,24 @@ class AdaptiveResearchRunner:
                 resolution, healthy_batches, round_evidence.entities, round_evidence.sources,
             )
         )
+        selected_candidate = next(
+            candidate for candidate in resolution.candidates
+            if candidate.candidate_id == resolution.selected_candidate_id
+        )
+        image_owner = canonical_entity or next(
+            (
+                entity for entity in round_evidence.entities
+                if entity.canonical_name == selected_candidate.canonical_name
+                or MergeEvidence._norm_name(entity.canonical_name)
+                == MergeEvidence._norm_name(selected_candidate.canonical_name)
+            ),
+            None,
+        )
         # Discovered images -> ImageEvidence (P0-15/16), with page Sources.
-        self._attach_discovered_images(round_evidence, telemetry, official_domains)
+        self._attach_discovered_images(
+            round_evidence, telemetry, official_domains,
+            canonical_entity_id=image_owner.entity_id if image_owner is not None else None,
+        )
         # Merge into the cumulative evidence object with stable IDs.
         MergeEvidence.merge(self.cumulative, round_evidence)
         # Revalidate the merged evidence every round (P1-1 revalidation step).
@@ -1036,10 +1068,6 @@ class AdaptiveResearchRunner:
             else:
                 classified.append(gap)
         self.cumulative.gaps = classified
-        selected_candidate = next(
-            candidate for candidate in resolution.candidates
-            if candidate.candidate_id == resolution.selected_candidate_id
-        )
         # Keep the canonical entity stable across rounds: later rounds may
         # resolve other co-mentioned entities, which must not displace it.
         if canonical_entity is not None and any(
@@ -1064,21 +1092,97 @@ class AdaptiveResearchRunner:
         evidence: NormalizedEvidence,
         telemetry: KimiUsageTelemetry,
         official_domains: set[str],
+        canonical_entity_id: str | None = None,
     ) -> None:
         candidates = self._pending_image_candidates
         self._pending_image_candidates = []
         if not candidates or self.fetcher is None:
             return
-        builder = ImageEvidenceBuilder(self.fetcher)
-        grader = SourceGrader()
-        page_sources: dict[str, str] = {}
-        selected_entity = evidence.entities[0] if evidence.entities else None
         known_products = {
             product.name: product.product_id for product in evidence.products if product.name
         }
         known_factories = {
             factory.name: factory.factory_id for factory in evidence.factories if factory.name
         }
+
+        def matched_product_id(candidate):
+            if candidate.product_key:
+                return candidate.product_key
+            context = " ".join(filter(None, (
+                candidate.alt or "", candidate.surrounding_text or "", candidate.page_title or "",
+            )))
+            matches = [
+                (len(name), product_id) for name, product_id in known_products.items()
+                if name and name in context
+            ]
+            return max(matches, default=(0, None))[1]
+        # DOM discovery can yield the same CDN asset on many pages (logos,
+        # navigation thumbnails and responsive duplicates).  Fetching those
+        # sequentially was the real source of multi-minute "network hangs".
+        # Keep the best occurrence per URL, prioritize product/factory
+        # evidence, and enforce a bounded round budget.
+        priority = {"product": 0, "factory": 1, "energy_project": 2, "other": 3, "logo": 4}
+        unique = {}
+        for candidate in candidates:
+            key = str(candidate.url).strip()
+            if not key:
+                continue
+            current = unique.get(key)
+            candidate_rank = (
+                priority.get(candidate.image_type, 3),
+                -(int(candidate.width or 0) * int(candidate.height or 0)),
+            )
+            if current is None:
+                unique[key] = candidate
+                continue
+            current_rank = (
+                priority.get(current.image_type, 3),
+                -(int(current.width or 0) * int(current.height or 0)),
+            )
+            if candidate_rank < current_rank:
+                unique[key] = candidate
+        ranked_candidates = sorted(
+            unique.values(),
+            key=lambda item: (
+                0 if matched_product_id(item) else 1,
+                priority.get(item.image_type, 3),
+                -(int(item.width or 0) * int(item.height or 0)),
+                str(item.url),
+            ),
+        )
+        # First reserve one slot for every concretely matched product, then
+        # fill the remaining budget by editorial/technical priority.  This
+        # avoids one image-rich product crowding five distinct products out
+        # of the bounded candidate window.
+        candidates = []
+        selected_urls: set[str] = set()
+        selected_products: set[str] = set()
+        for candidate in ranked_candidates:
+            product_id = matched_product_id(candidate)
+            if not product_id or product_id in selected_products:
+                continue
+            candidates.append(candidate)
+            selected_urls.add(str(candidate.url))
+            selected_products.add(product_id)
+            if len(candidates) >= self.max_image_candidates_per_round:
+                break
+        for candidate in ranked_candidates:
+            if len(candidates) >= self.max_image_candidates_per_round:
+                break
+            if str(candidate.url) in selected_urls:
+                continue
+            candidates.append(candidate)
+            selected_urls.add(str(candidate.url))
+        builder = ImageEvidenceBuilder(self.fetcher)
+        grader = SourceGrader()
+        page_sources: dict[str, str] = {}
+        # Never bind images to whichever co-mentioned entity happens to be
+        # first in a normalized batch.  Prefer the resolved canonical entity;
+        # a positional fallback is safe only when the batch has one entity.
+        selected_entity = self._select_image_owner(evidence.entities, canonical_entity_id)
+        product_ids = {product.product_id for product in evidence.products}
+        factory_ids = {factory.factory_id for factory in evidence.factories}
+        prepared: list[tuple] = []
         for candidate in candidates:
             if not str(candidate.page_url).lower().startswith(("http://", "https://")):
                 telemetry.image_download_failures += 1
@@ -1091,11 +1195,7 @@ class AdaptiveResearchRunner:
             # title) — never randomly assigned.  A context match also
             # corrects the page-kind fallback type.
             if candidate.product_key is None and (candidate.image_type == "product" or candidate.page_kind == "product"):
-                matched = next(
-                    (product_id for name, product_id in known_products.items()
-                     if name and name in context),
-                    None,
-                )
+                matched = matched_product_id(candidate)
                 if matched:
                     candidate = candidate.model_copy(update={"product_key": matched, "image_type": "product"})
             if candidate.factory_key is None and (candidate.image_type == "factory" or candidate.page_kind == "factory"):
@@ -1113,30 +1213,42 @@ class AdaptiveResearchRunner:
                 evidence.sources.append(Source(
                     source_id=source_id, canonical_url=candidate.page_url,  # type: ignore[arg-type]
                     source_title=candidate.page_title,
-                    source_domain=candidate.page_url.split("/", 2)[2] if "//" in candidate.page_url else "",
+                    source_domain=(urlparse(candidate.page_url).hostname or "").lower(),
                     publisher=candidate.publisher, source_level=level, content_type="text/html",
                     grading_reason=reason,
                 ))
                 page_sources[candidate.page_url] = source_id
-            image = builder.build(
-                candidate, source_id=source_id,
-                entity_id=selected_entity.entity_id if selected_entity else None,
-                factory_id=(
-                    candidate.factory_key
-                    if candidate.factory_key and candidate.factory_key in {factory.factory_id for factory in evidence.factories}
-                    else None
-                ),
-                product_id=(
-                    candidate.product_key
-                    if candidate.product_key and candidate.product_key in {product.product_id for product in evidence.products}
-                    else None
-                ),
+            prepared.append((
+                candidate,
+                source_id,
+                selected_entity.entity_id if selected_entity else None,
+                candidate.factory_key if candidate.factory_key in factory_ids else None,
+                candidate.product_key if candidate.product_key in product_ids else None,
+            ))
+
+        def build_one(item):
+            candidate, source_id, entity_id, factory_id, product_id = item
+            return builder.build(
+                candidate, source_id=source_id, entity_id=entity_id,
+                factory_id=factory_id, product_id=product_id,
             )
+
+        # Each URL is independent and the fetcher has its own socket timeout.
+        # Six workers bound worst-case latency without flooding official CDNs.
+        with ThreadPoolExecutor(max_workers=min(6, len(prepared) or 1)) as pool:
+            built_images = list(pool.map(build_one, prepared))
+        for image in built_images:
             if image is None:
                 telemetry.image_download_failures += 1
                 continue
             evidence.images.append(image)
         telemetry.image_candidates_verified = len(evidence.images)
+
+    @staticmethod
+    def _select_image_owner(entities: list[Entity], canonical_entity_id: str | None) -> Entity | None:
+        if canonical_entity_id is not None:
+            return next((entity for entity in entities if entity.entity_id == canonical_entity_id), None)
+        return entities[0] if len(entities) == 1 else None
 
     def _reconcile_catalog(self) -> None:
         from enterprise_energy_research.research.catalog import CatalogInventory, CatalogTraverser
@@ -1222,6 +1334,13 @@ class AdaptiveResearchRunner:
         bundle = FreezeService(store).load_bundle(final_state.freeze_id)
         publishers = self.publishers or default_publishers()
         results = ArtifactPublicationService(publishers).publish(bundle, manifest, output_dir / "artifacts")
+        failed = [result for result in results if result.status == "failed"]
+        if failed:
+            details = "; ".join(
+                f"{result.artifact_type.value}: {', '.join(result.diagnostics) or 'publication failed'}"
+                for result in failed
+            )
+            raise RuntimeError(f"formal publication QA failed: {details}")
         used = sorted({claim_id for result in results for claim_id in result.used_claim_ids})
         return final_state.freeze_id, used
 

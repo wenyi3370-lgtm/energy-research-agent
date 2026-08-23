@@ -100,16 +100,16 @@ Required structure:
 
 Rules:
 
-- Apply [references/office-visual-production.md](references/office-visual-production.md) and `config/office_visual_policy.yaml`; these supersede generic defaults when a visual rule conflicts.
+- Apply [docs/archive/office-visual-production.md](docs/archive/office-visual-production.md), [references/fifth-round-quality-contract.md](references/fifth-round-quality-contract.md), and `config/office_visual_policy.yaml`; the fifth-round contract supersedes archived length-first rules.
 - Use A4 with approximately 2.54 cm margins. Body is 12 pt SimSun plus Times New Roman, exactly 22 pt line spacing, two-character first-line indent and justified alignment. Heading 1/2/3 are 22/14/12 pt with controlled spacing and keep-with-next behavior.
 - Use formal three-line tables: 1.5 pt black top/bottom rules, 1 pt navy header rule, pale-blue header fill, no vertical/internal grid. Center the table on the page; center every cell horizontally and vertically; explicitly set every cell paragraph's first-line, left and right indents to zero. `Table Grid` is prohibited in formal output.
-- Default formal depth is 15,000–30,000 Chinese characters and at least 30 rendered pages. Use the concise profile only when explicitly requested by the user.
-- Target 4–6 evidence-backed analytical paragraphs per core chapter, normally 200–350 Chinese characters each. Every Heading 1/2 has at least 50 characters of substantive analysis before its first visual.
-- Every core chapter contains at least one decision-useful figure/table. If numeric evidence is unavailable, use an explicitly labeled framework/process diagram rather than invented data.
+- Formal depth follows research density rather than a character/page quota. Target a 50% facts/data, 35% analysis/insight and 15% constraints/limitations mix.
+- Core chapters prioritize concise evidence-backed analysis. Missing data triggers a targeted retry or an explicit limitation; it never triggers prose padding.
+- Every core chapter contains at least one decision-useful figure/table when real data supports it. If numeric evidence is unavailable, retain prose/table treatment rather than inventing a framework diagram.
 - Use only VisualSpec figures whose evidence data satisfies the Visual Router's data-sufficiency checks for the routed diagram-design type. The router's anti-abuse rules decide: real time series → line, real categories → bar, real x/y metrics → quadrant/scatter, real flows → Sankey, verified relationships → tree. Insufficient data degrades to table/KPI/prose — never to an implied chart, and never to process/relationship/hierarchy/decision-tree decorations.
 - Follow the fixed sequence analysis paragraph → “见图/表 N-x” → visual → caption → `数据来源：`. Every visual must exist as offline standalone HTML, 300 DPI PNG and editable SVG; chart text is at least 8 pt and a chart may not carry its own competing page title.
 - Build `image_publication_manifest.json` separately from the chart manifest. Revalidate every selected real image against its archived SHA-256, MIME and dimensions, normalize it to an offline PNG, and insert it in the mapped cover/entity/product/factory/process/certificate chapter. Images never substitute for a qualifying data chart and never trigger a fabricated chart. Every non-cover image has a `图 N-Px` caption and exact original-page source note.
-- Use Heading 1-3 styles and a Word TOC field; never hand-write TOC pages.
+- Use Heading 1-2 entries in the Word TOC field; never hand-write TOC pages. Each entry is an independent left-aligned paragraph with a page number.
 - For `GROUP_LARGE`, list every publicly identified member and expand material entities; do not claim completeness without proof.
 - For `SMALL_SIMPLE`, shorten the entity-depth section automatically.
 - Give every figure a number, title, source ID and image ID.
@@ -123,17 +123,11 @@ Rules:
 
 Generate through `FrontendDesignAdapter` as one directly openable HTML file. Bind all data from the freeze.
 
-Sections:
-
-- verified logo and company identity;
-- KPIs and source/date context;
-- group/ownership and industry architecture;
-- subsidiaries and factories;
-- multi-factory comparison for large groups;
-- company profile and energy structure;
-- EPC, zero-carbon, storage ODM and overseas opportunities;
-- cooperation priority and 90-day route;
-- data gaps, evidence drawer and source index.
+Every chapter uses the fixed Dashboard grammar: one core judgement, 3–6
+evidence-backed KPIs, 1–3 meaningful visuals, three concise insights and a
+collapsed detail panel. The hero has at most six KPIs. Full source and product
+ledgers remain collapsed. For large enterprises, require at least eight
+meaningful visuals; for multi-base enterprises, require a geographic map.
 
 ### Company-style header
 

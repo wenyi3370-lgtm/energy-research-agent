@@ -60,7 +60,8 @@ ENTERPRISE_PROFILE: dict[str, str] = {
 # wide layouts vs standard layouts (diagram-design output-spec presets)
 WIDE_TYPES: frozenset[VisualType] = frozenset({
     "process", "data_flow", "gantt", "journey", "timeline", "sankey",
-    "architecture", "tree", "fishbone", "pyramid",
+    "architecture", "tree", "fishbone", "pyramid", "dual_axis", "map",
+    "network", "heatmap",
 })
 SIZE_PRESETS: dict[str, tuple[int, int]] = {
     "doc-inline": (960, 600),
@@ -362,6 +363,74 @@ def _gen_line(c: _Canvas, spec: VisualSpec) -> None:
         c.text(x0, 20, f"单位：{spec.unit}", size=10, fill=ENTERPRISE_PROFILE["muted"], weight=400)
 
 
+def _gen_area(c: _Canvas, spec: VisualSpec) -> None:
+    """Evidence-backed time series with restrained area emphasis."""
+    items = [item for item in spec.items if isinstance(item.value, (int, float))]
+    values = [float(item.value) for item in items]
+    lo, hi = min(values), max(values)
+    pad = (hi - lo) * 0.15 or max(abs(hi), 1) * 0.15
+    y0, y1 = min(0.0, lo - pad), hi + pad
+    x0, x1, ytop, ybot = 72.0, c.w - 24.0, 40.0, c.h - 48.0
+    _grid(c, x0, ytop, x1, ybot)
+    for tick in _ticks(y0, y1, 5):
+        y = ybot - (tick - y0) / (y1 - y0 or 1) * (ybot - ytop)
+        c.line(x0, y, x1, y, stroke=ENTERPRISE_PROFILE["rule"])
+        c.text(x0 - 8, y + 4, _fmt_num(tick), size=10, fill=ENTERPRISE_PROFILE["muted"], weight=400, anchor="end")
+    points: list[tuple[float, float]] = []
+    for index, item in enumerate(items):
+        x = x0 + (x1 - x0) * index / max(len(items) - 1, 1)
+        y = ybot - (float(item.value) - y0) / (y1 - y0 or 1) * (ybot - ytop)
+        points.append((x, y))
+        c.text(x, ybot + 20, item.period or item.label, size=10, fill=ENTERPRISE_PROFILE["muted"], weight=400, anchor="middle")
+    if points:
+        area = [(points[0][0], ybot), *points, (points[-1][0], ybot)]
+        c.path("M" + " L".join(f"{x:g},{y:g}" for x, y in area) + " Z", fill=ENTERPRISE_PROFILE["accent_tint"], stroke="none")
+        c.polyline(points, stroke=ENTERPRISE_PROFILE["accent"], width=2.4)
+        for x, y in points:
+            c.circle(x, y, 4, fill=ENTERPRISE_PROFILE["paper"], stroke=ENTERPRISE_PROFILE["accent"])
+    if spec.unit:
+        c.text(x0, 20, f"单位：{spec.unit}", size=10, fill=ENTERPRISE_PROFILE["muted"], weight=400)
+
+
+def _gen_dual_axis(c: _Canvas, spec: VisualSpec) -> None:
+    """Two genuine time series with separately labelled axes."""
+    series: dict[str, list[Any]] = {}
+    periods: list[str] = []
+    for item in spec.items:
+        if not isinstance(item.value, (int, float)) or not item.series:
+            continue
+        series.setdefault(item.series, []).append(item)
+        if item.period and item.period not in periods:
+            periods.append(item.period)
+    names = list(series)[:2]
+    x0, x1, ytop, ybot = 76.0, c.w - 76.0, 42.0, c.h - 54.0
+    _grid(c, x0, ytop, x1, ybot)
+    colors = [ENTERPRISE_PROFILE["accent"], ENTERPRISE_PROFILE["series1"]]
+    x_by_period = {period: x0 + (x1 - x0) * index / max(len(periods) - 1, 1) for index, period in enumerate(periods)}
+    for axis_index, name in enumerate(names):
+        points_for_series = series[name]
+        vals = [float(item.value) for item in points_for_series]
+        lo, hi = min(vals), max(vals)
+        pad = (hi - lo) * 0.15 or max(abs(hi), 1) * 0.15
+        y0, y1 = min(0.0, lo - pad), hi + pad
+        for tick in _ticks(y0, y1, 5):
+            y = ybot - (tick - y0) / (y1 - y0 or 1) * (ybot - ytop)
+            c.text(x0 - 8 if axis_index == 0 else x1 + 8, y + 4, _fmt_num(tick), size=10, fill=colors[axis_index], weight=400, anchor="end" if axis_index == 0 else "start")
+        points: list[tuple[float, float]] = []
+        for item in points_for_series:
+            x = x_by_period.get(item.period or "", x0)
+            y = ybot - (float(item.value) - y0) / (y1 - y0 or 1) * (ybot - ytop)
+            points.append((x, y))
+        if len(points) > 1:
+            c.polyline(points, stroke=colors[axis_index], width=2.4)
+        for x, y in points:
+            c.circle(x, y, 4, fill=ENTERPRISE_PROFILE["paper"], stroke=colors[axis_index])
+        unit = next((item.unit for item in points_for_series if item.unit), "")
+        c.text(x0 + axis_index * 260, 24, f"{name}{f'（{unit}）' if unit else ''}", size=11, fill=colors[axis_index], weight=700)
+    for period, x in x_by_period.items():
+        c.text(x, ybot + 20, period, size=10, fill=ENTERPRISE_PROFILE["muted"], weight=400, anchor="middle")
+
+
 def _gen_bar(c: _Canvas, spec: VisualSpec) -> None:
     items = [item for item in spec.items if isinstance(item.value, (int, float))]
     values = [float(item.value) for item in items]  # type: ignore[arg-type]
@@ -498,6 +567,22 @@ def _gen_scatter(c: _Canvas, spec: VisualSpec) -> None:
         c.text(x + 9, y + 4, item.label, size=10, fill=ENTERPRISE_PROFILE["ink"], weight=500)
 
 
+def _gen_bubble(c: _Canvas, spec: VisualSpec) -> None:
+    items = [item for item in spec.items if isinstance(item.x, (int, float)) and isinstance(item.y, (int, float))]
+    xs, ys = [float(item.x) for item in items], [float(item.y) for item in items]
+    weights = [float(item.weight or item.value or 1) for item in items]
+    x0, x1, ytop, ybot = 72.0, c.w - 32.0, 32.0, c.h - 56.0
+    _grid(c, x0, ytop, x1, ybot)
+    for item, weight in zip(items, weights):
+        x = x0 + (float(item.x) - min(xs)) / (max(xs) - min(xs) or 1) * (x1 - x0)
+        y = ybot - (float(item.y) - min(ys)) / (max(ys) - min(ys) or 1) * (ybot - ytop)
+        radius = 7 + 20 * math.sqrt(max(weight, 0) / (max(weights) or 1))
+        c.circle(x, y, radius, fill=_with_alpha(ENTERPRISE_PROFILE["accent"], 0.16), stroke=ENTERPRISE_PROFILE["accent"], width=1.5)
+        c.text(x, y + 4, _lines(item.label, 8, 1)[0], size=10, fill=ENTERPRISE_PROFILE["ink"], weight=600, anchor="middle")
+    c.text((x0 + x1) / 2, c.h - 16, str(spec.axes.get("x_label", "X")), size=11, fill=ENTERPRISE_PROFILE["muted"], weight=500, anchor="middle")
+    c.text(16, (ytop + ybot) / 2, str(spec.axes.get("y_label", "Y")), size=11, fill=ENTERPRISE_PROFILE["muted"], weight=500, anchor="middle")
+
+
 def _gen_treemap(c: _Canvas, spec: VisualSpec) -> None:
     items = [item for item in spec.items if isinstance(item.weight, (int, float)) and item.weight > 0]
     total = sum(float(item.weight) for item in items)  # type: ignore[arg-type]
@@ -535,6 +620,68 @@ def _treemap_cell(c: _Canvas, item: Any, x: float, y: float, w: float, h: float,
             ty += 16
         value = f"{_fmt_num(item.value)}{item.unit or ''} ({frac * 100:.0f}%)" if item.value is not None else f"{frac * 100:.0f}%"
         c.text(x + 8, y + h - 10, value, size=10, fill=ENTERPRISE_PROFILE["muted"], weight=500)
+
+
+def _gen_map(c: _Canvas, spec: VisualSpec) -> None:
+    """Geographic distribution using verified coordinates or labelled centroids."""
+    items = [item for item in spec.items if isinstance(item.x, (int, float)) and isinstance(item.y, (int, float))]
+    x0, x1, ytop, ybot = 42.0, c.w - 42.0, 38.0, c.h - 54.0
+    c.rect(x0, ytop, x1 - x0, ybot - ytop, fill=ENTERPRISE_PROFILE["paper2"], stroke=ENTERPRISE_PROFILE["rule_solid"], rx=10)
+    for lon in range(-120, 181, 60):
+        x = x0 + (lon + 180) / 360 * (x1 - x0)
+        c.line(x, ytop, x, ybot, stroke=ENTERPRISE_PROFILE["rule"])
+    for lat in range(-60, 91, 30):
+        y = ybot - (lat + 90) / 180 * (ybot - ytop)
+        c.line(x0, y, x1, y, stroke=ENTERPRISE_PROFILE["rule"])
+    max_weight = max(float(item.weight or item.value or 1) for item in items)
+    for item in items:
+        lon, lat = float(item.x), float(item.y)
+        x = x0 + (lon + 180) / 360 * (x1 - x0)
+        y = ybot - (lat + 90) / 180 * (ybot - ytop)
+        radius = 6 + 14 * math.sqrt(float(item.weight or item.value or 1) / (max_weight or 1))
+        c.circle(x, y, radius, fill=_with_alpha(ENTERPRISE_PROFILE["accent"], 0.20), stroke=ENTERPRISE_PROFILE["accent"], width=1.5)
+        c.text(x + radius + 4, y + 4, item.label, size=10, fill=ENTERPRISE_PROFILE["ink"], weight=600)
+    c.text(x0, c.h - 22, "点位按公开地址或行政区中心定位；不表示厂址边界。", size=10, fill=ENTERPRISE_PROFILE["muted"], weight=400)
+
+
+def _gen_heatmap(c: _Canvas, spec: VisualSpec) -> None:
+    items = [item for item in spec.items if isinstance(item.x, (int, float)) and isinstance(item.y, (int, float)) and isinstance(item.value, (int, float))]
+    xs = sorted({int(item.x) for item in items})
+    ys = sorted({int(item.y) for item in items})
+    values = [float(item.value) for item in items]
+    x0, x1, ytop, ybot = 150.0, c.w - 40.0, 48.0, c.h - 70.0
+    cell_w, cell_h = (x1 - x0) / max(len(xs), 1), (ybot - ytop) / max(len(ys), 1)
+    x_labels, y_labels = spec.axes.get("x_labels", {}), spec.axes.get("y_labels", {})
+    lo, hi = min(values), max(values)
+    for item in items:
+        xi, yi = xs.index(int(item.x)), ys.index(int(item.y))
+        ratio = (float(item.value) - lo) / (hi - lo or 1)
+        c.rect(x0 + xi * cell_w, ytop + yi * cell_h, cell_w - 2, cell_h - 2, fill=_with_alpha(ENTERPRISE_PROFILE["accent"], 0.08 + ratio * 0.72), stroke=ENTERPRISE_PROFILE["paper"], rx=3)
+        c.text(x0 + (xi + 0.5) * cell_w, ytop + (yi + 0.5) * cell_h + 4, _fmt_num(item.value), size=11, fill=ENTERPRISE_PROFILE["ink"], weight=700, anchor="middle")
+    for xi, value in enumerate(xs):
+        c.text(x0 + (xi + 0.5) * cell_w, ybot + 22, str(x_labels.get(str(value), x_labels.get(value, value))), size=10, fill=ENTERPRISE_PROFILE["muted"], weight=500, anchor="middle")
+    for yi, value in enumerate(ys):
+        c.text(x0 - 10, ytop + (yi + 0.5) * cell_h + 4, str(y_labels.get(str(value), y_labels.get(value, value))), size=10, fill=ENTERPRISE_PROFILE["muted"], weight=500, anchor="end")
+
+
+def _gen_network(c: _Canvas, spec: VisualSpec) -> None:
+    cx, cy, radius = c.w / 2, c.h / 2, min(c.w, c.h) * 0.34
+    positions: dict[str, tuple[float, float]] = {}
+    for index, node in enumerate(spec.nodes):
+        angle = 2 * math.pi * index / max(len(spec.nodes), 1) - math.pi / 2
+        positions[node.id] = (cx + radius * math.cos(angle), cy + radius * math.sin(angle))
+    for stage in spec.stages:
+        if stage.from_label not in positions or stage.to_label not in positions:
+            continue
+        x1, y1 = positions[stage.from_label]
+        x2, y2 = positions[stage.to_label]
+        c.line(x1, y1, x2, y2, stroke=ENTERPRISE_PROFILE["link"], width=1.5)
+        c.text((x1 + x2) / 2, (y1 + y2) / 2 - 5, _lines(stage.label, 10, 1)[0], size=9, fill=ENTERPRISE_PROFILE["muted"], weight=500, anchor="middle")
+    for node in spec.nodes:
+        x, y = positions[node.id]
+        fill, stroke, dash = _node_fill(node.kind)
+        c.rect(x - 58, y - 24, 116, 48, fill=fill, stroke=stroke, rx=8, dash=dash)
+        c.text(x, y + 4, _lines(node.label, 10, 1)[0], size=11, fill=ENTERPRISE_PROFILE["ink"], weight=700, anchor="middle")
 
 
 def _gen_timeline(c: _Canvas, spec: VisualSpec) -> None:
@@ -891,11 +1038,17 @@ def _gen_table(c: _Canvas, spec: VisualSpec) -> None:
 
 GENERATORS: dict[VisualType, Callable[[_Canvas, VisualSpec], None]] = {
     "line": _gen_line,
+    "area": _gen_area,
+    "dual_axis": _gen_dual_axis,
     "bar": _gen_bar,
     "radar": _gen_radar,
     "quadrant": _gen_quadrant,
     "scatter": _gen_scatter,
+    "bubble": _gen_bubble,
     "treemap": _gen_treemap,
+    "map": _gen_map,
+    "heatmap": _gen_heatmap,
+    "network": _gen_network,
     "timeline": _gen_timeline,
     "process": _gen_process,
     "data_flow": _gen_process,

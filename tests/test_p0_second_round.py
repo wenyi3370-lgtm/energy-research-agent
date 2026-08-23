@@ -120,7 +120,7 @@ class SecondRoundP0Tests(unittest.TestCase):
         self.assertEqual(sum(chapter.chapter_id == "sources" for chapter in self.narrative.chapters), 0)
 
     def test_08_html_source_ledger_once(self):
-        self.assertEqual(self.html_text.count("来源与方法"), 1)
+        self.assertEqual(self.html_text.count("来源索引"), 1)
 
     def test_09_manufacturing_gwh_never_enters_energy_visual(self):
         claim_by_id = {item.claim_id: item for item in self.bundle.claims}

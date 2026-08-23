@@ -137,10 +137,21 @@ class FreshnessGateTests(unittest.TestCase):
         self.assertEqual(result.evaluated[0].freshness_status, "OLD")
         self.assertIn("72-hour", result.rejected[0])
 
-    def test_date_only_or_unknown_time_is_rejected(self):
+    def test_confirmed_date_only_inside_safe_72_hour_window_is_low_confidence_new(self):
         date_only = make_raw(published_at="2026-08-22", original_published_at="2026-08-22")
+        result = apply_freshness_gate([date_only], current_time=self.now)
+        self.assertEqual(result.accepted[0].freshness_status, "NEW")
+        self.assertEqual(result.accepted[0].publication_time_precision, "DATE_ONLY")
+        self.assertEqual(result.accepted[0].confidence_level, "LOW")
+
+    def test_unknown_or_boundary_ambiguous_date_is_rejected(self):
         unknown = make_raw(published_at="", original_published_at="")
-        result = apply_freshness_gate([date_only, unknown], current_time=self.now)
+        boundary = make_raw(
+            published_at="2026-08-19", original_published_at="2026-08-19",
+            source_url="https://example.com/boundary",
+            original_source_url="https://example.com/boundary",
+        )
+        result = apply_freshness_gate([unknown, boundary], current_time=self.now)
         self.assertEqual(result.accepted, [])
         self.assertEqual(len(result.rejected), 2)
         self.assertTrue(all(item.confidence_level == "LOW" for item in result.evaluated))
@@ -285,6 +296,90 @@ class FreshnessGateTests(unittest.TestCase):
             parse_exact_publication_time("2026年8月22日 07:30"),
             datetime(2026, 8, 22, 7, 30, tzinfo=TZ),
         )
+
+    def test_extraction_boundary_tolerates_common_model_transport_quirks(self):
+        from enterprise_energy_research.automation.intelligence import IntelligenceExtraction
+
+        extracted = IntelligenceExtraction.model_validate({
+            "title": None,
+            "fact": "某项目披露新增100MWh储能规模。",
+            "published_at_iso": "2026-08-22",
+            "numbers": [100, "MWh"],
+            "unexpected_model_key": "ignored",
+        })
+        self.assertEqual(extracted.title, "")
+        self.assertIsNone(extracted.published_at_iso)
+        self.assertEqual(extracted.numbers, ["100", "MWh"])
+
+
+class CollectorPipelineTests(unittest.TestCase):
+    def test_anysearch_snippet_is_hydrated_before_llm_extraction(self):
+        from enterprise_energy_research.adapters.base import (
+            AdapterHealth, SearchHit, SearchResultEnvelope,
+        )
+        from enterprise_energy_research.automation.intelligence import (
+            IntelligenceCollector, IntelligenceExtraction,
+        )
+
+        class FakeAnySearch:
+            name = "anysearch"
+
+            def __init__(self):
+                self.requests = []
+
+            def health(self):
+                return AdapterHealth(name=self.name, available=True)
+
+            def search(self, request):
+                self.requests.append(request)
+                if request.metadata.get("url"):
+                    return SearchResultEnvelope(
+                        adapter=self.name, query_id=request.query_id, status="ok",
+                        hits=[SearchHit(
+                            final_url=request.metadata["url"], title="官方原文",
+                            text="官方原文完整内容；发布时间：2026-08-22 07:30；项目规模100MWh。",
+                            status="ok", retrieved_at="2026-08-22T00:00:00Z",
+                            metadata={"snippet": False},
+                        )],
+                    )
+                return SearchResultEnvelope(
+                    adapter=self.name, query_id=request.query_id, status="ok",
+                    hits=[SearchHit(
+                        final_url="https://official.example/news/1", title="搜索摘要",
+                        text="只有搜索摘要", status="ok",
+                        retrieved_at="2026-08-22T00:00:00Z", metadata={"snippet": True},
+                    )],
+                )
+
+        class FakeGateway:
+            def __init__(self):
+                self.prompts = []
+
+            def structured(self, request):
+                self.prompts.append(request.messages[0]["content"])
+                return IntelligenceExtraction(
+                    category="重大项目", title="新储能项目", fact="项目规模100MWh。",
+                    source_name="官方机构", source_url="https://official.example/news/1",
+                    published_at="2026-08-22 07:30", original_published_at="2026-08-22 07:30",
+                    original_source_name="官方机构",
+                    original_source_url="https://official.example/news/1",
+                    is_original_source=True,
+                    publication_time_evidence="发布时间：2026-08-22 07:30",
+                    entity="示范项目", topic="储能项目", source_type="official_latest",
+                )
+
+        adapter = FakeAnySearch()
+        gateway = FakeGateway()
+        collector = IntelligenceCollector(
+            {"anysearch": adapter}, gateway, queries=[("储能 项目", "project")]
+        )
+        items = collector.collect(current_time=datetime(2026, 8, 22, 8, 0, tzinfo=TZ))
+        self.assertEqual(len(items), 1)
+        self.assertEqual(collector.extraction_attempt_count, 1)
+        self.assertEqual(collector.extraction_success_count, 1)
+        self.assertTrue(any(request.metadata.get("url") for request in adapter.requests))
+        self.assertIn("官方原文完整内容", gateway.prompts[0])
+        self.assertNotIn("只有搜索摘要", gateway.prompts[0])
 
 
 class BriefingTests(unittest.TestCase):

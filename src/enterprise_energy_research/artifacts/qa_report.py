@@ -69,6 +69,10 @@ class PublicationQAReport(BaseModel):
 
     def record_finding(self, finding: QAFinding) -> None:
         self.findings.append(finding)
+        if finding.severity == "error":
+            self.status = "fail"
+        elif finding.severity == "warn" and self.status == "pass":
+            self.status = "warn"
 
 
 def new_qa_report(run_id: str, freeze_id: str, artifact_id: str) -> PublicationQAReport:

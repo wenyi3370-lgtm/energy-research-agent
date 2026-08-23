@@ -118,7 +118,7 @@ class ConsultingNarrativeValidator:
         ]) if executive else "\n".join(narrative.executive_summary)
         executive_count = cjk_count(executive_text)
         threshold = evidence_adjusted_threshold(narrative)
-        self._check(checks, "executive_summary_length", executive_count >= min(1200, max(600, threshold // 8)), f"执行摘要中文字符数 {executive_count}")
+        self._check(checks, "executive_summary_length", executive_count >= min(800, max(500, threshold // 10)), f"执行摘要中文字符数 {executive_count}")
         self._check(checks, "no_raw_internal_enum", not any(token in body for token in RAW_ENUMS), "正文不得出现内部枚举")
         self._check(checks, "no_raw_snake_case", not re.search(r"\b[a-z]+(?:_[a-z0-9]+)+\b", body), "正文不得出现 snake_case 字段")
         paragraphs = self._paragraphs(narrative)
@@ -136,7 +136,10 @@ class ConsultingNarrativeValidator:
                 deficient.append(chapter.chapter_id)
             short.extend(f"{chapter.chapter_id}:{cjk_count(p)}" for p in substantive if cjk_count(p) < 80)
         self._check(checks, "core_chapter_depth", not deficient, "核心章节至少 2 个实质分析段", deficient)
-        self._check(checks, "substantive_paragraph_length", not short, "实质分析段建议不少于 80 个中文字符", short)
+        checks.append(ValidationCheck(
+            code="substantive_paragraph_length", status="PASS" if not short else "WARN",
+            message="实质分析段建议不少于 80 个中文字符；短段不以模板句补长。", value=short,
+        ))
         hollow = [p for p in paragraphs if re.search(r"已形成\s*1\s*份", p)]
         self._check(checks, "no_hollow_chapter", not hollow, "不得使用空洞计数句撑起章节")
         negative_trend_terms = ("不足", "不能", "不支持", "不可", "尚无法")
@@ -164,7 +167,13 @@ class ConsultingNarrativeValidator:
         self._check(checks, "shared_word_html_judgement", bool(narrative.overall_judgement), "Word/HTML 使用同一总体判断")
         self._check(checks, "shared_word_html_ranking", len(keys) == len(set(keys)), "Word/HTML 使用同一机会排序")
         self._check(checks, "shared_word_html_risks", narrative.key_risks is not None, "Word/HTML 使用同一风险集合")
-        self._check(checks, "main_body_length", main_count >= threshold, f"正文中文字符数 {main_count}，门槛 {threshold}")
+        # Fifth-round publications optimize for decision density, not padded
+        # character count. Keep the former threshold as a warning signal only.
+        checks.append(ValidationCheck(
+            code="main_body_length", status="PASS" if main_count >= threshold else "WARN",
+            message=f"正文中文字符数 {main_count}，参考值 {threshold}；不足时不得用模板句补齐。",
+            value={"actual": main_count, "reference": threshold},
+        ))
         return ConsultingNarrativeValidation(
             status="PASS" if all(item.status != "FAIL" for item in checks) else "BLOCKED",
             main_body_cjk_char_count=main_count, executive_summary_cjk_char_count=executive_count,

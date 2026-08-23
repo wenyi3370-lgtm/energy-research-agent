@@ -27,6 +27,8 @@ import sqlite3
 from pathlib import Path
 
 from enterprise_energy_research.adapters.kimi_webbridge import KimiWebBridgeSearchAdapter
+from enterprise_energy_research.adapters.anysearch import AnySearchCliAdapter
+from enterprise_energy_research.adapters.base import SearchRequest
 from enterprise_energy_research.domain.enums import EnterpriseComplexity, RunStatus, VerificationStatus
 from enterprise_energy_research.domain.models import RunManifest
 from enterprise_energy_research.evidence.store import EvidenceStore
@@ -119,6 +121,8 @@ def main() -> int:
     for source in evidence.sources:
         if "official" in (source.grading_reason or "").lower() and source.source_domain:
             official_domains.add(source.source_domain.lower().removeprefix("www."))
+    # This recovery script registers CATL's official catalog explicitly.
+    official_domains.add("catl.com")
 
     # When extraction missed the entity website, restore it from the derived
     # official domain so the image validator can grant the official_domain
@@ -129,12 +133,13 @@ def main() -> int:
     )
     if canonical_entity is not None and not canonical_entity.official_website and official_domains:
         from pydantic import HttpUrl
-        domain = sorted(official_domains)[0]
+        domain = "catl.com" if "catl.com" in official_domains else sorted(official_domains)[0]
         patched = canonical_entity.model_copy(update={"official_website": HttpUrl(f"https://{domain}/")})
         evidence.entities = [
             patched if entity.entity_id == canonical_entity.entity_id else entity
             for entity in evidence.entities
         ]
+        canonical_entity = patched
 
     # Pages = verified product source pages on OFFICIAL domains only
     # (spec: official product pages first, search thumbnails never publish).
@@ -162,9 +167,10 @@ def main() -> int:
             entry = pages.setdefault(url, {
                 "url": url, "kind": "product", "source_kind": "official_company",
                 "publisher": source.source_title, "source_id": source_id,
-                "product_ids": set(),
+                "product_ids": set(), "specific": False,
             })
             entry["product_ids"].add(product.product_id)
+            entry["specific"] = len(entry["product_ids"]) == 1
 
     # Official catalog landing pages (SPA navigation on catl.com): these are
     # the pages that actually render product photos.  Register a source for
@@ -194,9 +200,52 @@ def main() -> int:
         if url not in pages:
             pages[url] = {
                 "url": url, "kind": "product", "source_kind": "official_company",
-                "publisher": "宁德时代官网", "source_id": source_id, "product_ids": set(),
+                "publisher": "宁德时代官网", "source_id": source_id,
+                "product_ids": set(), "specific": False,
             }
-    page_list = sorted(pages.values(), key=lambda entry: -len(entry["product_ids"]))[: args.max_pages]
+
+    # Product records often originate from annual reports, whose source page
+    # is not where the official product photo lives.  Use the approved
+    # AnySearch adapter to discover one CATL-hosted page per branded product;
+    # Kimi will open those real target pages for DOM/pixel evidence.
+    generic_names = {"储能系统", "动力电池系统", "锂电池材料", "电池回收"}
+    branded_products = [
+        product for product in products
+        if product.name not in generic_names and not product.name.endswith("解决方案")
+    ]
+    branded_products.sort(key=lambda product: (-len(product.name), product.name))
+    anysearch = AnySearchCliAdapter()
+    if anysearch.health().available:
+        for product in branded_products[: min(12, args.max_pages)]:
+            envelope = anysearch.search(SearchRequest(
+                query_id=f"IMG-{product.product_id}",
+                query=f"site:catl.com {product.name} 宁德时代",
+                entity_id=canonical_entity.entity_id if canonical_entity else "PENDING-ENTITY",
+                purpose="official product image page discovery",
+                max_results=3,
+                topic="image_evidence",
+            ))
+            for hit in envelope.hits:
+                url = str(hit.final_url or "")
+                from urllib.parse import urlparse
+                host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+                if host != "catl.com" and not host.endswith(".catl.com"):
+                    continue
+                if url.lower().split("?", 1)[0].endswith(NON_PAGE_SUFFIXES):
+                    continue
+                entry = pages.setdefault(url, {
+                    "url": url, "kind": "product", "source_kind": "official_company",
+                    "publisher": product.name, "source_id": None,
+                    "product_ids": set(), "specific": True,
+                })
+                entry["product_ids"].add(product.product_id)
+                entry["specific"] = len(entry["product_ids"]) == 1
+                break
+
+    page_list = sorted(
+        pages.values(),
+        key=lambda entry: (not entry.get("specific", False), -len(entry["product_ids"]), entry["url"]),
+    )[: args.max_pages]
     if not page_list:
         print("[recovery] no navigable official product pages found")
         return 2
@@ -206,7 +255,10 @@ def main() -> int:
         {
             "url": entry["url"], "kind": "product", "source_kind": entry["source_kind"],
             "publisher": entry["publisher"],
-            "product_key": next(iter(entry["product_ids"]), None),
+            # Page-level binding is exact only when this source belongs to one
+            # and only one verified product.  Generic catalog pages must bind
+            # from the image card's own title/context instead.
+            "product_key": next(iter(entry["product_ids"])) if len(entry["product_ids"]) == 1 else None,
         }
         for entry in page_list
     ]
@@ -216,59 +268,29 @@ def main() -> int:
         print(f"[recovery] reason: {telemetry.reason}")
         return 2
 
-    builder = ImageEvidenceBuilder(fetcher)
-    known = {product.name: product.product_id for product in evidence.products if product.name}
-    category_map: dict[str, str] = {
-        (product.category or "").lower(): product.product_id for product in evidence.products if product.category
-    }
-    application_map: dict[str, str] = {}
-    for product in evidence.products:
-        for application in product.applications:
-            application_map.setdefault(str(application).strip().lower(), product.product_id)
-    canonical_entity_id = run_manifest.canonical_entity_id or (evidence.entities[0].entity_id if evidence.entities else None)
-    new_images = []
-    for candidate in candidates:
-        page = pages.get(candidate.page_url)
-        if page is None:
-            continue
-        product_id = candidate.product_key
-        context = " ".join(filter(None, (candidate.alt or "", candidate.surrounding_text or "", candidate.page_title or "")))
-        lowered = context.lower()
-        # Binding priority: (1) explicit product name mention in the image
-        # context, (2) page's own product ids, (3) application mention,
-        # (4) category/family mention in the page title.
-        matched = next(
-            (product_id for name, product_id in known.items() if name and name in context),
-            None,
-        )
-        if matched is not None:
-            product_id = matched
-        elif product_id is None and page["product_ids"]:
-            product_id = next(iter(sorted(page["product_ids"])))
-        if product_id is None:
-            product_id = next(
-                (product_id for application, product_id in application_map.items() if application and application in lowered),
-                None,
-            )
-        if product_id is None:
-            product_id = next(
-                (product_id for category, product_id in category_map.items() if category and category in lowered),
-                None,
-            )
-        image = builder.build(
-            candidate, source_id=page["source_id"], entity_id=canonical_entity_id,
-            product_id=product_id,
-        )
-        if image is None:
-            telemetry.image_download_failures += 1
-            continue
-        new_images.append(image)
-
-    telemetry.image_candidates_verified = len(new_images)
+    # Reuse the production handoff: URL de-duplication, per-product diversity,
+    # exact name/page binding, 48-candidate cap and six-way bounded downloads.
+    image_round = NormalizedEvidence()
+    # _attach_discovered_images uses the first entity as the binding owner;
+    # keep the manifest's canonical company first, never an incidental entity
+    # extracted from a supplier/customer page.
+    image_round.entities = (
+        [canonical_entity] + [entity for entity in evidence.entities if entity.entity_id != canonical_entity.entity_id]
+        if canonical_entity is not None else list(evidence.entities)
+    )
+    image_round.factories = list(evidence.factories)
+    image_round.products = list(evidence.products)
+    runner._pending_image_candidates = candidates
+    runner._attach_discovered_images(
+        image_round, telemetry, official_domains,
+        canonical_entity_id=canonical_entity.entity_id if canonical_entity is not None else None,
+    )
+    new_images = image_round.images
+    new_sources = image_round.sources
     print(f"[recovery] built {len(new_images)} image evidence records")
 
     validator = ImageValidator()
-    new_images = validator.validate(new_images, evidence.entities, evidence.sources)
+    new_images = validator.validate(new_images, evidence.entities, [*evidence.sources, *new_sources])
     if not new_images:
         print("[recovery] all images failed technical validation")
         return 2
@@ -281,6 +303,7 @@ def main() -> int:
     print(f"[recovery] archived={len(archived.archived_image_ids)}, failed={len(archived.failed_image_ids)}, visual_verified={sum(1 for image in new_images if image.visual_verified)}")
 
     round_evidence = NormalizedEvidence()
+    round_evidence.sources = new_sources
     round_evidence.images = new_images
     MergeEvidence.merge(runner.cumulative, round_evidence)
     runner.cumulative.products, _ = ProductDetector().detect(
@@ -304,13 +327,58 @@ def main() -> int:
         is_large_enterprise=True, minimum_substantive_claims=20,
     )
     print("[recovery] readiness:", readiness["status"])
+    from enterprise_energy_research.research.data_coverage import ResearchDataCoverageValidator
+    coverage = ResearchDataCoverageValidator().audit(
+        entity_name="宁德时代", claims=runner.cumulative.claims,
+        products=runner.cumulative.products, factories=runner.cumulative.factories,
+        images=runner.cumulative.images, complexity=EnterpriseComplexity.GROUP_LARGE,
+        has_stock_code=True,
+    )
+    high_gaps = [gap.gap_code for gap in coverage.gaps if gap.severity == "high"]
+    print("[recovery] high coverage gaps:", high_gaps)
     (args.output / "02_research_quality").mkdir(parents=True, exist_ok=True)
     telemetry_path = args.output / "02_research_quality" / "image_recovery_telemetry.json"
     telemetry_path.write_text(json.dumps(telemetry.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    if readiness["status"] == "PASS":
-        freeze_id = runner._freeze_and_publish(fix_store, run_id, args.output)
+    (args.output / "02_research_quality" / "image_recovery_coverage.json").write_text(
+        json.dumps(coverage.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    if readiness["status"] == "PASS" and not high_gaps:
+        freeze_id, used_claim_ids = runner._freeze_and_publish(fix_store, run_id, args.output)
         print("[recovery] freeze:", freeze_id)
-        return 0 if freeze_id else 2
+        if not freeze_id:
+            return 2
+        artifact_root = args.output / "artifacts"
+        final_summary = {
+            "run_id": run_id,
+            "run_status": "COMPLETED",
+            "network_mode": "direct" if not os.getenv("EER_OUTBOUND_PROXY") else "proxy",
+            "recovered_from": str(args.evidence),
+            "evidence_store": str(fix_path),
+            "freeze_id": freeze_id,
+            "used_claim_count": len(used_claim_ids),
+            "product_image_recovery": {
+                "official_pages": len(page_list),
+                "candidates": len(candidates),
+                "built": len(new_images),
+                "archived": len(archived.archived_image_ids),
+                "visual_verified": sum(1 for image in new_images if image.visual_verified),
+                "products_with_bound_images": len(bound),
+            },
+            "coverage": coverage.model_dump(mode="json"),
+            "artifacts": {
+                "word": str(artifact_root / "enterprise_research.docx"),
+                "excel": str(artifact_root / "enterprise_research.xlsx"),
+                "html": str(artifact_root / "enterprise_research_dashboard.html"),
+                "word_qa": str(artifact_root / "enterprise_research_assets" / "publication_qa_report.json"),
+                "html_qa": str(artifact_root / "enterprise_research_dashboard_assets" / "publication_qa_report.json"),
+            },
+        }
+        (args.output / "acceptance_summary_final.json").write_text(
+            json.dumps(final_summary, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return 0
     return 2
 
 

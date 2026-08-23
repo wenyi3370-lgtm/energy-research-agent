@@ -18,15 +18,17 @@ from pydantic import BaseModel, Field
 
 # Visual types supported by the diagram-design editorial design system.
 VisualType = Literal[
-    "line", "bar", "radar", "quadrant", "scatter", "treemap", "timeline",
+    "line", "area", "dual_axis", "bar", "radar", "quadrant", "scatter",
+    "bubble", "treemap", "map", "heatmap", "network", "timeline",
     "process", "data_flow", "sankey", "gantt", "pyramid", "tree", "fishbone",
     "architecture", "journey", "kpi_cards", "table",
 ]
 
 # Information-semantics patterns: chapter thesis → semantics → visual type.
 SemanticPattern = Literal[
-    "time_series", "category_comparison", "multi_dimension_score",
+    "time_series", "dual_metric_time_series", "category_comparison", "multi_dimension_score",
     "opportunity_priority", "two_metric_distribution", "part_to_whole",
+    "spatial_distribution", "matrix_heatmap", "network_relationship",
     "technology_evolution", "operational_process", "value_flow",
     "implementation_roadmap", "hierarchy_or_conversion", "verified_relationship",
     "root_cause", "system_architecture", "customer_journey", "data_handoff",

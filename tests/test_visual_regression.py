@@ -15,7 +15,7 @@ from enterprise_energy_research.artifacts.visual_policy import colors, word_poli
 
 # P0 third-round baseline: ENTERPRISE RESEARCH DASHBOARD hero (real KPI grid,
 # judgement demoted to one module) instead of the decision-first hero.
-FROZEN_CSS_SHA256 = "6c7716ab951c96d6b9326906613d7a3101f01fb217fc854e16f985117a3f3acd"
+FROZEN_CSS_SHA256 = "f4bc660a21f34da93907d287cc238345316ad18360ed0d180ea32110bbd9d908"
 
 FROZEN_WORD_POLICY = {
     "page": "A4", "body_cjk_font": "SimSun", "body_latin_font": "Times New Roman",

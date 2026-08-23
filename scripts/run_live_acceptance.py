@@ -82,7 +82,7 @@ def visual_regression_verdicts() -> dict:
     from enterprise_energy_research.artifacts.visual_policy import colors, word_policy
     # P0 third-round baseline: ENTERPRISE RESEARCH DASHBOARD hero (real KPI
     # grid, judgement demoted to one module) instead of the decision hero.
-    frozen_css = "6c7716ab951c96d6b9326906613d7a3101f01fb217fc854e16f985117a3f3acd"
+    frozen_css = "f4bc660a21f34da93907d287cc238345316ad18360ed0d180ea32110bbd9d908"
     css_ok = hashlib.sha256(html_module.CSS.encode("utf-8")).hexdigest() == frozen_css
     frozen_colors = {
         "black": "#1B1F26", "canvas": "#F7F8FA", "cobalt": "#2D5A8A",

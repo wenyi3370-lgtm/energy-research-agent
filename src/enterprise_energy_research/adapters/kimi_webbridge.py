@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import urllib.error
@@ -22,6 +23,9 @@ class KimiWebBridgeSearchAdapter:
         self.session = session
         self.daemon_url = daemon_url.rstrip("/")
         self.skill_root = skill_root or embedded_skill_root("kimi-webbridge")
+        self.command_timeout_seconds = max(
+            5, min(30, int(os.environ.get("KIMI_WEBBRIDGE_TIMEOUT_SECONDS", "15")))
+        )
         # Per-run usage telemetry (P0-14): routing alone is not usage.
         from enterprise_energy_research.research.image_discovery import KimiUsageTelemetry
         self.usage = KimiUsageTelemetry()
@@ -74,7 +78,11 @@ class KimiWebBridgeSearchAdapter:
     def _command(self, action: str, args: dict[str, Any]) -> dict[str, Any]:
         body = json.dumps({"action": action, "args": args, "session": self.session}).encode("utf-8")
         request = urllib.request.Request(f"{self.daemon_url}/command", data=body, headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(request, timeout=30) as response:
+        # The daemon is loopback-only.  Always bypass HTTP(S)_PROXY here so an
+        # optional outbound proxy cannot accidentally capture local bridge
+        # control traffic.
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(request, timeout=self.command_timeout_seconds) as response:
             payload = json.loads(response.read().decode("utf-8"))
         if payload.get("ok") is False:
             raise OSError(str(payload.get("error") or "Kimi WebBridge command failed"))

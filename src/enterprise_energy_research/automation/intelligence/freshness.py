@@ -99,12 +99,67 @@ def parse_event_date(value: str) -> date | None:
         .replace("/", "-")
     )
     match = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", normalized)
-    if not match:
+    if match:
+        try:
+            return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        except ValueError:
+            return None
+    english = re.search(
+        r"\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+        r"Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|"
+        r"Dec(?:ember)?)\s+(\d{1,2}),?\s+(\d{4})\b",
+        value or "",
+        re.IGNORECASE,
+    )
+    if not english:
         return None
+    months = {
+        "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+        "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+    }
     try:
-        return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        return date(
+            int(english.group(3)), months[english.group(1)[:3].lower()], int(english.group(2))
+        )
     except ValueError:
         return None
+
+
+def parse_publication_time(
+    value: str,
+    evidence: str,
+    reference: datetime,
+) -> tuple[datetime | None, str, bool]:
+    """Return a conservative timestamp, precision and corroboration flag.
+
+    Many authoritative sources publish only a calendar date.  A confirmed
+    date is usable when the *whole possible day* is inside the 72-hour gate;
+    it is never promoted to an invented exact clock time and remains LOW
+    confidence in publication output.
+    """
+    exact = parse_exact_publication_time(value)
+    evidence_exact = parse_exact_publication_time(evidence)
+    value_date = parse_event_date(value)
+    evidence_date = parse_event_date(evidence)
+
+    if value_date and evidence_date and value_date != evidence_date:
+        return None, "UNKNOWN", False
+    if exact is not None and evidence_exact is not None:
+        if abs((exact - evidence_exact).total_seconds()) <= 60:
+            return exact, "EXACT", True
+        return None, "UNKNOWN", False
+    if evidence_exact is not None and (value_date is None or value_date == evidence_exact.date()):
+        return evidence_exact, "EXACT", True
+    if exact is not None:
+        if evidence_date is not None and evidence_date == exact.date():
+            midnight = datetime.combine(exact.date(), datetime.min.time(), tzinfo=reference.tzinfo)
+            return midnight, "DATE_ONLY", True
+        return exact, "EXACT", False
+    confirmed_date = value_date or evidence_date
+    if confirmed_date is not None:
+        midnight = datetime.combine(confirmed_date, datetime.min.time(), tzinfo=reference.tzinfo)
+        return midnight, "DATE_ONLY", bool(value_date and evidence_date)
+    return None, "UNKNOWN", False
 
 
 def content_sha256(text: str) -> str:
@@ -192,12 +247,9 @@ def _classify(
     original_name = (raw.original_source_name or (source_name if raw.is_original_source else "")).strip()
     original_url = (raw.original_source_url or (source_url if raw.is_original_source else "")).strip()
     published_raw = raw.original_published_at or raw.published_at
-    published = parse_exact_publication_time(published_raw)
-    evidence_time = parse_exact_publication_time(raw.publication_time_evidence)
-    publication_verified = published is not None and evidence_time is not None
-    if publication_verified and abs((published - evidence_time).total_seconds()) > 60:
-        publication_verified = False
-        published = None
+    published, publication_precision, publication_corroborated = parse_publication_time(
+        published_raw, raw.publication_time_evidence, cutoff
+    )
 
     updated = parse_exact_publication_time(raw.updated_at)
     update_evidence = parse_exact_publication_time(raw.update_time_evidence)
@@ -220,6 +272,7 @@ def _classify(
         "original_source_name": original_name,
         "original_source_url": original_url,
         "published_at_iso": published,
+        "publication_time_precision": publication_precision,
         "updated_at_iso": updated,
         "event_at_iso": event_exact,
         "event_date": event_date,
@@ -231,7 +284,7 @@ def _classify(
     provisional = provisional.model_copy(update={"event_key": canonical_event_key(provisional)})
     matched = next((candidate for candidate in history if are_same_event(provisional, candidate)), None)
     first_seen = (_aware(matched.first_seen_at, cutoff) if matched is not None else crawl_at) or crawl_at
-    confidence = "HIGH" if publication_verified else "LOW"
+    confidence = "HIGH" if publication_precision == "EXACT" and publication_corroborated else "LOW"
     common = {
         "first_seen_at": first_seen,
         "confidence_level": confidence,
@@ -284,12 +337,12 @@ def _classify(
             **common,
             "freshness_status": "UPDATED",
             "freshness_reason": reason,
-            "confidence_level": "HIGH" if publication_verified else "LOW",
+            "confidence_level": confidence,
             "disclosure_label": _updated_disclosure_label(event_date, updated, cutoff),
         }), reason
 
-    if not publication_verified:
-        reason = "publication time cannot be verified; confidence lowered"
+    if published is None:
+        reason = "publication date cannot be verified; confidence lowered"
         return provisional.model_copy(update={
             **common, "freshness_status": "OLD", "freshness_reason": reason,
             "confidence_level": "LOW",
@@ -304,7 +357,11 @@ def _classify(
         return provisional.model_copy(update={
             **common, "freshness_status": "OLD", "freshness_reason": reason,
         }), reason
-    reason = "first discovery, original publication within 72 hours, not previously sent"
+    reason = (
+        "first discovery, original publication date within 72 hours at LOW confidence"
+        if confidence == "LOW"
+        else "first discovery, original publication within 72 hours, not previously sent"
+    )
     return provisional.model_copy(update={
         **common, "freshness_status": "NEW", "freshness_reason": reason,
     }), reason

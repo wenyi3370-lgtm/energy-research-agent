@@ -70,9 +70,11 @@ def prune_to_schema(value: Any, schema: dict[str, Any], *, path: str = "", defs:
 class HttpJsonModelGateway:
     """OpenAI-compatible structured gateway with no third-party runtime deps."""
 
-    def __init__(self, settings: Settings, *, timeout_seconds: int = 120) -> None:
+    def __init__(self, settings: Settings, *, timeout_seconds: int | None = None) -> None:
         self.settings = settings
-        self.timeout_seconds = timeout_seconds
+        self.timeout_seconds = timeout_seconds or max(5, int(settings.model_timeout_seconds))
+        self.max_attempts = max(1, min(3, int(settings.model_max_attempts)))
+        self.outbound_proxy = str(settings.outbound_proxy or "").strip() or None
 
     def health(self) -> dict[str, Any]:
         configured = {
@@ -85,6 +87,9 @@ class HttpJsonModelGateway:
             "fallback_provider": self.settings.fallback_provider,
             "configured": configured,
             "runtime": "http-json",
+            "timeout_seconds": self.timeout_seconds,
+            "max_attempts": self.max_attempts,
+            "proxy": "configured" if self.outbound_proxy else "direct",
         }
 
     def _provider_config(self, provider: str) -> tuple[str, str, str]:
@@ -109,10 +114,14 @@ class HttpJsonModelGateway:
             },
         )
         last_error: Exception | None = None
-        for attempt in range(3):
+        for attempt in range(self.max_attempts):
             start = time.perf_counter()
             try:
-                opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+                proxy_map = (
+                    {"http": self.outbound_proxy, "https": self.outbound_proxy}
+                    if self.outbound_proxy else {}
+                )
+                opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxy_map))
                 with opener.open(request, timeout=self.timeout_seconds) as response:
                     raw = response.read().decode("utf-8")
                 payload_out = json.loads(raw)
@@ -127,7 +136,7 @@ class HttpJsonModelGateway:
                 )
             except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError, OSError) as exc:
                 last_error = exc
-                if attempt < 2:
+                if attempt < self.max_attempts - 1:
                     time.sleep(2 * (attempt + 1))
         raise GatewayError(f"{provider} request failed: {type(last_error).__name__}: {last_error}")
 
@@ -140,6 +149,8 @@ class HttpJsonModelGateway:
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
+        if request.max_tokens is not None:
+            payload["max_tokens"] = request.max_tokens
         return payload
 
     def complete(self, request: ModelRequest) -> ModelResponse:

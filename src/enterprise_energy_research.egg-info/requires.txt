@@ -29,6 +29,7 @@ httpx<1,>=0.27
 pytest<9,>=8
 pytest-asyncio<1,>=0.23
 PyMuPDF<2,>=1.24
+playwright==1.60.0
 
 [models]
 litellm<2,>=1.40
@@ -42,3 +43,7 @@ PyMuPDF<2,>=1.24
 [test]
 pytest<9,>=8
 pytest-asyncio<1,>=0.23
+jsonschema<5,>=4.23
+
+[visual]
+playwright==1.60.0

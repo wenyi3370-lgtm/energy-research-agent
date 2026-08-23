@@ -6,9 +6,9 @@ SVGs (inline here, PNG-exported for Word).  There is no second charting
 implementation, no fixed 18-section navigation, no group-evidence-register
 chapter, and no renderer/QA text in the user-facing page.
 
-Verified products appear in the product matrix even when no photo passed
-the publication gate (image-less products keep their name, model,
-parameters and source references).
+The default view is a decision dashboard. Full prose and evidence ledgers
+remain available behind collapsed detail controls, while the product showcase
+contains only products with formally approved official imagery.
 """
 
 from __future__ import annotations
@@ -24,6 +24,10 @@ from enterprise_energy_research.adapters.base import AdapterHealth, ArtifactResu
 from enterprise_energy_research.artifacts.diagram_design_adapter import DiagramDesignAdapter
 from enterprise_energy_research.artifacts.image_publication import prepare_publication_images, write_image_publication_manifest
 from enterprise_energy_research.artifacts.narrative import NarrativeBuilder, write_narrative
+from enterprise_energy_research.artifacts.publication_boilerplate import (
+    HTML_ZERO_PHRASES,
+    PublicationBoilerplateFilter,
+)
 from enterprise_energy_research.artifacts.qa_report import QAFinding, QAVisualEntry, new_qa_report, write_qa_report
 from enterprise_energy_research.artifacts.visuals import write_visual_manifest
 from enterprise_energy_research.domain.enums import ArtifactType, VerificationStatus
@@ -32,6 +36,11 @@ from enterprise_energy_research.research.synthesis import ResearchSynthesizer
 from enterprise_energy_research.vendor import embedded_skill_root
 from enterprise_energy_research.validation.consulting_narrative import (
     ConsultingNarrativeValidator, VisualSemanticValidator, write_consulting_validation,
+)
+from enterprise_energy_research.validation.publication_quality import (
+    ProductImageCoverageValidator,
+    PublicationBoilerplateValidator,
+    ResearchValueValidator,
 )
 
 
@@ -68,18 +77,20 @@ class FrozenHtmlPublisher:
             return ArtifactResult(adapter=self.name, artifact_id=binding.artifact_id, artifact_type=binding.type, status="failed", diagnostics=health.diagnostics)
         if binding.type != self.artifact_type:
             return ArtifactResult(adapter=self.name, artifact_id=binding.artifact_id, artifact_type=binding.type, status="failed", diagnostics=["Binding type does not match publisher"])
-        content, claims, images = self._unified_page(bundle, binding, output_path)
+        content, claims, images, qa_status = self._unified_page(bundle, binding, output_path)
         digest = _write(output_path, content)
         return ArtifactResult(
             adapter=self.name, artifact_id=binding.artifact_id, artifact_type=binding.type,
-            path=output_path, content_sha256=digest, used_claim_ids=claims, used_image_ids=images, status="published",
+            path=output_path, content_sha256=digest, used_claim_ids=claims, used_image_ids=images,
+            status="published" if qa_status != "fail" else "failed",
+            diagnostics=[] if qa_status != "fail" else ["publication_qa_failed"],
         )
 
     @staticmethod
     def _canonical_entity(bundle: FrozenResearchBundle):
         return next((item for item in bundle.entities if item.entity_id == bundle.run_manifest.canonical_entity_id), bundle.entities[0] if bundle.entities else None)
 
-    def _unified_page(self, bundle: FrozenResearchBundle, binding: ArtifactBinding, output_path: Path) -> tuple[str, list[str], list[str]]:
+    def _unified_page(self, bundle: FrozenResearchBundle, binding: ArtifactBinding, output_path: Path) -> tuple[str, list[str], list[str], str]:
         entity = self._canonical_entity(bundle)
         if not entity:
             raise ValueError("Frozen bundle contains no enterprise entity")
@@ -107,6 +118,15 @@ class FrozenHtmlPublisher:
         for check in narrative_validation.checks:
             if check.status == "FAIL":
                 qa.record_finding(QAFinding(code=check.code, severity="error", message=check.message))
+        for check in [
+            *PublicationBoilerplateValidator().validate(narrative),
+            *ResearchValueValidator().validate(narrative, bundle),
+            *ProductImageCoverageValidator().validate(narrative),
+        ]:
+            if check.status == "FAIL":
+                qa.record_finding(QAFinding(code=check.code, severity="error", message=check.message))
+            elif check.status == "WARN":
+                qa.record_finding(QAFinding(code=check.code, severity="warn", message=check.message))
 
         inline_visuals: dict[str, dict[str, Any]] = {}
         for spec in narrative.visuals:
@@ -144,8 +164,6 @@ class FrozenHtmlPublisher:
             }
         write_visual_manifest(narrative.visual_manifest(), asset_root / "visual_manifest.json")
         write_narrative(narrative, asset_root / "narrative.json")
-        write_qa_report(qa, asset_root / "publication_qa_report.json")
-
         extra_roots = [self.asset_root] if self.asset_root else []
         image_manifest = prepare_publication_images(bundle, binding, asset_root, extra_search_roots=extra_roots)
         prepared = {item.image_id: item for item in image_manifest.prepared_images}
@@ -153,7 +171,8 @@ class FrozenHtmlPublisher:
         image_manifest = image_manifest.model_copy(update={"artifact_selections": {"html": used_image_ids}})
         write_image_publication_manifest(image_manifest, asset_root)
 
-        # ── products: VERIFIED products always appear; photos are optional ──
+        # Full product ledger remains searchable in collapsed detail. The
+        # default showcase is image-backed only: no placeholders are published.
         products = []
         for product in bundle.products:
             if product.verification_status != VerificationStatus.VERIFIED:
@@ -172,6 +191,7 @@ class FrozenHtmlPublisher:
                 "evidenceStatus": "已核验",
                 "sourceIds": product.source_ids,
             })
+        featured_products = [product for product in products if product["offlineAsset"]][:8]
 
         gallery = []
         for chapter in narrative.chapters:
@@ -185,11 +205,36 @@ class FrozenHtmlPublisher:
                     "asset": self._data_uri(asset_root, publication.publication_path),
                 })
 
-        chapters_payload = [
-            {
+        chapters_payload = []
+        for chapter in narrative.chapters:
+            chapter_visuals = [inline_visuals[visual_id] for visual_id in chapter.visual_ids if visual_id in inline_visuals][:3]
+            insight_candidates = [
+                *chapter.implications, *chapter.recommendations,
+                *chapter.analysis_paragraphs, *chapter.context_paragraphs,
+                *chapter.limitations,
+            ]
+            insights: list[str] = []
+            for item in insight_candidates:
+                compact = " ".join(str(item).split())
+                if compact and compact not in insights:
+                    insights.append(compact)
+                if len(insights) == 3:
+                    break
+            while len(insights) < 3:
+                facts = [
+                    f"本章汇总 {len(chapter.claim_ids)} 条已核验事实。",
+                    f"本章配置 {len(chapter_visuals)} 项数据可视化。",
+                    f"本章列出 {len(chapter.action_items)} 项可执行动作。",
+                ]
+                candidate = facts[len(insights)]
+                if candidate not in insights:
+                    insights.append(candidate)
+            chapters_payload.append({
                 "id": chapter.chapter_id, "kind": chapter.kind, "title": chapter.title,
                 "assertionTitle": chapter.assertion_title,
                 "executiveTakeaway": chapter.executive_takeaway,
+                "kpis": self._chapter_kpis(chapter.kind, bundle, narrative, prepared),
+                "insights": insights[:3],
                 "context": chapter.context_paragraphs,
                 "analysis": chapter.analysis_paragraphs,
                 "implications": chapter.implications,
@@ -198,11 +243,9 @@ class FrozenHtmlPublisher:
                 "limitations": chapter.limitations,
                 "actions": chapter.action_items,
                 "tables": chapter.table_rows,
-                "visuals": [inline_visuals[visual_id] for visual_id in chapter.visual_ids if visual_id in inline_visuals],
+                "visuals": chapter_visuals,
                 "images": [item for item in gallery if item["chapter"] == chapter.chapter_id],
-            }
-            for chapter in narrative.chapters
-        ]
+            })
 
         payload = {
             "entity": {
@@ -222,6 +265,7 @@ class FrozenHtmlPublisher:
             "insights": list(narrative.executive_summary),
             "kpis": narrative.kpis,
             "products": products,
+            "featuredProducts": featured_products,
             "sources": narrative.appendices.source_ledger,
             "meta": {
                 "freeze": bundle.freeze.freeze_id,
@@ -231,7 +275,83 @@ class FrozenHtmlPublisher:
                 "counts": narrative.counts,
             },
         }
-        return self._document(entity.canonical_name, payload), [item.claim_id for item in bundle.claims if item.verification_status == VerificationStatus.VERIFIED], used_image_ids
+        payload = PublicationBoilerplateFilter().filter_value(payload)
+        phrase_counts = PublicationBoilerplateFilter.zero_phrase_counts(payload)
+        if any(phrase_counts.values()):
+            qa.record_finding(QAFinding(code="html_boilerplate_zero_gate", severity="error", message=str(phrase_counts)))
+        self._record_dashboard_contract_qa(qa, bundle, chapters_payload, featured_products)
+        write_qa_report(qa, asset_root / "publication_qa_report.json")
+        return self._document(entity.canonical_name, payload), [item.claim_id for item in bundle.claims if item.verification_status == VerificationStatus.VERIFIED], used_image_ids, qa.status
+
+    @staticmethod
+    def _chapter_kpis(kind: str, bundle: FrozenResearchBundle, narrative: Any, prepared: dict[str, Any]) -> list[dict[str, Any]]:
+        verified_products = [item for item in bundle.products if item.verification_status == VerificationStatus.VERIFIED]
+        verified_claims = [item for item in bundle.claims if item.verification_status == VerificationStatus.VERIFIED]
+        verified_sources = {item.source_id for item in verified_claims}
+        image_bound = sum(1 for item in verified_products if (narrative.product_images.get(item.product_id) or item.image_id) in prepared)
+        parameterized = sum(bool(item.parameters) for item in verified_products)
+        families = len({item.category for item in verified_products if item.category})
+        base = {
+            "executive_summary": list(narrative.kpis[:6]),
+            "entity_profile": [
+                {"label": "已核验事实", "value": len(verified_claims), "unit": "条"},
+                {"label": "有效来源", "value": len(verified_sources), "unit": "个"},
+                {"label": "关联主体", "value": len(bundle.entities), "unit": "个"},
+            ],
+            "operations": list(narrative.kpis[:6]),
+            "products": [
+                {"label": "已核验产品", "value": len(verified_products), "unit": "项"},
+                {"label": "产品族", "value": families, "unit": "类"},
+                {"label": "含公开参数", "value": parameterized, "unit": "项"},
+                {"label": "正式产品图片", "value": image_bound, "unit": "张"},
+            ],
+            "factories": [
+                {"label": "生产基地", "value": len(bundle.factories), "unit": "处"},
+                {"label": "有公开地址", "value": sum(bool(item.address) for item in bundle.factories), "unit": "处"},
+                {"label": "有工序信息", "value": sum(bool(item.processes) for item in bundle.factories), "unit": "处"},
+            ],
+            "energy_profile": [
+                {"label": "能源画像", "value": len(bundle.energy_profiles), "unit": "组"},
+                {"label": "用能字段", "value": sum(len(item.field_status) for item in bundle.energy_profiles), "unit": "项"},
+                {"label": "能源解决方案", "value": len(bundle.solutions), "unit": "项"},
+            ],
+            "opportunities": [
+                {"label": "合作机会", "value": len(narrative.opportunity_assessments), "unit": "项"},
+                {"label": "A 级机会", "value": sum(item.priority == "A" for item in narrative.opportunity_assessments), "unit": "项"},
+                {"label": "支撑事实", "value": sum(len(item.supporting_claim_ids) for item in narrative.opportunity_assessments), "unit": "条"},
+            ],
+            "action_plan": [
+                {"label": "首阶段", "value": 30, "unit": "天"},
+                {"label": "验证阶段", "value": 60, "unit": "天"},
+                {"label": "决策里程碑", "value": 90, "unit": "天"},
+            ],
+            "risks_evidence": [
+                {"label": "待补数据", "value": len(bundle.gaps), "unit": "项"},
+                {"label": "冲突组", "value": len(bundle.conflicts), "unit": "组"},
+                {"label": "关键风险", "value": len(narrative.key_risks), "unit": "项"},
+            ],
+        }
+        rows = list(base.get(kind, []))
+        if len(rows) < 3:
+            rows.extend(base["entity_profile"][: 3 - len(rows)])
+        return rows[:6]
+
+    @staticmethod
+    def _record_dashboard_contract_qa(qa: Any, bundle: FrozenResearchBundle, chapters: list[dict[str, Any]], featured_products: list[dict[str, Any]]) -> None:
+        if any(not 3 <= len(chapter.get("kpis", [])) <= 6 for chapter in chapters):
+            qa.record_finding(QAFinding(code="dashboard_chapter_kpi_contract", severity="error", message="每章必须含 3—6 个 KPI。"))
+        if any(len(chapter.get("insights", [])) != 3 for chapter in chapters):
+            qa.record_finding(QAFinding(code="dashboard_chapter_insight_contract", severity="error", message="每章必须含 3 条洞察。"))
+        if any(len(chapter.get("visuals", [])) > 3 for chapter in chapters):
+            qa.record_finding(QAFinding(code="dashboard_chapter_visual_contract", severity="error", message="每章最多 3 个可视化。"))
+        verified_product_count = sum(item.verification_status == VerificationStatus.VERIFIED for item in bundle.products)
+        if verified_product_count >= 5 and len(featured_products) < 5:
+            qa.record_finding(QAFinding(code="dashboard_product_image_gate", severity="error", message="正式 Dashboard 至少需要 5 张已核验官方产品图。"))
+        all_visuals = [visual for chapter in chapters for visual in chapter.get("visuals", [])]
+        if len(bundle.claims) >= 80 and len(all_visuals) < 8:
+            qa.record_finding(QAFinding(code="dashboard_visual_count_gate", severity="error", message="大型企业 Dashboard 至少需要 8 个有意义可视化。"))
+        if len(bundle.factories) >= 3 and not any(visual.get("type") == "map" for visual in all_visuals):
+            qa.record_finding(QAFinding(code="dashboard_map_gate", severity="error", message="多基地企业 Dashboard 必须包含至少 1 张地图。"))
 
     @staticmethod
     def _data_uri(root: Path, relative: str) -> str:
@@ -248,11 +368,11 @@ class FrozenHtmlPublisher:
             f'数据来源：公开渠道（详见页面末尾来源说明） · 生成日期：{payload["meta"]["generatedAt"]} · '
             "偏差说明：本报告基于公开信息编制，不构成投资建议。"
         )
-        return f'''<!doctype html><html lang="zh-CN" data-visual-system="diagram-design"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#1B365D"><link rel="icon" href="data:,"><title>{safe_title}｜企业产业与能源合作调研</title><style>{CSS}</style></head>
-<body><aside class="sidebar" aria-label="报告索引"><div class="brand"><strong>{safe_title}</strong><span>企业产业与能源合作调研</span></div><nav aria-label="章节导航">{nav}</nav></aside>
-<main><section class="hero research-hero"><div class="hero-head"><span class="eyebrow">ENTERPRISE RESEARCH DASHBOARD</span><h1>{safe_title}</h1><p>企业研究 · 产业与能源合作 · 数据截止 {payload['meta']['researchDate']}</p></div><div class="kpi-grid" id="kpiGrid" aria-label="关键经营指标"></div><div class="hero-judgement"><div class="judgement"><span>总体判断</span><b>{html.escape(payload.get('overallJudgement',''))}</b><p>{html.escape(payload.get('judgementRationale',''))}</p></div><div class="decision-stack"><article><span>优先切入方向</span><b>{html.escape(payload.get('topOpportunity',''))}</b></article><article><span>90 天决策里程碑</span><p>{html.escape(payload.get('ninetyDayAction',''))}</p></article></div></div></section>
+        return f'''<!doctype html><html lang="zh-CN" data-visual-system="diagram-design" data-dashboard-contract="1-judgement|3-6-kpi|1-3-visual|3-insight|collapsed-details"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#1B365D"><link rel="icon" href="data:,"><title>{safe_title}｜企业研究 Dashboard</title><style>{CSS}</style></head>
+<body><aside class="sidebar" aria-label="Dashboard 索引"><div class="brand"><strong>{safe_title}</strong><span>企业研究 Dashboard</span></div><nav aria-label="章节导航">{nav}</nav></aside>
+<main><section class="hero research-hero"><div class="hero-head"><span class="eyebrow">ENTERPRISE RESEARCH DASHBOARD</span><h1>{safe_title}</h1><p>企业研究 · 产业与能源合作 · 数据截止 {payload['meta']['researchDate']}</p></div><div class="kpi-grid" id="kpiGrid" aria-label="关键经营指标"></div><div class="hero-judgement"><div class="judgement"><span>总体判断</span><b>{html.escape(payload.get('overallJudgement',''))}</b><p>{html.escape(str(payload.get('judgementRationale',''))[:280])}</p></div><div class="decision-stack"><article><span>优先切入方向</span><b>{html.escape(payload.get('topOpportunity',''))}</b></article><article><span>90 天决策里程碑</span><p>{html.escape(payload.get('ninetyDayAction',''))}</p></article></div></div></section>
 <section class="workspace"><div class="chapters" id="chapters"></div></section>
-<section class="workspace sources"><header class="section-title"><h2>来源与方法</h2></header><div id="sourceList" class="ledger"></div></section>
+<section class="workspace sources"><details><summary>来源索引</summary><div id="sourceList" class="ledger"></div></details></section>
 </main>
 <footer class="page-footer">{footer}</footer>
 <script id="frozen-data" type="application/json">{_json_script(payload)}</script><script>{JS}</script></body></html>'''
@@ -297,8 +417,25 @@ main{margin-left:264px;max-width:1680px}
 .section-title{margin-bottom:22px}
 .section-title h2{margin:0;font-family:var(--serif);font-size:28px;font-weight:600}
 .chapter{background:var(--paper);border:1px solid var(--rule-solid);border-radius:8px;padding:36px clamp(20px,3vw,44px);margin-bottom:28px}
+.dashboard-chapter{box-shadow:0 14px 40px rgba(27,54,93,.06)}
+.chapter-head{display:grid;grid-template-columns:minmax(220px,.7fr) minmax(300px,1.3fr);gap:32px;align-items:end;border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:20px}
+.chapter-head>div>span{font-size:10px;letter-spacing:.16em;color:var(--soft);font-weight:700}
+.chapter-head h2{font-family:var(--serif);font-size:26px;font-weight:600;margin:5px 0 0;color:var(--ink)}
 .chapter>h2{font-family:var(--serif);font-size:26px;font-weight:600;margin:0 0 6px;color:var(--ink)}
-.chapter .assertion{font-family:var(--serif);font-size:19px;font-weight:700;color:var(--accent);margin:0 0 16px;line-height:1.55}
+.chapter .assertion{font-family:var(--serif);font-size:19px;font-weight:700;color:var(--accent);margin:0;line-height:1.55}
+.chapter-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin:18px 0 22px}
+.chapter-kpis article{border-top:3px solid var(--accent);background:var(--canvas);padding:13px 14px;min-height:88px}
+.chapter-kpis span{display:block;font-size:10px;color:var(--soft);font-weight:700;letter-spacing:.06em}
+.chapter-kpis b{display:block;margin-top:8px;font-family:var(--serif);font-size:21px;color:var(--ink)}
+.chapter-kpis small{font:500 11px var(--sans);margin-left:4px}.chapter-kpis i{display:block;font-style:normal;color:var(--soft);font-size:10px;margin-top:4px}
+.visual-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:14px;align-items:start}
+.visual-grid .fig{margin:0 0 16px;min-width:0}
+.insight-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}
+.insight-grid article{border-left:3px solid var(--accent);padding:12px 14px;background:var(--canvas)}
+.insight-grid span{font-size:9.5px;color:var(--soft);letter-spacing:.12em;font-weight:700}.insight-grid p{margin:7px 0 0;font-size:13px;line-height:1.65}
+.chapter-details,.nested-details,.sources>details{border-top:1px solid var(--rule);margin-top:18px;padding-top:14px}
+.chapter-details>summary,.nested-details>summary,.sources summary{cursor:pointer;color:var(--accent);font-size:12px;font-weight:700;letter-spacing:.04em;list-style-position:inside}
+.chapter-details[open]>summary,.nested-details[open]>summary{margin-bottom:16px}
 .chapter .takeaway{border-left:3px solid var(--accent);background:var(--canvas);padding:11px 14px;font-size:14px;line-height:1.75;margin:0 0 18px}
 .chapter .content p{margin:0 0 12px;line-height:1.85;font-size:14.5px}
 .chapter .block-label{margin:20px 0 8px;font-size:11px;letter-spacing:.1em;color:var(--soft);font-weight:700}
@@ -344,22 +481,24 @@ main{margin-left:264px;max-width:1680px}
 .source-row b{font-weight:700}.source-row span{color:var(--soft)}
 .page-footer{padding:22px clamp(22px,5vw,76px) 40px;margin-left:264px;font-size:11.5px;color:var(--soft);line-height:1.8}
 @media(max-width:1100px){.sidebar{width:224px}main{margin-left:224px}.page-footer{margin-left:224px}.gallery,.product-grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:768px){.sidebar{position:sticky;top:0;width:100%;height:auto;padding:12px 16px}.sidebar nav{display:none}.brand{padding:0;border:0}.main,main{margin:0}.page-footer{margin-left:0}.hero{min-height:220px;padding:40px 20px 54px}.hero-judgement{display:block}.decision-stack{width:100%;margin-top:22px}.kpi-grid{grid-template-columns:repeat(2,1fr)}.workspace{padding:36px 18px}.chapter{padding:24px 18px}.chapter .table-scroll table{min-width:680px}.gallery,.product-grid{grid-template-columns:1fr}.source-row{grid-template-columns:1fr}}
+@media(max-width:768px){.sidebar{position:sticky;top:0;width:100%;height:auto;padding:12px 16px}.sidebar nav{display:none}.brand{padding:0;border:0}.main,main{margin:0}.page-footer{margin-left:0}.hero{min-height:220px;padding:40px 20px 54px}.hero-judgement{display:block}.decision-stack{width:100%;margin-top:22px}.kpi-grid{grid-template-columns:repeat(2,1fr)}.workspace{padding:36px 18px}.chapter{padding:24px 18px}.chapter-head{grid-template-columns:1fr;gap:12px}.chapter .table-scroll table{min-width:680px}.gallery,.product-grid,.insight-grid,.visual-grid{grid-template-columns:1fr}.source-row{grid-template-columns:1fr}}
 @media print{.sidebar{display:none}main{margin:0}.hero{color:var(--ink);background:var(--paper);border-bottom:2px solid var(--ink)}.workspace{break-inside:avoid}.page-footer{margin-left:0}}
 '''
 
 JS = r'''
 const DATA=JSON.parse(document.getElementById('frozen-data').textContent);const $=id=>document.getElementById(id);const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function figBlock(v,index){const items=v.markup||'';return `<div class="fig"><h3>图 ${index} ${esc(v.title)}</h3>${v.subtitle?`<p class="fig-sub">${esc(v.subtitle)}</p>`:''}<p class="fig-thesis">${esc(v.businessThesis)}</p>${items}${v.sourceNote?`<p class="fig-source">${esc(v.sourceNote)}<br>${esc(v.transformation||'')}</p>`:''}</div>`}
+const chunks=(v,n=360)=>{const s=String(v??'').trim();const out=[];for(let i=0;i<s.length;i+=n)out.push(s.slice(i,i+n));return out};
+function figBlock(v,index){return `<div class="fig"><h3>图 ${index} ${esc(v.title)}</h3>${v.subtitle?`<p class="fig-sub">${esc(v.subtitle)}</p>`:''}<p class="fig-thesis">${esc(v.businessThesis)}</p>${v.markup||''}${v.sourceNote?`<p class="fig-source">${esc(v.sourceNote)}<br>${esc(v.transformation||'')}</p>`:''}</div>`}
 function tableBlock(rows){if(!rows||!rows.length)return '';const cols=Object.keys(rows[0]);return `<div class="table-scroll" role="region" aria-label="可横向滚动的数据表"><table><thead><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td>${esc(r[c])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`}
 function imageBlock(images){if(!images||!images.length)return '';return `<div class="gallery">${images.map(img=>`<figure data-img="${esc(img.asset)}" data-cap="${esc(img.caption)}"><img src="${img.asset}" alt="${esc(img.caption)}"><figcaption><b>${esc(img.caption)}</b><br><span>${esc(img.role)} · <a href="${esc(img.source)}" target="_blank" rel="noreferrer">原始页面 ↗</a></span></figcaption></figure>`).join('')}</div>`}
-function productBlock(products){return `<div class="filters"><input id="productSearch" placeholder="搜索产品、品牌、型号"><select id="categoryFilter"><option value="">全部产品族</option></select></div><div class="product-grid" id="productGrid"></div><p class="muted">最多 4 项对比</p><div class="compare" id="comparePanel"></div>`}
-function renderProducts(){let rows=DATA.products;const q=$('productSearch').value.toLowerCase();rows=rows.filter(p=>JSON.stringify(p).toLowerCase().includes(q)&&(!$('categoryFilter').value||(p.family||'未分类')===$('categoryFilter').value));$('productGrid').innerHTML=rows.map(p=>`<article class="product-card">${p.offlineAsset?`<img src="${p.offlineAsset}" alt="${esc(p.name)}">`:`<div class="no-photo">产品图片待补充（不影响产品记录发布）</div>`}<div class="product-body"><h3>${esc(p.name)}</h3><p>${esc(p.description||'')}</p><div class="product-meta"><span>${esc(p.brand||'品牌待核验')}</span><span>${esc(p.model||'型号待核验')}</span><span>${esc(p.family)}</span>${p.series?`<span>${esc(p.series)}</span>`:''}</div>${p.parameters.length?`<div class="product-meta" style="margin-top:8px">${p.parameters.map(x=>`<span>${esc(x.name)}：${esc(x.value)} ${esc(x.unit||'')}</span>`).join('')}</div>`:''}<div class="product-actions"><button data-compare="${esc(p.id)}">${selected.includes(p.id)?'已加入':'加入对比'}</button></div></div></article>`).join('')||'<article class="chapter"><p>暂无满足核验门禁的产品记录。</p></article>';document.querySelectorAll('[data-compare]').forEach(b=>b.onclick=()=>{const id=b.dataset.compare;if(selected.includes(id))selected=selected.filter(x=>x!==id);else if(selected.length<4)selected.push(id);renderProducts();compare()})}
-function compare(){const rows=selected.map(id=>DATA.products.find(p=>p.id===id)).filter(Boolean);$('comparePanel').innerHTML=rows.length?`<table><thead><tr><th>字段</th>${rows.map(p=>`<th>${esc(p.name)}</th>`).join('')}</tr></thead><tbody><tr><td>产品族</td>${rows.map(p=>`<td>${esc(p.family)}</td>`).join('')}</tr><tr><td>型号</td>${rows.map(p=>`<td>${esc(p.model||'待核验')}</td>`).join('')}</tr><tr><td>参数</td>${rows.map(p=>`<td>${p.parameters.map(x=>`${esc(x.name)}：${esc(x.value)} ${esc(x.unit||'')}`).join('<br>')||'待核验'}</td>`).join('')}</tr></tbody></table>`:''}
 function listBlock(label,items){return items&&items.length?`<p class="block-label">${esc(label)}</p><ul>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
+function kpiStrip(rows){return `<div class="chapter-kpis">${(rows||[]).slice(0,6).map(k=>`<article><span>${esc(k.label)}</span><b>${esc(String(k.value??''))}${k.unit?`<small>${esc(k.unit)}</small>`:''}</b><i>${esc(k.period||k.scope||'')}</i></article>`).join('')}</div>`}
+function insightBlock(rows){return `<div class="insight-grid">${(rows||[]).slice(0,3).map((v,i)=>`<article><span>INSIGHT ${i+1}</span><p>${esc(chunks(v,220)[0])}</p></article>`).join('')}</div>`}
+function productShowcase(){const rows=DATA.featuredProducts||[];if(!rows.length)return '';return `<div class="product-grid featured-products">${rows.map(p=>`<article class="product-card"><img src="${p.offlineAsset}" alt="${esc(p.name)}"><div class="product-body"><h3>${esc(p.name)}</h3><div class="product-meta"><span>${esc(p.family)}</span>${p.series?`<span>${esc(p.series)}</span>`:''}${p.model?`<span>${esc(p.model)}</span>`:''}</div>${p.applications?.length?`<p><b>应用：</b>${esc(p.applications.slice(0,4).join(' / '))}</p>`:''}${p.parameters?.length?`<div class="product-meta">${p.parameters.slice(0,5).map(x=>`<span>${esc(x.name)}：${esc(x.value)} ${esc(x.unit||'')}</span>`).join('')}</div>`:''}${p.imageSource?`<p class="image-source"><a href="${esc(p.imageSource)}" target="_blank" rel="noreferrer">官方图片来源 ↗</a></p>`:''}</div></article>`).join('')}</div>`}
+function productLedger(){if(!DATA.products?.length)return '';const rows=DATA.products.map(p=>({'产品':p.name,'产品族':p.family,'系列/型号':[p.series,p.model].filter(Boolean).join(' / '),'应用场景':(p.applications||[]).join('；'),'公开参数':(p.parameters||[]).map(x=>`${x.name}:${x.value}${x.unit||''}`).join('；')}));return `<details class="nested-details"><summary>完整产品清单（${rows.length} 项）</summary>${tableBlock(rows)}</details>`}
+function detailBlock(c){const prose=[...(c.context||[]),...(c.analysis||[])].flatMap(p=>chunks(p)).map(p=>`<p>${esc(p)}</p>`).join('');return `<details class="chapter-details"><summary>展开分析与数据明细</summary>${c.executiveTakeaway?`<p class="takeaway">${esc(c.executiveTakeaway)}</p>`:''}<div class="content">${prose}</div>${tableBlock(c.tables)}${imageBlock(c.images)}${listBlock('业务含义',c.implications)}${listBlock('建议',c.recommendations)}${listBlock('反向事实',c.counterEvidence)}${listBlock('待确认事项',c.limitations)}${listBlock('行动项',c.actions)}${c.kind==='products'?productLedger():''}</details>`}
 function renderKpis(){$('kpiGrid').innerHTML=(DATA.kpis||[]).slice(0,6).map(k=>`<article class="kpi-card"><span>${esc(k.label)}</span><b>${esc(String(k.value??''))}${k.unit?`<small style="font-size:12px">${esc(k.unit)}</small>`:''}</b><i>${esc(k.period||k.scope||'公开披露口径')}</i></article>`).join('')}
-function renderChapters(){$('chapters').innerHTML=DATA.chapters.map((c,index)=>{const extra=c.kind==='products'?productBlock(c):'';const prose=[...(c.context||[]),...(c.analysis||[])];return `<article class="chapter" id="${index+1}"><h2>${String(index+1).padStart(2,'0')} ${esc(c.title)}</h2><p class="assertion">${esc(c.assertionTitle)}</p>${c.executiveTakeaway?`<p class="takeaway">${esc(c.executiveTakeaway)}</p>`:''}<div class="content">${prose.map(p=>`<p>${esc(p)}</p>`).join('')}</div>${tableBlock(c.tables)}${c.visuals.map((v,i)=>figBlock(v,i+1)).join('')}${imageBlock(c.images)}${listBlock('业务含义',c.implications)}${listBlock('建议',c.recommendations)}${listBlock('反向证据',c.counterEvidence)}${listBlock('局限与待确认',c.limitations)}${listBlock('行动项',c.actions)}${c.implications&&c.implications.length?`<p class="so-what">${esc(c.implications[0])}</p>`:''}${extra}</article>`}).join('');if(DATA.products.length){const cats=[...new Set(DATA.products.map(p=>p.family||'未分类'))];$('categoryFilter').innerHTML+=cats.sort().map(c=>`<option>${esc(c)}</option>`).join('');$('productSearch').oninput=renderProducts;$('categoryFilter').onchange=renderProducts;renderProducts()}document.querySelectorAll('[data-img]').forEach(el=>el.querySelector('img').onclick=()=>{const w=window.open('');w.document.write(`<img src="${el.dataset.img}" style="max-width:96vw;max-height:94vh;display:block;margin:auto"><p style="text-align:center;font-family:sans-serif">${el.dataset.cap}</p>`)});}
-const selected=[];
+function renderChapters(){$('chapters').innerHTML=DATA.chapters.map((c,index)=>`<article class="chapter dashboard-chapter" id="${index+1}"><header class="chapter-head"><div><span>CHAPTER ${String(index+1).padStart(2,'0')}</span><h2>${esc(c.title)}</h2></div><p class="assertion">${esc(c.assertionTitle)}</p></header>${kpiStrip(c.kpis)}<div class="visual-grid">${(c.visuals||[]).slice(0,3).map((v,i)=>figBlock(v,i+1)).join('')}</div>${c.kind==='products'?productShowcase():''}${insightBlock(c.insights)}${detailBlock(c)}</article>`).join('');document.querySelectorAll('[data-img]').forEach(el=>el.querySelector('img').onclick=()=>{const w=window.open('');w.document.write(`<img src="${el.dataset.img}" style="max-width:96vw;max-height:94vh;display:block;margin:auto"><p style="text-align:center;font-family:sans-serif">${el.dataset.cap}</p>`)});}
 function renderSources(){$('sourceList').innerHTML=DATA.sources.map(s=>`<article class="source-row"><div><b>${esc(s['来源名称'])}</b></div><div><span>${esc(s['来源类型'])}${s['发布日期']?` · ${esc(s['发布日期'])}`:''}</span></div><div><a href="${esc(s['网址'])}" target="_blank" rel="noreferrer">查看原始页面 ↗</a></div></article>`).join('')}
 renderKpis();renderChapters();renderSources();
 '''

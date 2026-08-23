@@ -98,7 +98,7 @@ class Phase4OfficeTests(unittest.TestCase):
             self.assertGreaterEqual(document_xml.count("<w:drawing>"), len(png_visuals))
             for item in payload["visuals"]:
                 self.assertIn(item["visual_type"], {
-                    "line", "bar", "radar", "quadrant", "scatter", "treemap", "timeline",
+                    "line", "area", "dual_axis", "bar", "radar", "quadrant", "scatter", "bubble", "treemap", "map", "heatmap", "network", "timeline",
                     "process", "data_flow", "sankey", "gantt", "pyramid", "tree",
                     "fishbone", "architecture", "journey", "kpi_cards", "table",
                 })
@@ -111,7 +111,14 @@ class Phase4OfficeTests(unittest.TestCase):
             self.assertTrue(qa_path.is_file())
             qa = json.loads(qa_path.read_text(encoding="utf-8"))
             self.assertEqual(qa["freeze_id"], bundle.freeze.freeze_id)
-            self.assertNotIn("QA", document_xml)
+            # Check user-visible content, not arbitrary XML substrings.  A random
+            # sortable ID can legitimately contain the two letters "QA".
+            visible_text = "\n".join(
+                paragraph.text for paragraph in report.paragraphs if paragraph.text
+            )
+            self.assertNotIn("publication_qa_report", visible_text)
+            self.assertNotIn("内部 QA", visible_text)
+            self.assertNotIn("QA finding", visible_text)
             # narrative artifact drives the document
             self.assertTrue((asset_root / "narrative.json").is_file())
 

@@ -93,13 +93,19 @@ class Phase3AdapterTests(unittest.TestCase):
             def read():
                 return b'{"ok":true,"data":{"title":"example"}}'
 
-        original = __import__("urllib.request", fromlist=["urlopen"]).urlopen
-        module = __import__("urllib.request", fromlist=["urlopen"])
-        module.urlopen = lambda *_args, **_kwargs: Response()
+        module = __import__("urllib.request", fromlist=["build_opener"])
+        original = module.build_opener
+
+        class Opener:
+            @staticmethod
+            def open(*_args, **_kwargs):
+                return Response()
+
+        module.build_opener = lambda *_args, **_kwargs: Opener()
         try:
             result = KimiWebBridgeSearchAdapter("fixture")._command("snapshot", {})
         finally:
-            module.urlopen = original
+            module.build_opener = original
         self.assertEqual(result, {"title": "example"})
 
 

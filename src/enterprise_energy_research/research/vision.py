@@ -50,7 +50,11 @@ def _load_gateway_config() -> dict[str, Any] | None:
     endpoint = os.getenv("ENTERPRISE_VISION_ENDPOINT")
     key = os.getenv("ENTERPRISE_VISION_KEY")
     if endpoint:
-        return {"endpoint": endpoint, "key": key or "", "model": os.getenv("ENTERPRISE_VISION_MODEL", "deepseek-v4-flash-vision-exp")}
+        return {
+            "endpoint": endpoint, "key": key or "",
+            "model": os.getenv("ENTERPRISE_VISION_MODEL", "deepseek-v4-flash-vision-exp"),
+            "proxy": os.getenv("EER_OUTBOUND_PROXY") or None,
+        }
     # 2) config/vision_gateway.yaml
     for parent in Path(__file__).resolve().parents:
         config = parent / "config" / "vision_gateway.yaml"
@@ -72,12 +76,14 @@ def _load_gateway_config() -> dict[str, Any] | None:
                 "endpoint": settings.deepseek_api_base.rstrip("/"),
                 "key": settings.deepseek_api_key,
                 "model": settings.deepseek_vision_model or "deepseek-v4-flash-vision-exp",
+                "proxy": settings.outbound_proxy,
             }
         if provider in {"auto", "openai"} and settings.openai_api_key:
             return {
                 "endpoint": (settings.openai_api_base or "https://api.openai.com/v1").rstrip("/"),
                 "key": settings.openai_api_key,
                 "model": settings.openai_vision_model or "gpt-4o-mini",
+                "proxy": settings.outbound_proxy,
             }
     except Exception:  # noqa: BLE001 - settings unavailable → no vision gateway
         return None
@@ -91,6 +97,10 @@ class GatewayVisionVerifier:
         self.endpoint = str(config["endpoint"]).rstrip("/")
         self.key = str(config.get("key", ""))
         self.model = str(config.get("model", "gpt-4o-mini"))
+        self.proxy = str(config.get("proxy") or "").strip() or None
+        self.timeout_seconds = max(
+            10, min(45, int(os.getenv("EER_VISION_TIMEOUT_SECONDS", "30")))
+        )
 
     def __call__(self, image: ImageEvidence, image_bytes: bytes | None) -> VisionVerdict | None:
         if image_bytes is None:
@@ -129,7 +139,9 @@ class GatewayVisionVerifier:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=60) as response:
+            proxy_map = {"http": self.proxy, "https": self.proxy} if self.proxy else {}
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxy_map))
+            with opener.open(request, timeout=self.timeout_seconds) as response:
                 body = json.loads(response.read().decode("utf-8"))
         except Exception:
             return None

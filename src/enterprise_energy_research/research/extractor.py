@@ -116,6 +116,7 @@ class EvidenceExtractor:
                     messages=[{"role": "user", "content": prompt}],
                     response_model=ExtractedEvidenceBatch,
                     temperature=0.0,
+                    max_tokens=6000,
                     metadata={
                         "query_id": result.query_id,
                         "adapter": result.adapter,

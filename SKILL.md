@@ -15,8 +15,8 @@ Build every run around one rule: research produces evidence, validation freezes 
 4. Read [references/embedded-skills.md](references/embedded-skills.md) before invoking research or artifact adapters. Treat the bundled upstream instructions and quality gates as authoritative for their capability domain.
 5. Use [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) to determine the current delivery phase. Do not cross a phase gate without the required validation evidence.
 6. Read [references/migrated-quality-gates.md](references/migrated-quality-gates.md) before live collection or formal Word/PPT publication. Its three-round saturation, report-depth and visual-registration rules are release gates.
-7. Read [references/office-visual-production.md](references/office-visual-production.md) before any formal Word/PPT build. Its SEVC-adapted `kami-broker-v2` typography, three-line tables, chart variety, per-slide contract, geometry checks and render artifacts are blocking requirements.
-8. Read [references/v0.9-quality-contract.md](references/v0.9-quality-contract.md) before live research or formal release. Read [references/reference_visual_benchmark.md](references/reference_visual_benchmark.md) before Word or unified HTML layout work.
+7. Read [docs/archive/office-visual-production.md](docs/archive/office-visual-production.md) before any formal Word/PPT build. Its typography, three-line tables, chart variety, per-slide contract, geometry checks and render artifacts are blocking requirements.
+8. Read [references/fifth-round-quality-contract.md](references/fifth-round-quality-contract.md) before live research or formal release. It supersedes the archived v0.9 length-first contract. Read [references/reference_visual_benchmark.md](references/reference_visual_benchmark.md) before Word or unified HTML layout work.
 
 ## Enforce the workflow contract
 
@@ -72,8 +72,12 @@ Unless the user explicitly requests a concise report, Word is a 15,000–30,000 
 - `research/research_analysis.py` (ResearchAnalysisEngine) answers the objective questions first: business scale and trend (YoY/CAGR/margin from real multi-year series), product families and key parameters, manufacturing geography, and the strict split between a company's OWN energy data and its energy PRODUCT capability. Missing data produces nothing — no padded prose.
 - `research/publication_relevance.py` (PublicationRelevanceFilter) scores every verified claim (semantic relevance, metric completeness, source quality, period/scope completeness, visualization and decision value) and its Junk/Fragment Guard keeps phone numbers, marketing counters, isolated `+`/percent values and page-UI numbers OUT of the body — they stay in the internal evidence store with reasons.
 - `research/data_coverage.py` (ResearchDataCoverageValidator) states the per-company-type data contract (listed companies: ≥3 comparable years of revenue/profit, margins, R&D, segments, market position, product parameters, factory list, product images) and drives the R4 targeted-retry round (annual reports, exchange filings, official product pages) instead of prose fill-in.
+- Formal HTML is an Enterprise Research Dashboard: one judgement, 3–6 KPIs, 1–3 visuals and three insights per chapter, with detail collapsed by default. Hero KPIs are capped at six.
+- `PublicationBoilerplateFilter` runs on publication DTOs. The fifth-round HTML zero-tolerance phrases must remain absent from the full offline artifact, including embedded JSON.
+- When at least five verified products exist, Word and HTML require at least five distinct pixel-verified official product images; no placeholder product cards are allowed.
+- Error-level publisher QA is fail-closed: a Word/HTML result marked `failed` blocks the production run from reporting completion.
 - `artifacts/visual_opportunity.py` (VisualOpportunityPlanner) proposes figures from the structured research dataset BEFORE narrative assembly; the Visual Router still owns the final visual type. No data -> no proposal -> QA records `missing_high_value_research_data`.
-- `research/product_images.py` (ProductImageResolver) binds verified product photos to products (product.image_id -> verified image by product_id -> verified official image by name match -> no photo). Word shows 4–8 key products with photo+name+parameters; the full matrix is an appendix.
+- `research/product_images.py` (ProductImageResolver) binds verified product photos to products only by exact product identity (`product.image_id` or `image.product_id == product.product_id`, with `target_entity_id` equal to that product ID). Name/category/random fallbacks are forbidden. Word shows 4–8 key products with photo+name+parameters; the full matrix is an appendix.
 - The executive summary is data-first (what the company is, key financial facts, industry/technology capability, cooperation basis, opportunities/limits, final recommendation; 800–1500 CJK chars). Word TOC entries are one LEFT-aligned paragraph each with a real right dot-leader tab (TOC 1/2/3 styles, never Normal/JUSTIFY); "So What：" labels never render.
 - QA additions (`validation/publication_quality.py`): PublicationBoilerplateValidator (the self-referential phrase list must be zero), ParagraphSimilarityValidator (skeleton similarity > 0.80 -> boilerplate_duplicate), ResearchValueValidator (boilerplate_sentence_ratio < 15%, enterprise-specific ratio > 60%, meaningful_visual_count target, visual-density warning), ProductImageCoverageValidator. Regression contract: tests/test_p0_third_round.py (TEST 1–25).
 
@@ -91,6 +95,17 @@ These pitfalls each cost a full debug cycle in production; the fixes below are i
 - **No future periods in annual series** — `ResearchAnalysisEngine._series` drops claims whose period_end is in the future and text-year claims for the current year without explicit full-year periods (mislabeled H1 figures).
 - **Unit normalization** — 千元/万元/亿元 scale to 元 inside `_series`; 11-digit integers are never phone numbers (`PHONE_RE` requires separators).
 - **Continue deep research** — `POST /api/v1/research/{run_id}/deep-research` runs `research/deep_retry.py`: user requirement clauses → `planner.requirement_queries` (longest-keyword topic routing) + coverage-gap queries + official-image recovery → revalidate → new freeze → republish Word/HTML/Excel. The portal button ③「继续深度研究」drives it.
+
+## Portable fifth-round incident fixes
+
+These fixes are part of the Skill source and regression suite, not local-run patches:
+
+- Direct outbound access is the default. `EER_OUTBOUND_PROXY` is an opt-in process-local fallback (for example `http://127.0.0.1:7897`); Kimi loopback control always bypasses outbound proxies. Model, browser and image calls have bounded timeouts and attempts.
+- Image discovery de-duplicates URLs, caps pages/candidates, reserves product diversity and uses bounded concurrent download/vision workers. The resolved canonical entity ID is passed explicitly; list position must never choose image ownership.
+- Official page hostnames are normalized with URL parsing. Product images require exact product-ID binding plus pixel verification. Shared catalog pages carry no page-level product ID; their images bind only when the image card/DOM context names one verified product.
+- The normal production path and `research/deep_retry.py` reuse the same image handoff. One-off recovery scripts may orchestrate a run but must not contain a looser second binding implementation.
+- Every Word paragraph containing an inline image overrides the fixed body leading with automatic single-line spacing. Portrait tables compact prose-heavy schemas to at most four columns; full ledgers remain in appendices.
+- Release on another computer requires `python scripts/vendor_skills.py verify`, the full pytest suite, a source scan with no machine-specific absolute paths, and rendered Word inspection. See `references/fifth-round-quality-contract.md`.
 
 ## Decision synthesis and consulting narrative contract (P0)
 

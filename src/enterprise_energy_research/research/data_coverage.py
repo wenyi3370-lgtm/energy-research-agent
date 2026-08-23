@@ -57,10 +57,10 @@ class ResearchDataCoverageValidator:
     FINANCIAL_REQUIREMENTS = [
         ("revenue", "营业收入", "high", 3),
         ("profit", "归母净利润", "high", 3),
-        ("gross_margin", "毛利率", "medium", 2),
-        ("rnd_expense", "研发投入", "medium", 1),
+        ("gross_margin", "毛利率", "medium", 3),
+        ("rnd_expense", "研发投入", "high", 3),
         ("rnd_expense_ratio", "研发费用率", "medium", 1),
-        ("operating_cash_flow", "经营活动现金流", "low", 1),
+        ("operating_cash_flow", "经营活动现金流", "medium", 3),
     ]
     SEGMENT_FIELDS = (
         "battery_revenue", "storage_revenue", "material_revenue",
@@ -153,6 +153,40 @@ class ResearchDataCoverageValidator:
                     severity="high",
                     retry_hint="生产基地 工厂 厂区 地址 产能布局",
                 ))
+        else:
+            located = [factory for factory in factories if getattr(factory, "address", None)]
+            if len(located) < min(3, len(factories)):
+                gaps.append(CoverageGap(
+                    gap_code="coverage-factory-regions", field_name="factory_regions",
+                    description="生产基地缺少可用于区域布局分析的地点信息",
+                    requirement=f"≥ {min(3, len(factories))} 处基地具有地区/地址",
+                    found=f"现有 {len(located)} 处",
+                    severity="medium",
+                    retry_hint="全球生产基地 区域布局 工厂 地址 海外基地 官方",
+                ))
+            with_process = [factory for factory in factories if getattr(factory, "processes", None)]
+            if not with_process:
+                gaps.append(CoverageGap(
+                    gap_code="coverage-factory-products", field_name="factory_products",
+                    description="基地与产品/工艺之间尚未形成结构化映射",
+                    requirement="≥ 1 处基地披露产品或主要工艺",
+                    found="无",
+                    severity="medium",
+                    retry_hint="生产基地 主要产品 生产线 工艺 产能 官方",
+                ))
+            capacity_rows = [
+                row for field in ("capacity", "production_capacity", "battery_production_capacity")
+                for row in by_field.get(field, [])
+            ]
+            if not capacity_rows:
+                gaps.append(CoverageGap(
+                    gap_code="coverage-factory-capacity", field_name="factory_capacity",
+                    description="制造布局缺少可核验的产能口径",
+                    requirement="≥ 1 条带单位、期间或范围的产能数据",
+                    found="无",
+                    severity="medium",
+                    retry_hint="生产基地 产能 GWh 年产能 项目环评 官方公告",
+                ))
 
         parameterized = [
             product for product in products
@@ -172,16 +206,44 @@ class ResearchDataCoverageValidator:
         product_images = [
             image for image in (images or [])
             if getattr(image, "product_id", None) is not None
+            and getattr(image, "target_entity_type", None) == "product"
+            and getattr(image, "target_entity_id", None) == getattr(image, "product_id", None)
             and image.verification_status == VerificationStatus.VERIFIED
+            and getattr(image, "visual_verified", False)
         ]
-        if len(verified_products) >= 5 and not product_images:
+        required_product_images = min(5, len(verified_products))
+        bound_product_ids = {
+            getattr(image, "product_id", None)
+            for image in product_images
+        }
+        if required_product_images and len(bound_product_ids) < required_product_images:
             gaps.append(CoverageGap(
                 gap_code="coverage-product-images", field_name="product_images",
-                description="已核验产品 ≥5 项但缺少绑定产品的合格图片",
-                requirement="≥ 1 张 product_id 绑定且视觉核验通过的图片",
-                found=f"现有 {len(product_images)} 张",
+                description="重点产品的官网图片覆盖不足",
+                requirement=f"≥ {required_product_images} 个不同产品具有 product_id 绑定且视觉核验通过的图片",
+                found=f"现有 {len(bound_product_ids)} 个产品（{len(product_images)} 张图片）",
                 severity="high",
-                retry_hint="官网产品页 产品图片 产品中心 高清图",
+                retry_hint="官网 产品中心 产品详情 官方手册 产品图片 高清图",
+            ))
+
+        own_energy_fields = {
+            "electricity_consumption", "energy_consumption", "power_demand", "peak_load",
+            "peak_demand", "electricity_cost", "load_curve", "renewable_share",
+        }
+        energy_capability_fields = {
+            "storage_capacity", "storage_power", "pv_capacity", "energy_project",
+            "carbon_project", "technology", "product_family",
+        }
+        own_energy_rows = [row for field in own_energy_fields for row in by_field.get(field, [])]
+        capability_rows = [row for field in energy_capability_fields for row in by_field.get(field, [])]
+        if capability_rows and not own_energy_rows:
+            gaps.append(CoverageGap(
+                gap_code="coverage-own-energy", field_name="own_energy_metrics",
+                description="已识别能源产品/项目能力，但缺少企业自身能源消费数据",
+                requirement="企业自身用电量、负荷、电价或可再生能源占比至少 1 项；不得以产品容量替代",
+                found="企业能源能力与企业能源消费尚未形成双口径数据",
+                severity="medium",
+                retry_hint="可持续发展报告 用电量 能源消耗 绿电比例 峰值负荷 电费",
             ))
 
         return CoverageAudit(

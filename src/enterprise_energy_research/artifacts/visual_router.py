@@ -74,12 +74,16 @@ class RouteCheck(BaseModel):
 # ── Semantic pattern → candidate visual types (first candidate that passes
 #    the data-sufficiency checks wins; order matters only for ties).
 RULES: dict[SemanticPattern, list[VisualType]] = {
-    "time_series": ["line"],
+    "time_series": ["area", "line"],
+    "dual_metric_time_series": ["dual_axis"],
     "category_comparison": ["bar"],
     "multi_dimension_score": ["radar"],
     "opportunity_priority": ["quadrant"],
-    "two_metric_distribution": ["scatter"],
+    "two_metric_distribution": ["bubble", "scatter"],
     "part_to_whole": ["treemap"],
+    "spatial_distribution": ["map"],
+    "matrix_heatmap": ["heatmap"],
+    "network_relationship": ["network"],
     "technology_evolution": ["timeline"],
     "operational_process": ["process"],
     "value_flow": ["sankey"],
@@ -109,11 +113,15 @@ ANTI_ABUSE_RULES: tuple[str, ...] = (
 # Chinese labels used when the narrative needs to name a pattern for a human.
 SEMANTIC_LABELS: dict[SemanticPattern, str] = {
     "time_series": "时间趋势",
+    "dual_metric_time_series": "双指标趋势",
     "category_comparison": "分类对比",
     "multi_dimension_score": "多维评分",
     "opportunity_priority": "机会优先级",
     "two_metric_distribution": "双指标分布",
     "part_to_whole": "构成占比",
+    "spatial_distribution": "空间分布",
+    "matrix_heatmap": "矩阵热力",
+    "network_relationship": "关系网络",
     "technology_evolution": "技术演进",
     "operational_process": "业务流程",
     "value_flow": "价值流向",
@@ -144,6 +152,37 @@ def _check_line(items: list[VisualDatum], nodes: list[VisualNode], stages: list[
         reasons.append("数值数据点不足 2 个")
     if len(_periods(items)) < 2:
         reasons.append("不构成真实时间序列（少于 2 个不同 period）")
+    return not reasons, reasons
+
+
+def _check_dual_axis(items: list[VisualDatum], *_: Any) -> tuple[bool, list[str]]:
+    reasons: list[str] = []
+    series = {item.series for item in items if item.series and isinstance(item.value, (int, float))}
+    if len(series) != 2:
+        reasons.append("双轴图必须且只能包含 2 个真实数值序列")
+    if len(_periods(items)) < 2:
+        reasons.append("双轴图少于 2 个共同期间")
+    return not reasons, reasons
+
+
+def _check_map(items: list[VisualDatum], *_: Any) -> tuple[bool, list[str]]:
+    points = [item for item in items if isinstance(item.x, (int, float)) and isinstance(item.y, (int, float))]
+    return (bool(points), [] if points else ["地图缺少可定位的经纬度或行政区中心点"])
+
+
+def _check_heatmap(items: list[VisualDatum], *_: Any) -> tuple[bool, list[str]]:
+    cells = [item for item in items if isinstance(item.x, (int, float)) and isinstance(item.y, (int, float)) and isinstance(item.value, (int, float))]
+    return (len(cells) >= 3, [] if len(cells) >= 3 else ["热力矩阵有效单元不足 3 个"])
+
+
+def _check_network(items: list[VisualDatum], nodes: list[VisualNode], stages: list[VisualStage], axes: dict[str, Any]) -> tuple[bool, list[str]]:
+    node_ids = {node.id for node in nodes}
+    edges = [stage for stage in stages if stage.from_label in node_ids and stage.to_label in node_ids]
+    reasons: list[str] = []
+    if len(nodes) < 3:
+        reasons.append("网络节点不足 3 个")
+    if len(edges) < 2:
+        reasons.append("已核验关系边不足 2 条")
     return not reasons, reasons
 
 
@@ -289,11 +328,17 @@ def _check_table(items: list[VisualDatum], *_: Any) -> tuple[bool, list[str]]:
 
 SUFFICIENCY_CHECKS: dict[VisualType, Callable[..., tuple[bool, list[str]]]] = {
     "line": _check_line,
+    "area": _check_line,
+    "dual_axis": _check_dual_axis,
     "bar": _check_bar,
     "radar": _check_radar,
     "quadrant": _check_quadrant,
     "scatter": _check_scatter,
+    "bubble": _check_scatter,
     "treemap": _check_treemap,
+    "map": _check_map,
+    "heatmap": _check_heatmap,
+    "network": _check_network,
     "timeline": _check_timeline,
     "process": _check_process,
     "data_flow": _check_data_flow,

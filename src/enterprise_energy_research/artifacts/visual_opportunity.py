@@ -23,6 +23,22 @@ from enterprise_energy_research.research.research_analysis import ResearchAnalys
 from .visual_router import VisualDatum, VisualProposal, VisualStage
 
 
+# Administrative centroids are a transparent fallback when an official source
+# names a region but does not disclose exact site coordinates.  They are used
+# only for distribution maps and are explicitly labelled as approximate.
+REGION_CENTROIDS: tuple[tuple[tuple[str, ...], float, float], ...] = (
+    (("福建", "宁德"), 119.30, 26.08), (("广东", "肇庆", "佛山"), 113.27, 23.13),
+    (("江苏", "溧阳"), 119.48, 31.42), (("上海",), 121.47, 31.23),
+    (("四川", "宜宾"), 104.07, 30.67), (("湖北", "宜昌"), 111.29, 30.69),
+    (("江西", "宜春"), 115.86, 28.68), (("贵州", "贵阳"), 106.63, 26.65),
+    (("河南", "洛阳"), 112.45, 34.62), (("山东",), 117.00, 36.65),
+    (("青海", "西宁"), 101.78, 36.62), (("德国", "图林根", "erfurt"), 11.03, 50.98),
+    (("匈牙利", "德布勒森", "debrecen"), 21.63, 47.53),
+    (("印度尼西亚", "印尼", "indonesia"), 106.85, -6.21),
+    (("西班牙", "zaragoza"), -0.89, 41.65), (("美国", "usa"), -98.58, 39.83),
+)
+
+
 class VisualOpportunityPlanner:
     """Detect visualizable patterns in one ResearchAnalysis."""
 
@@ -50,6 +66,16 @@ class VisualOpportunityPlanner:
         if unit == "万元":
             return round(value / 1e4, 2)
         return value
+
+    @staticmethod
+    def _factory_point(factory: Any) -> tuple[float, float, str] | None:
+        if factory.longitude is not None and factory.latitude is not None:
+            return float(factory.longitude), float(factory.latitude), "official_coordinates"
+        haystack = f"{factory.name or ''} {factory.address or ''}".lower()
+        for keywords, longitude, latitude in REGION_CENTROIDS:
+            if any(keyword.lower() in haystack for keyword in keywords):
+                return longitude, latitude, "administrative_centroid"
+        return None
 
     def _trend_proposal(self, chapter_id: str, index: int, title: str, thesis: str, points: list[ResearchMetric]) -> VisualProposal | None:
         if len(points) < 2:
@@ -83,21 +109,63 @@ class VisualOpportunityPlanner:
 
     def financial_proposals(self) -> list[VisualProposal]:
         proposals: list[VisualProposal] = []
-        index = 0
-        for trend in self.analysis.trends:
-            if trend.field_name in {"capacity", "production_capacity", "battery_production_capacity", "storage_capacity", "pv_capacity"}:
-                continue  # capacity belongs to the factories chapter
-            index += 1
+        trends = {trend.field_name: trend for trend in self.analysis.trends}
+
+        # Revenue + profit answer one executive question and therefore share a
+        # genuine two-axis figure when at least three common periods exist.
+        revenue = trends.get("revenue")
+        profit = trends.get("net_profit") or trends.get("profit")
+        if revenue is not None and profit is not None:
+            rev_by_period = {point.period: point for point in revenue.points}
+            profit_by_period = {point.period: point for point in profit.points}
+            periods = sorted(set(rev_by_period) & set(profit_by_period))
+            if len(periods) >= 3:
+                selected = [rev_by_period[p] for p in periods] + [profit_by_period[p] for p in periods]
+                proposals.append(VisualProposal(
+                    visual_id="v-operations-revenue-profit", chapter_id="operations",
+                    decision_question="收入规模与盈利能力是否同步变化？",
+                    business_thesis=f"营业收入与净利润形成 {len(periods)} 个共同年度的可比序列。",
+                    semantic_pattern="dual_metric_time_series", semantic_domain="financial",
+                    title="营业收入与净利润变化", data_binding="research:revenue+net_profit",
+                    source_ids=list(dict.fromkeys(s for point in selected for s in point.source_ids)),
+                    source_claim_ids=list(dict.fromkeys(c for point in selected for c in point.claim_ids)),
+                    period=f"{periods[0]}—{periods[-1]}",
+                    transformation="两组数值均直接映射冻结证据；按各自披露单位显示，未插值、未预测。",
+                    items=[VisualDatum(label=f"{p}年", value=self._chart_value(rev_by_period[p].value, rev_by_period[p].unit), unit=rev_by_period[p].unit, period=p, series="营业收入") for p in periods]
+                    + [VisualDatum(label=f"{p}年", value=self._chart_value(profit_by_period[p].value, profit_by_period[p].unit), unit=profit_by_period[p].unit, period=p, series="净利润") for p in periods],
+                    source_note=self._note(list(dict.fromkeys(s for point in selected for s in point.source_ids))),
+                    confidence="high",
+                ))
+
+        # A dashboard chapter exposes at most three visuals. Prefer the fields
+        # explicitly required by the fifth-round contract.
+        for field_name in ("gross_margin", "rnd_expense", "operating_cash_flow"):
+            if len(proposals) >= 3:
+                break
+            trend = trends.get(field_name)
+            if trend is None or len(trend.points) < 3:
+                continue
             proposal = self._trend_proposal(
-                "operations", index, f"{trend.label}趋势",
-                f"{trend.label}形成 {len(trend.points)} 个真实年度的可比序列。",
-                trend.points,
+                "operations", len(proposals) + 1, f"{trend.label}趋势",
+                f"{trend.label}形成 {len(trend.points)} 个真实年度的可比序列。", trend.points,
             )
             if proposal is not None:
                 proposals.append(proposal)
-        # Segment structure -> bar (real part-to-whole from disclosed numbers).
+
+        if len(proposals) < 3 and sum(item.semantic_pattern == "time_series" for item in proposals) < 2:
+            fallback_trend = revenue or profit
+            if fallback_trend is not None and len(fallback_trend.points) >= 3:
+                proposal = self._trend_proposal(
+                    "operations", len(proposals) + 1, f"{fallback_trend.label}趋势",
+                    f"{fallback_trend.label}形成 {len(fallback_trend.points)} 个真实年度的可比序列。",
+                    fallback_trend.points,
+                )
+                if proposal is not None:
+                    proposals.append(proposal)
+
+        # Segment structure is retained only when the trend set leaves room.
         comparison = next((item for item in self.analysis.comparisons if item.comparison_id == "CMP-SEGMENTS"), None)
-        if comparison is not None and len(comparison.rows) >= 2:
+        if len(proposals) < 3 and comparison is not None and len(comparison.rows) >= 2:
             proposals.append(VisualProposal(
                 visual_id="v-operations-segments", chapter_id="operations",
                 decision_question="收入结构是否发生变化？", business_thesis=comparison.statement,
@@ -114,7 +182,7 @@ class VisualOpportunityPlanner:
                 ) for row in comparison.rows],
                 source_note=self._note(comparison.source_ids),
             ))
-        return proposals
+        return proposals[:3]
 
     def product_proposals(self) -> list[VisualProposal]:
         proposals: list[VisualProposal] = []
@@ -123,11 +191,11 @@ class VisualOpportunityPlanner:
             proposals.append(VisualProposal(
                 visual_id="v-products-families", chapter_id="products",
                 decision_question="产品组合的重心在哪几个产品族？", business_thesis=comparison.statement,
-                semantic_pattern="category_comparison", semantic_domain="product",
+                semantic_pattern="part_to_whole", semantic_domain="product",
                 title="产品族分布",
                 data_binding="research:product_families",
                 source_ids=comparison.source_ids, source_claim_ids=comparison.claim_ids,
-                items=[VisualDatum(label=row.label, value=row.value, unit="项") for row in comparison.rows],
+                items=[VisualDatum(label=row.label, value=row.value, weight=row.value, unit="项") for row in comparison.rows],
                 source_note=self._note(comparison.source_ids),
             ))
         # Key-product parameter matrix -> structured table (mixed units: never
@@ -168,10 +236,75 @@ class VisualOpportunityPlanner:
                         items=items,
                         source_note=self._note(list(dict.fromkeys(source_id for product in products for source_id in product.source_ids))),
                     ))
-        return proposals
+
+        # Product × application matrix: binary cells reflect disclosed
+        # applications, not invented scores. It complements the parameter table.
+        scenario_products = [
+            product for product in self.bundle.products
+            if product.product_id in self.analysis.key_product_ids and product.applications
+        ][:8]
+        applications: list[str] = []
+        for product in scenario_products:
+            for application in product.applications:
+                if application not in applications:
+                    applications.append(application)
+        applications = applications[:8]
+        if len(scenario_products) >= 2 and len(applications) >= 2:
+            items = [
+                VisualDatum(label=f"{product.name}｜{application}", x=app_index, y=product_index, value=1 if application in product.applications else 0)
+                for product_index, product in enumerate(scenario_products)
+                for app_index, application in enumerate(applications)
+            ]
+            proposals.append(VisualProposal(
+                visual_id="v-products-scenarios", chapter_id="products",
+                decision_question="重点产品分别覆盖哪些应用场景？",
+                business_thesis="产品—应用场景矩阵仅标记官网或正式材料已披露的适用关系。",
+                semantic_pattern="matrix_heatmap", semantic_domain="product",
+                title="重点产品—应用场景矩阵", data_binding="research:product_applications",
+                source_ids=list(dict.fromkeys(source_id for product in scenario_products for source_id in product.source_ids)),
+                source_claim_ids=[], transformation="披露适用关系记为 1，未披露记为 0；不把空白解释为不适用。",
+                items=items,
+                axes={
+                    "x_labels": {index: value for index, value in enumerate(applications)},
+                    "y_labels": {index: product.name for index, product in enumerate(scenario_products)},
+                },
+                source_note=self._note(list(dict.fromkeys(source_id for product in scenario_products for source_id in product.source_ids))),
+            ))
+        return proposals[:3]
 
     def factory_proposals(self) -> list[VisualProposal]:
         proposals: list[VisualProposal] = []
+        claim_sources = {claim.claim_id: claim.source_id for claim in self.bundle.claims}
+        mapped = []
+        approximate = False
+        for factory in self.bundle.factories:
+            point = self._factory_point(factory)
+            if point is None:
+                continue
+            longitude, latitude, method = point
+            approximate = approximate or method == "administrative_centroid"
+            mapped.append((factory, longitude, latitude))
+        if mapped:
+            source_ids = list(dict.fromkeys(
+                claim_sources[claim_id]
+                for factory, _, _ in mapped
+                for claim_id in factory.supporting_claim_ids
+                if claim_id in claim_sources
+            ))
+            if not source_ids:
+                source_ids = [source.source_id for source in self.bundle.sources[:5]]
+            proposals.append(VisualProposal(
+                visual_id="v-factories-map", chapter_id="factories",
+                decision_question="核心生产基地在全球如何布局？",
+                business_thesis=f"已定位 {len(mapped)} 处公开披露基地，呈现国内集群与海外节点。",
+                semantic_pattern="spatial_distribution", semantic_domain="manufacturing",
+                title="全球生产基地布局", data_binding="research:factory_locations",
+                source_ids=source_ids,
+                source_claim_ids=list(dict.fromkeys(claim_id for factory, _, _ in mapped for claim_id in factory.supporting_claim_ids)),
+                transformation=("精确坐标优先；未披露坐标的基地按公开地址所属行政区中心定位，不表示厂址边界。" if approximate else "使用公开披露坐标直接定位。"),
+                items=[VisualDatum(label=factory.name or factory.address or factory.factory_id, x=longitude, y=latitude, value=1, weight=1, note=factory.address) for factory, longitude, latitude in mapped],
+                source_note=self._note(source_ids) or "数据来源：公开披露基地地址（详见附录基地清单）。",
+            ))
         distribution = self.analysis.region_distribution
         if len(distribution) >= 2:
             proposals.append(VisualProposal(
@@ -210,7 +343,7 @@ class VisualOpportunityPlanner:
             if proposal is not None:
                 proposal = proposal.model_copy(update={"semantic_domain": "manufacturing", "decision_question": "产能如何变化？"})
                 proposals.append(proposal)
-        return proposals
+        return proposals[:3]
 
     def energy_proposals(self) -> list[VisualProposal]:
         proposals: list[VisualProposal] = []

@@ -91,12 +91,13 @@ class Phase4HtmlTests(unittest.TestCase):
             result = FrozenHtmlPublisher(ArtifactType.ENTERPRISE_HTML).publish(bundle, binding, target)
             text = target.read_text(encoding="utf-8")
             self.assertEqual(result.status, "published")
-            self.assertIn("productSearch", text)
-            self.assertIn("comparePanel", text)
-            self.assertIn("最多 4 项对比", text)
-            # the VERIFIED product with no usable photo still appears in the matrix
+            self.assertIn("featuredProducts", text)
+            self.assertIn("完整产品清单", text)
+            self.assertIn("chapter-details", text)
+            # Verified products remain in the collapsed ledger, while the
+            # default showcase never renders a no-photo placeholder card.
             self.assertIn("工商业液冷储能柜", text)
-            self.assertIn("产品图片待补充", text)
+            self.assertNotIn("产品图片待补充", text)
         self.assertIn("data:image/png;base64,", text)
 
     def test_product_html_rejects_bundle_without_qualified_products(self) -> None:

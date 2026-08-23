@@ -202,7 +202,11 @@ class ResearchValueValidator:
             if any(phrase in sentence for phrase in DECISION_DENSITY_PHRASES)
         )
         boilerplate_ratio = round(boilerplate / len(sentences), 4) if sentences else 1.0
-        enterprise_specific_ratio = round(1 - boilerplate_ratio, 4)
+        from enterprise_energy_research.research.publication_relevance import PublicationRelevanceFilter
+        relevant_claims, relevance_report = PublicationRelevanceFilter().filter(bundle)
+        enterprise_specific_ratio = round(
+            len(relevant_claims) / relevance_report.total_verified, 4
+        ) if relevance_report.total_verified else 0.0
         main_body = int(narrative.counts.get("main_body_cjk_char_count", 0))
         checks: list[QualityCheck] = [
             QualityCheck(code="quantitative_fact_count", status="PASS", message="正文量化事实数", value=quantitative_facts),
@@ -216,9 +220,9 @@ class ResearchValueValidator:
                 message=f"模板句占比 {boilerplate_ratio:.1%}（门槛 <15%）", value=boilerplate_ratio,
             ),
             QualityCheck(
-                code="enterprise_specific_sentence_ratio",
-                status="PASS" if enterprise_specific_ratio > 0.60 else "FAIL",
-                message=f"企业特异性句占比 {enterprise_specific_ratio:.1%}（门槛 >60%）", value=enterprise_specific_ratio,
+                code="enterprise_specific_data_ratio",
+                status=("PASS" if enterprise_specific_ratio > 0.60 else "FAIL" if relevance_report.total_verified >= 20 else "WARN"),
+                message=f"企业特异性数据占已核验事实 {enterprise_specific_ratio:.1%}（门槛 >60%）", value=enterprise_specific_ratio,
             ),
         ]
         if main_body > 15_000 and meaningful_visuals < 5:
@@ -228,11 +232,11 @@ class ResearchValueValidator:
                 value={"main_body": main_body, "meaningful_visuals": meaningful_visuals},
             ))
         verified_products = int(narrative.counts.get("verified_products", 0))
-        if verified_products >= 5 and product_image_count == 0:
+        if verified_products >= 5 and product_image_count < 5:
             checks.append(QualityCheck(
-                code="product_image_coverage_failure", status="WARN",
-                message=f"已核验产品 {verified_products} 项但产品图片为 0，需触发产品图片重试",
-                value=verified_products,
+                code="product_image_coverage_failure", status="FAIL",
+                message=f"已核验产品 {verified_products} 项但正式产品图片仅 {product_image_count} 张，需重试至至少 5 张",
+                value={"verified_products": verified_products, "product_images": product_image_count},
             ))
         return checks
 
@@ -243,9 +247,9 @@ class ProductImageCoverageValidator:
         product_images = int(narrative.counts.get("product_image_count", 0))
         if verified_products < 5:
             return [QualityCheck(code="product_image_coverage", status="PASS", message="产品不足 5 项，无图片覆盖门槛")]
-        if product_images == 0:
+        if product_images < 5:
             return [QualityCheck(
-                code="product_image_coverage_failure", status="WARN",
-                message=f"verified_products={verified_products} 但 product images=0", value=verified_products,
+                code="product_image_coverage_failure", status="FAIL",
+                message=f"verified_products={verified_products}，正式产品图片={product_images}（门槛 ≥5）", value=verified_products,
             )]
         return [QualityCheck(code="product_image_coverage", status="PASS", message=f"{product_images} 张产品图片", value=product_images)]

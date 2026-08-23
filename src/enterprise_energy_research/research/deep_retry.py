@@ -29,7 +29,6 @@ from enterprise_energy_research.research.executor import SearchExecutor
 from enterprise_energy_research.research.extractor import EvidenceExtractor
 from enterprise_energy_research.research.image_archiver import ImageAssetArchiver
 from enterprise_energy_research.research.image_discovery import (
-    ImageEvidenceBuilder,
     KimiImageDiscovery,
     KimiUsageTelemetry,
 )
@@ -40,6 +39,11 @@ from enterprise_energy_research.research.production_runner import AdaptiveResear
 from enterprise_energy_research.research.product_detector import ProductDetector
 
 NON_PAGE_SUFFIXES = (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip")
+
+
+def exact_product_key(product_ids: set[str]) -> str | None:
+    """Return a page-level binding only for a provably single-product page."""
+    return next(iter(product_ids)) if len(product_ids) == 1 else None
 
 
 def load_evidence(store: EvidenceStore, run_id: str) -> NormalizedEvidence:
@@ -247,7 +251,11 @@ def recover_product_images(
     discovery_pages = [
         {
             "url": entry["url"], "kind": "product", "source_kind": entry["source_kind"],
-            "publisher": entry["publisher"], "product_key": next(iter(entry["product_ids"]), None),
+            "publisher": entry["publisher"],
+            # A shared catalog page is not evidence for one arbitrary product.
+            # Only single-product pages may carry a page-level exact binding;
+            # shared pages must bind from the image card's own DOM context.
+            "product_key": exact_product_key(entry["product_ids"]),
         }
         for entry in page_list
     ]
@@ -255,42 +263,34 @@ def recover_product_images(
     if not candidates:
         return evidence, telemetry
 
-    builder = ImageEvidenceBuilder(fetcher)
-    known = {product.name: product.product_id for product in evidence.products if product.name}
-    category_map = {(product.category or "").lower(): product.product_id for product in evidence.products if product.category}
-    application_map: dict[str, str] = {}
-    for product in evidence.products:
-        for application in product.applications:
-            application_map.setdefault(str(application).strip().lower(), product.product_id)
-    new_images = []
-    for candidate in candidates:
-        page = pages.get(candidate.page_url)
-        if page is None:
-            continue
-        product_id = candidate.product_key
-        context = " ".join(filter(None, (candidate.alt or "", candidate.surrounding_text or "", candidate.page_title or "")))
-        lowered = context.lower()
-        matched = next((pid for name, pid in known.items() if name and name in context), None)
-        if matched is not None:
-            product_id = matched
-        elif product_id is None and page["product_ids"]:
-            product_id = next(iter(sorted(page["product_ids"])))
-        if product_id is None:
-            product_id = next((pid for app, pid in application_map.items() if app and app in lowered), None)
-        if product_id is None:
-            product_id = next((pid for cat, pid in category_map.items() if cat and cat in lowered), None)
-        image = builder.build(candidate, source_id=page["source_id"], entity_id=canonical_entity_id, product_id=product_id)
-        if image is None:
-            telemetry.image_download_failures += 1
-            continue
-        new_images.append(image)
+    # Reuse the production handoff instead of maintaining a second image
+    # binding implementation.  This preserves URL de-duplication, bounded
+    # concurrency, product diversity, exact product matching and canonical
+    # entity ownership on every machine that installs the Skill.
+    runner = AdaptiveResearchRunner(
+        {}, fetcher=fetcher, enable_image_archiving=False,
+        enable_publication=False,
+    )
+    runner.cumulative = evidence
+    image_round = NormalizedEvidence()
+    image_round.entities = list(evidence.entities)
+    image_round.factories = list(evidence.factories)
+    image_round.products = list(evidence.products)
+    runner._pending_image_candidates = candidates
+    runner._attach_discovered_images(
+        image_round, telemetry, official_domains,
+        canonical_entity_id=canonical_entity_id,
+    )
+    new_images = image_round.images
+    new_sources = image_round.sources
 
     validator = ImageValidator()
-    new_images = validator.validate(new_images, evidence.entities, evidence.sources)
+    new_images = validator.validate(new_images, evidence.entities, [*evidence.sources, *new_sources])
     if new_images:
         archived = ImageAssetArchiver(fetcher=lambda url, referer: (fetcher(url, referer), None)).archive(new_images, output_dir)
         new_images = validator.visual_verify(archived.images, base_dir=output_dir)
     round_evidence = NormalizedEvidence()
+    round_evidence.sources = new_sources
     round_evidence.images = new_images
     MergeEvidence.merge(evidence, round_evidence)
     evidence.products, _ = ProductDetector().detect(evidence.products, evidence.images, evidence.sources, evidence.claims)
