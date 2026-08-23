@@ -16,6 +16,16 @@ _RELEVANCE_KEYWORDS = [
     "构网型", "液冷", "电芯", "兆瓦", "MWh", "MW", "Wh", "招标", "中标",
 ]
 
+# Hard scope gate. Generic project words such as MW/招标/中标 may improve the
+# score only after an item has demonstrated an actual V2G/storage/electricity-
+# flexibility link; otherwise ordinary PV/EPC procurements can become false
+# positives merely because they contain a capacity and a tender amount.
+_CORE_SCOPE_KEYWORDS = [
+    "V2G", "车网互动", "双向充电", "储能", "虚拟电厂", "充换电", "充电桩",
+    "光储充", "构网型", "储能电池", "电化学储能", "电芯", "PCS", "BMS", "EMS",
+    "峰谷电价", "电力现货", "辅助服务", "需求响应", "源网荷储", "微电网",
+]
+
 # 行业影响信号词
 _INDUSTRY_SIGNALS = ["规模", "首", "试点", "示范", "标准", "规则", "价格", "降价", "并购", "产能"]
 
@@ -45,6 +55,12 @@ def _relevance(text: str) -> float:
     """业务相关性：领域基准 4 分 + 每个命中关键词 +2（上限 10）。"""
     hits = sum(1 for keyword in _RELEVANCE_KEYWORDS if keyword.lower() in text.lower())
     return min(10.0, 4.0 + hits * 2.0)
+
+
+def _is_in_scope(item: RawIntelligenceItem) -> bool:
+    text = f"{item.title} {item.fact} {item.impact_company} {item.topic}"
+    lowered = text.lower()
+    return any(keyword.lower() in lowered for keyword in _CORE_SCOPE_KEYWORDS)
 
 
 def _business_value(category: str, fact: str) -> float:
@@ -114,7 +130,8 @@ def _source_choice_key(item: IntelligenceItem) -> tuple[Any, ...]:
 
 def select_top(items: list[IntelligenceItem], *, maximum: int = 5, floor: float = 70.0) -> list[IntelligenceItem]:
     """宁缺毋滥：默认只保留 >=80 分；当日不足时允许 70-79 分补位。"""
-    strong = [item for item in items if item.score >= 80]
+    in_scope = [item for item in items if _is_in_scope(item)]
+    strong = [item for item in in_scope if item.score >= 80]
     if len(strong) >= 3:
         return strong[:maximum]
-    return [item for item in items if item.score >= floor][:maximum]
+    return [item for item in in_scope if item.score >= floor][:maximum]

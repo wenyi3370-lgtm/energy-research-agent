@@ -102,6 +102,26 @@ class ScorerTests(unittest.TestCase):
         selected = select_top(items, maximum=5, floor=70)
         self.assertLessEqual(len(selected), 3)
 
+    def test_select_top_rejects_generic_pv_tender_without_storage_or_v2g_scope(self):
+        unrelated = score_item(make_raw(
+            category="重大项目",
+            title="产业园50MW分布式光伏工程量清单及最高投标限价编制服务",
+            fact="项目启动招标，规模50MW，服务内容为工程量清单和最高投标限价编制。",
+            impact_company="",
+            topic="project",
+        ), date(2026, 8, 19))
+        self.assertGreaterEqual(unrelated.score, 70)
+        self.assertEqual(select_top([unrelated]), [])
+
+    def test_select_top_keeps_direct_storage_project(self):
+        storage = score_item(make_raw(
+            category="重大项目",
+            title="产业园50MW/100MWh储能项目启动招标",
+            fact="项目启动招标，储能规模50MW/100MWh。",
+            topic="储能项目",
+        ), date(2026, 8, 19))
+        self.assertEqual(select_top([storage]), [storage])
+
 
 class FreshnessGateTests(unittest.TestCase):
     def setUp(self):
@@ -313,6 +333,40 @@ class FreshnessGateTests(unittest.TestCase):
 
 
 class CollectorPipelineTests(unittest.TestCase):
+    def test_root_listing_pages_are_not_sent_to_the_llm(self):
+        from enterprise_energy_research.adapters.base import (
+            AdapterHealth, SearchHit, SearchResultEnvelope,
+        )
+        from enterprise_energy_research.automation.intelligence import IntelligenceCollector
+
+        class FakeAnySearch:
+            name = "anysearch"
+
+            def health(self):
+                return AdapterHealth(name=self.name, available=True)
+
+            def search(self, request):
+                return SearchResultEnvelope(
+                    adapter=self.name, query_id=request.query_id, status="ok",
+                    hits=[SearchHit(
+                        final_url="https://news.example.com/", title="新闻首页",
+                        text="多条新闻聚合列表", status="ok",
+                        retrieved_at="2026-08-22T00:00:00Z", metadata={"snippet": True},
+                    )],
+                )
+
+        class FailIfCalledGateway:
+            def structured(self, request):
+                raise AssertionError("listing root must not reach the LLM")
+
+        collector = IntelligenceCollector(
+            {"anysearch": FakeAnySearch()}, FailIfCalledGateway(),
+            queries=[("储能 项目", "project")],
+        )
+        items = collector.collect(current_time=datetime(2026, 8, 22, 8, 0, tzinfo=TZ))
+        self.assertEqual(items, [])
+        self.assertEqual(collector.extraction_attempt_count, 0)
+
     def test_anysearch_snippet_is_hydrated_before_llm_extraction(self):
         from enterprise_energy_research.adapters.base import (
             AdapterHealth, SearchHit, SearchResultEnvelope,

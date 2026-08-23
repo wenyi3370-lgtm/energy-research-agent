@@ -202,7 +202,12 @@ class IntelligenceCollector:
                 if not hit.final_url or not hit.text or self.gateway is None:
                     continue
                 canonical_url = _canonical_url(hit.final_url)
-                if not canonical_url or canonical_url in seen_urls or _is_search_result_page(canonical_url):
+                if (
+                    not canonical_url
+                    or canonical_url in seen_urls
+                    or _is_search_result_page(canonical_url)
+                    or _is_listing_root_page(canonical_url)
+                ):
                     continue
                 seen_urls.add(canonical_url)
                 hydrated = self._hydrate_hit(envelope.query_id, hit_index, hit)
@@ -280,6 +285,9 @@ class IntelligenceCollector:
         prompt = (
             "你是企业战略情报分析助手。从下面网页中抽取与 V2G、车网互动、储能、"
             "虚拟电厂、充换电、电力市场、双向充电设备相关的情报条目，输出 JSON 对象。\n"
+            "整页最多选择一条最重要且与上述领域直接相关的情报。只输出一个扁平 JSON 对象，"
+            "禁止输出数组、intelligence_items 等包装字段；若页面只是聚合列表或没有直接相关事实，"
+            "fact 留空。\n"
             "规则：只输出网页中明确存在的事实，禁止编造数字；category 必须是"
             "「政策监管」「重大项目」「竞争对手」「技术与产品」「市场与价格」「产业与资本」之一；"
             "fact 用 1-2 句包含关键数字的客观描述；impact_company 描述对储能/V2G"
@@ -416,3 +424,9 @@ def _is_search_result_page(value: str) -> bool:
         host in {"bing.com", "www.bing.com", "google.com", "www.google.com"}
         and parsed.path.rstrip("/") in {"/search", ""}
     )
+
+
+def _is_listing_root_page(value: str) -> bool:
+    """Daily facts require an article/detail URL, not a multi-story homepage."""
+    parsed = urlparse(value)
+    return parsed.path.rstrip("/") == ""
