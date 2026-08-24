@@ -94,13 +94,36 @@ class ScorerTests(unittest.TestCase):
         self.assertEqual(len(selected), 1)
         self.assertEqual(selected[0].source_type, "official_latest")
 
-    def test_select_top_floor(self):
-        items = [score_item(make_raw(
-            published_at=f"2026-08-{d:02d} 09:30",
-            original_published_at=f"2026-08-{d:02d} 09:30",
-        ), date(2026, 8, 19)) for d in (19, 18, 17)]
-        selected = select_top(items, maximum=5, floor=70)
-        self.assertLessEqual(len(selected), 3)
+    def test_select_top_has_no_score_floor_and_orders_time_before_confidence(self):
+        now = datetime(2026, 8, 22, 8, 0, tzinfo=TZ)
+        newest_high = apply_freshness_gate([make_raw(
+            title="最新官方储能材料论文",
+            fact="官方发布储能材料实验结果，无产业化信息。",
+            category="技术与产品",
+            published_at="2026-08-22 07:45",
+            original_published_at="2026-08-22 07:45",
+        )], current_time=now).accepted[0]
+        newer_low = apply_freshness_gate([make_raw(
+            title="行业媒体转载V2G项目消息",
+            source="行业媒体", source_name="行业媒体",
+            source_url="https://media.example/newer",
+            is_original_source=False, source_type="repost",
+            published_at="2026-08-22 07:30",
+            original_published_at="2026-08-20 10:00",
+        )], current_time=now).accepted[0]
+        older_high = apply_freshness_gate([make_raw(
+            title="稍早官方V2G政策",
+            source_url="https://example.com/older",
+            original_source_url="https://example.com/older",
+            published_at="2026-08-22 07:00",
+            original_published_at="2026-08-22 07:00",
+        )], current_time=now).accepted[0]
+        items = [score_item(item, now) for item in (older_high, newer_low, newest_high)]
+        selected = select_top(items, maximum=5, floor=99)
+        self.assertEqual([item.title for item in selected], [
+            "最新官方储能材料论文", "行业媒体转载V2G项目消息", "稍早官方V2G政策",
+        ])
+        self.assertLess(selected[0].score, 70)
 
     def test_select_top_rejects_generic_pv_tender_without_storage_or_v2g_scope(self):
         unrelated = score_item(make_raw(
@@ -164,7 +187,7 @@ class FreshnessGateTests(unittest.TestCase):
         self.assertEqual(result.accepted[0].publication_time_precision, "DATE_ONLY")
         self.assertEqual(result.accepted[0].confidence_level, "LOW")
 
-    def test_unknown_or_boundary_ambiguous_date_is_rejected(self):
+    def test_unknown_date_is_retained_low_confidence_but_old_boundary_is_rejected(self):
         unknown = make_raw(published_at="", original_published_at="")
         boundary = make_raw(
             published_at="2026-08-19", original_published_at="2026-08-19",
@@ -172,11 +195,13 @@ class FreshnessGateTests(unittest.TestCase):
             original_source_url="https://example.com/boundary",
         )
         result = apply_freshness_gate([unknown, boundary], current_time=self.now)
-        self.assertEqual(result.accepted, [])
-        self.assertEqual(len(result.rejected), 2)
+        self.assertEqual(len(result.accepted), 1)
+        self.assertEqual(result.accepted[0].published_at_iso, None)
+        self.assertEqual(result.accepted[0].confidence_level, "LOW")
+        self.assertEqual(len(result.rejected), 1)
         self.assertTrue(all(item.confidence_level == "LOW" for item in result.evaluated))
 
-    def test_recent_repost_of_old_original_is_rejected(self):
+    def test_recent_repost_of_old_original_is_retained_from_current_page(self):
         repost = make_raw(
             source_name="行业转载站", source_url="https://media.example/repost",
             is_original_source=False,
@@ -188,10 +213,14 @@ class FreshnessGateTests(unittest.TestCase):
             source_type="repost",
         )
         result = apply_freshness_gate([repost], current_time=self.now)
-        self.assertEqual(result.accepted, [])
-        self.assertIn("repost", result.rejected[0])
+        self.assertEqual(len(result.accepted), 1)
+        self.assertEqual(result.accepted[0].freshness_status, "NEW")
+        self.assertEqual(result.accepted[0].published_at_iso, datetime(2026, 8, 22, 7, 0, tzinfo=TZ))
+        self.assertEqual(result.accepted[0].source_url, "https://media.example/repost")
+        self.assertEqual(result.accepted[0].original_source_url, "https://gov.example/original")
+        self.assertEqual(result.accepted[0].confidence_level, "LOW")
 
-    def test_republished_old_article_without_new_facts_is_old(self):
+    def test_republished_old_article_inside_window_is_retained_for_awareness(self):
         item = make_raw(
             published_at="2026-08-22 07:00",
             original_published_at="2026-08-22 07:00",
@@ -199,8 +228,9 @@ class FreshnessGateTests(unittest.TestCase):
             is_republished_old=True,
         )
         result = apply_freshness_gate([item], current_time=self.now)
-        self.assertEqual(result.accepted, [])
-        self.assertIn("republished old article", result.rejected[0])
+        self.assertEqual(len(result.accepted), 1)
+        self.assertEqual(result.accepted[0].freshness_status, "NEW")
+        self.assertIn("awareness", result.accepted[0].freshness_reason)
 
     def test_historical_event_with_concrete_update_is_updated(self):
         history = make_raw(
@@ -240,6 +270,8 @@ class FreshnessGateTests(unittest.TestCase):
     def test_update_older_than_seven_days_is_old(self):
         history = make_raw(first_seen_at=datetime(2026, 8, 10, 12, 0, tzinfo=TZ))
         updated = make_raw(
+            published_at="2026-08-10 09:30",
+            original_published_at="2026-08-10 09:30",
             updated_at="2026-08-15 07:00",
             update_time_evidence="更新时间2026-08-15 07:00",
             is_substantive_update=True,
@@ -247,9 +279,9 @@ class FreshnessGateTests(unittest.TestCase):
         )
         result = apply_freshness_gate([updated], history=[history], current_time=self.now)
         self.assertEqual(result.accepted, [])
-        self.assertIn("within 7 days", result.rejected[0])
+        self.assertIn("72-hour", result.rejected[0])
 
-    def test_historical_event_with_cosmetic_update_is_old(self):
+    def test_historical_event_with_recent_cosmetic_update_is_retained_as_new(self):
         history = make_raw(first_seen_at=datetime(2026, 8, 21, 8, 0, tzinfo=TZ))
         updated = make_raw(
             updated_at="2026-08-22 07:00",
@@ -257,17 +289,16 @@ class FreshnessGateTests(unittest.TestCase):
             update_facts="",
         )
         result = apply_freshness_gate([updated], history=[history], current_time=self.now)
-        self.assertEqual(result.accepted, [])
-        self.assertIn("no substantive new facts", result.rejected[0])
+        self.assertEqual(result.accepted[0].freshness_status, "NEW")
+        self.assertIn("previously discovered", result.accepted[0].freshness_reason)
 
-    def test_previously_sent_event_without_update_is_old(self):
+    def test_previously_sent_event_with_recent_publication_is_retained(self):
         history = make_raw(first_seen_at=datetime(2026, 8, 21, 8, 0, tzinfo=TZ))
         repeated = make_raw(title="某省车网互动试点政策最新报道")
         result = apply_freshness_gate([repeated], history=[history], current_time=self.now)
-        self.assertEqual(result.accepted, [])
-        self.assertEqual(result.evaluated[0].freshness_status, "OLD")
+        self.assertEqual(result.accepted[0].freshness_status, "NEW")
 
-    def test_repeated_update_facts_are_old(self):
+    def test_repeated_update_facts_on_recent_page_are_retained_as_new(self):
         history = make_raw(
             updated_at="2026-08-22 06:00",
             update_time_evidence="更新时间2026-08-22 06:00",
@@ -281,8 +312,7 @@ class FreshnessGateTests(unittest.TestCase):
             update_facts="新增中标价格为0.62元/Wh。",
         )
         result = apply_freshness_gate([repeated], history=[history], current_time=self.now)
-        self.assertEqual(result.accepted, [])
-        self.assertIn("already discovered", result.rejected[0])
+        self.assertEqual(result.accepted[0].freshness_status, "NEW")
 
     def test_event_time_is_distinct_from_publication_time(self):
         item = make_raw(
@@ -295,7 +325,7 @@ class FreshnessGateTests(unittest.TestCase):
         self.assertIn("今日披露", result.accepted[0].disclosure_label)
         self.assertIn("2026年08月18日", result.accepted[0].disclosure_label)
 
-    def test_future_time_and_unconfirmed_original_source_are_rejected(self):
+    def test_future_time_and_unnamed_source_rejected_secondary_without_original_allowed(self):
         future = make_raw(
             published_at="2026-08-22 08:01", original_published_at="2026-08-22 08:01",
         )
@@ -306,9 +336,11 @@ class FreshnessGateTests(unittest.TestCase):
         result = apply_freshness_gate(
             [future, unknown_original, unnamed_original], current_time=self.now
         )
-        self.assertEqual(result.accepted, [])
-        self.assertEqual(len(result.rejected), 3)
-        self.assertIn("source name or source URL", result.rejected[2])
+        self.assertEqual(len(result.accepted), 1)
+        self.assertEqual(result.accepted[0].source_url, unknown_original.source_url)
+        self.assertEqual(result.accepted[0].confidence_level, "LOW")
+        self.assertEqual(len(result.rejected), 2)
+        self.assertIn("source name or source URL", result.rejected[1])
 
     def test_parser_requires_hour_and_minute(self):
         self.assertIsNone(parse_exact_publication_time("2026-08-22"))
@@ -493,6 +525,22 @@ class BriefingTests(unittest.TestCase):
         self.assertIn("今日建议关注", text)
         self.assertIn("来源：省发改委官网", text)
 
+    def test_low_confidence_stays_internal_and_is_not_rendered_as_a_label(self):
+        now = datetime(2026, 8, 22, 8, 0, tzinfo=TZ)
+        raw = make_raw(
+            published_at="", original_published_at="", publication_time_evidence="",
+        )
+        accepted = apply_freshness_gate([raw], current_time=now).accepted[0]
+        item = IntelligenceItem(**accepted.model_dump(), score=65.0)
+        brief = DailyBrief(
+            brief_date=now.date(), items=[item], updated_at=now,
+            window_start=now - timedelta(hours=72), window_end=now,
+            report_cutoff_time=now,
+        )
+        self.assertEqual(item.confidence_level, "LOW")
+        self.assertIn("时间未核验", brief.render_text())
+        self.assertNotIn("低可信", brief.render_text())
+
     def test_breaking_alert(self):
         item = IntelligenceItem(**make_raw().model_dump(), score=95.0, insight="重大变化", is_breaking=True)
         brief = DailyBrief(brief_date=date(2026, 8, 19), items=[item])
@@ -593,10 +641,11 @@ class ServiceTests(unittest.TestCase):
                 # 同日再次触发 → 幂等返回，不重复采集
                 brief2 = service.run_daily(date(2026, 8, 19), current_time=current_time)
                 self.assertEqual(brief1.brief_date, brief2.brief_date)
-                # 次日再次发现同一事件但没有实质更新 → OLD，不得重复进入日报
+                # 次日再次发现且当前页面发布时间仍在窗口内，可继续作为传播信息进入日报。
                 next_time = datetime(2026, 8, 20, 12, 0, tzinfo=TZ)
                 brief3 = service.run_daily(date(2026, 8, 20), current_time=next_time)
-                self.assertEqual(brief3.items, [])
+                self.assertEqual(len(brief3.items), 1)
+                self.assertEqual(brief3.items[0].freshness_status, "NEW")
                 self.assertTrue(any(request.query_id.startswith("IQ-U-") for request in FakeAdapter.sent))
             finally:
                 db.engine.dispose()

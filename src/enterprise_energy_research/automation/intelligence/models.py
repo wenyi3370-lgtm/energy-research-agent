@@ -27,14 +27,14 @@ class RawIntelligenceItem(StrictModel):
     source: str = ""  # 对外字段；与 source_name 保持一致
     source_name: str = ""
     source_url: str = ""
-    published_at: str = ""  # 原始来源显示的发布时间原文
+    published_at: str = ""  # 当前来源页面显示的发布时间原文
     published_at_iso: datetime | None = None
     publication_time_precision: Literal["EXACT", "DATE_ONLY", "UNKNOWN"] = "UNKNOWN"
     original_published_at: str = ""  # 转载/更新文章对应的原始发布时间
     original_source_name: str = ""
     original_source_url: str = ""
     is_original_source: bool = False
-    discovery_url: str = ""  # 搜索命中页；最终 source_url 统一指向原始来源
+    discovery_url: str = ""  # 搜索命中页；source_url 保留当前来源页面
     publication_time_evidence: str = ""  # 原文中的发布时间文本/元数据片段
     updated_at: str = ""  # 页面明确标注的更新时间
     updated_at_iso: datetime | None = None
@@ -133,8 +133,18 @@ class DailyBrief(StrictModel):
                 raise ValueError(f"brief item is not NEW/UPDATED: {item.title}")
             if item.freshness_status == "NEW":
                 published = _aware(item.published_at_iso, cutoff)
-                if published is None or not cutoff - timedelta(hours=72) <= published <= cutoff:
+                if published is not None and not cutoff - timedelta(hours=72) <= published <= cutoff:
                     raise ValueError(f"NEW item falls outside the 72-hour window: {item.title}")
+                if published is None:
+                    crawled = _aware(item.crawl_at, cutoff)
+                    if (
+                        item.confidence_level != "LOW"
+                        or crawled is None
+                        or not cutoff - timedelta(hours=72) <= crawled <= cutoff
+                    ):
+                        raise ValueError(
+                            f"NEW item without a verified publication time lacks a recent LOW-confidence crawl: {item.title}"
+                        )
             if item.freshness_status == "UPDATED":
                 updated = _aware(item.updated_at_iso, cutoff)
                 if (
@@ -167,8 +177,7 @@ class DailyBrief(StrictModel):
             age = _age_label(effective_at, cutoff, precision=precision)
             category = _display_category(item.category)
             status = "最新进展" if item.freshness_status == "UPDATED" else "NEW"
-            confidence = "｜低可信" if item.confidence_level == "LOW" else ""
-            lines.append(f"{marker} {sequence}【{category}｜{item.display_score()}｜{age}{confidence}】【{status}】{item.title}")
+            lines.append(f"{marker} {sequence}【{category}｜{item.display_score()}｜{age}】【{status}】{item.title}")
             if item.disclosure_label:
                 lines.append(f"时效说明：{item.disclosure_label}")
             lines.append(f"事实：{item.fact}")

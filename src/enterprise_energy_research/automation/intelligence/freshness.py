@@ -246,9 +246,13 @@ def _classify(
     source_url = raw.source_url.strip()
     original_name = (raw.original_source_name or (source_name if raw.is_original_source else "")).strip()
     original_url = (raw.original_source_url or (source_url if raw.is_original_source else "")).strip()
-    published_raw = raw.original_published_at or raw.published_at
+    # Freshness is evaluated against the current page being considered for
+    # publication.  For a repost, original_published_at describes the older
+    # underlying event/source and must not replace the repost page's own time.
+    published_raw = raw.published_at or (raw.original_published_at if raw.is_original_source else "")
+    publication_evidence = raw.publication_time_evidence if raw.is_original_source else ""
     published, publication_precision, publication_corroborated = parse_publication_time(
-        published_raw, raw.publication_time_evidence, cutoff
+        published_raw, publication_evidence, cutoff
     )
 
     updated = parse_exact_publication_time(raw.updated_at)
@@ -268,7 +272,7 @@ def _classify(
         "company": raw.company or raw.entity,
         "source": source_name,
         "source_name": source_name,
-        "source_url": original_url or source_url,
+        "source_url": source_url,
         "original_source_name": original_name,
         "original_source_url": original_url,
         "published_at_iso": published,
@@ -297,54 +301,27 @@ def _classify(
             **common, "freshness_status": "OLD", "freshness_reason": reason,
             "confidence_level": "LOW",
         }), reason
-    if not raw.is_original_source:
-        reason = "repost/secondary propagation is not new information"
-        return provisional.model_copy(update={
-            **common, "freshness_status": "OLD", "freshness_reason": reason,
-        }), reason
-    if (raw.is_duplicate_report or raw.is_republished_old) and (
-        not raw.is_substantive_update or matched is None
-    ):
-        reason = "duplicate report or republished old article is not a verified historical update"
-        return provisional.model_copy(update={
-            **common, "freshness_status": "OLD", "freshness_reason": reason,
-        }), reason
-    if not original_url or not original_name:
-        reason = "original source is unconfirmed"
-        return provisional.model_copy(update={
-            **common, "freshness_status": "OLD", "freshness_reason": reason,
-            "confidence_level": "LOW",
-        }), reason
-
     if matched is not None:
-        if not raw.is_substantive_update or not raw.update_facts.strip():
-            reason = "event was previously discovered/sent and has no substantive new facts"
+        if (
+            raw.is_substantive_update
+            and raw.update_facts.strip()
+            and updated is not None
+            and cutoff - UPDATE_WINDOW <= updated <= cutoff
+            and not _update_already_known(provisional, history)
+        ):
+            reason = "previously known event contains verified substantive new facts"
             return provisional.model_copy(update={
-                **common, "freshness_status": "OLD", "freshness_reason": reason,
+                **common,
+                "freshness_status": "UPDATED",
+                "freshness_reason": reason,
+                "confidence_level": confidence,
+                "disclosure_label": _updated_disclosure_label(event_date, updated, cutoff),
             }), reason
-        if updated is None or not cutoff - UPDATE_WINDOW <= updated <= cutoff:
-            reason = "substantive update lacks a verified update time within 7 days"
-            return provisional.model_copy(update={
-                **common, "freshness_status": "OLD", "freshness_reason": reason,
-            }), reason
-        if _update_already_known(provisional, history):
-            reason = "update facts/content were already discovered or sent"
-            return provisional.model_copy(update={
-                **common, "freshness_status": "OLD", "freshness_reason": reason,
-            }), reason
-        reason = "previously known event contains verified substantive new facts"
-        return provisional.model_copy(update={
-            **common,
-            "freshness_status": "UPDATED",
-            "freshness_reason": reason,
-            "confidence_level": confidence,
-            "disclosure_label": _updated_disclosure_label(event_date, updated, cutoff),
-        }), reason
 
     if published is None:
-        reason = "publication date cannot be verified; confidence lowered"
+        reason = "publication time unverified; retained for awareness and ranked after verified times"
         return provisional.model_copy(update={
-            **common, "freshness_status": "OLD", "freshness_reason": reason,
+            **common, "freshness_status": "NEW", "freshness_reason": reason,
             "confidence_level": "LOW",
         }), reason
     if published > cutoff:
@@ -357,11 +334,16 @@ def _classify(
         return provisional.model_copy(update={
             **common, "freshness_status": "OLD", "freshness_reason": reason,
         }), reason
-    reason = (
-        "first discovery, original publication date within 72 hours at LOW confidence"
-        if confidence == "LOW"
-        else "first discovery, original publication within 72 hours, not previously sent"
-    )
+    if not raw.is_original_source:
+        reason = "recent secondary/repost publication retained for awareness"
+    elif matched is not None:
+        reason = "recent publication remains inside 72-hour window; previously discovered events are allowed"
+    elif raw.is_duplicate_report or raw.is_republished_old:
+        reason = "recent publication retained for awareness despite duplicate/republished classification"
+    elif confidence == "LOW":
+        reason = "first discovery, current-page publication within 72 hours at LOW confidence"
+    else:
+        reason = "first discovery, current-page publication within 72 hours"
     return provisional.model_copy(update={
         **common, "freshness_status": "NEW", "freshness_reason": reason,
     }), reason

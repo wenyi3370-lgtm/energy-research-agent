@@ -105,7 +105,7 @@ def _policy_weight(category: str) -> float:
 
 
 def deduplicate(items: list[IntelligenceItem]) -> list[IntelligenceItem]:
-    """同一事件只留最优来源；实质更新、来源权威性和最新版本优先。"""
+    """同一事件只留一条：发布时间优先，其次可信度与来源权威性。"""
     groups: list[list[IntelligenceItem]] = []
     for item in items:
         group = next((group for group in groups if are_same_event(item, group[0])), None)
@@ -114,24 +114,28 @@ def deduplicate(items: list[IntelligenceItem]) -> list[IntelligenceItem]:
         else:
             group.append(item)
     preferred = [min(group, key=_source_choice_key) for group in groups]
-    return sorted(preferred, key=lambda item: item.score, reverse=True)
+    return sorted(preferred, key=_publication_order_key)
 
 
 def _source_choice_key(item: IntelligenceItem) -> tuple[Any, ...]:
+    return _publication_order_key(item)
+
+
+def _publication_order_key(item: IntelligenceItem) -> tuple[Any, ...]:
+    """Newest verified publication first, then internal confidence/source quality."""
     effective = item.updated_at_iso if item.freshness_status == "UPDATED" else item.published_at_iso
-    timestamp = effective.timestamp() if effective is not None else 0.0
-    return (
-        0 if item.freshness_status == "UPDATED" else 1,
-        item.source_priority,
-        -timestamp,
-        -item.score,
-    )
+    confidence_rank = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}.get(item.confidence_level, 3)
+    if effective is None:
+        # Unknown publication times are retained, but never promoted using a
+        # crawl/first-seen timestamp that is not a publication timestamp.
+        return (1, 0.0, confidence_rank, item.source_priority, -item.score)
+    return (0, -effective.timestamp(), confidence_rank, item.source_priority, -item.score)
 
 
 def select_top(items: list[IntelligenceItem], *, maximum: int = 5, floor: float = 70.0) -> list[IntelligenceItem]:
-    """宁缺毋滥：默认只保留 >=80 分；当日不足时允许 70-79 分补位。"""
+    """不设分数/可信度门槛；仅保留业务范围内条目并按发布时间优先排序。
+
+    ``floor`` is retained for API compatibility and intentionally ignored.
+    """
     in_scope = [item for item in items if _is_in_scope(item)]
-    strong = [item for item in in_scope if item.score >= 80]
-    if len(strong) >= 3:
-        return strong[:maximum]
-    return [item for item in in_scope if item.score >= floor][:maximum]
+    return sorted(in_scope, key=_publication_order_key)[:maximum]

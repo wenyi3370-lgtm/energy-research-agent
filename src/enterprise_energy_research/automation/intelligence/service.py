@@ -278,8 +278,6 @@ class IntelligenceService:
         for item in reversed(history):
             if item.category not in allowed_categories:
                 continue
-            if item.freshness_status not in ("NEW", "UPDATED") and getattr(item, "score", 0) < 70:
-                continue
             reference = item.updated_at_iso or item.published_at_iso or item.crawl_at or item.first_seen_at
             if reference is None:
                 continue
