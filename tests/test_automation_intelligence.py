@@ -491,6 +491,7 @@ class CollectorPipelineTests(unittest.TestCase):
         )
         items = collector.collect(current_time=datetime(2026, 8, 22, 8, 0, tzinfo=TZ))
         self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].crawl_at, datetime(2026, 8, 22, 8, 0, tzinfo=TZ))
         self.assertEqual(collector.extraction_attempt_count, 1)
         self.assertEqual(collector.extraction_success_count, 1)
         self.assertTrue(any(request.metadata.get("url") for request in adapter.requests))

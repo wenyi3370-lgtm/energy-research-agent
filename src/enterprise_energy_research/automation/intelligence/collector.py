@@ -223,7 +223,7 @@ class IntelligenceCollector:
                 hydrated = self._hydrate_hit(envelope.query_id, hit_index, hit)
                 if hydrated is None:
                     continue
-                final_url, final_title, final_text, retrieved_at = hydrated
+                final_url, final_title, final_text, _retrieved_at = hydrated
                 self.extraction_attempt_count += 1
                 extracted = self._extract(
                     final_url, final_title, final_text,
@@ -233,7 +233,11 @@ class IntelligenceCollector:
                     update_start=update_start,
                     search_layer=_layer_from_query_id(envelope.query_id),
                     topic=envelope.topic or "",
-                    crawl_at=_parse_crawl_at(retrieved_at, current_time),
+                    # Search adapters may expose a cached/discovery timestamp
+                    # in retrieved_at.  crawl_at is the time this daily run
+                    # actually processed the page, so it must be the frozen
+                    # REPORT_CUTOFF_TIME rather than adapter metadata.
+                    crawl_at=current_time,
                     content_hash=content_sha256(final_text),
                 )
                 if extracted is not None:
@@ -403,16 +407,6 @@ def _layer_from_query_id(query_id: str) -> str:
 
 def _result_limit(layer: str) -> int:
     return 6 if layer == "PRIMARY" else 4
-
-
-def _parse_crawl_at(value: str, fallback: datetime) -> datetime:
-    try:
-        parsed = datetime.fromisoformat((value or "").replace("Z", "+00:00"))
-    except ValueError:
-        return fallback
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=fallback.tzinfo)
-    return parsed.astimezone(fallback.tzinfo)
 
 
 def _window_query(query: str, start: datetime, end: datetime) -> str:
