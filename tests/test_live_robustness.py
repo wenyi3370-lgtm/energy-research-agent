@@ -50,6 +50,37 @@ def batch_dict(source_url: str, *, claims=None, entities=None) -> ExtractedEvide
 
 
 class RobustnessTests(unittest.TestCase):
+    def test_undeclared_parent_omits_only_dangling_edge(self) -> None:
+        batch = batch_dict(
+            "https://www.acme-corp.com/brand",
+            entities=[{
+                "entity_key": "acme_brand",
+                "canonical_name": "ACME品牌",
+                "entity_type": "brand",
+                "parent_entity_key": "acme_parent_not_emitted",
+            }],
+            claims=[{
+                "entity_key": "acme_brand",
+                "field_name": "brand_name",
+                "value": "ACME品牌",
+                "value_type": "string",
+                "raw_text": "ACME品牌",
+                "context_text": "页面介绍ACME品牌。",
+                "qualifier": "exact",
+            }],
+        )
+
+        evidence = EvidenceNormalizer().normalize([batch], query_ids=["QUERY-PARENT"])
+
+        self.assertEqual([entity.canonical_name for entity in evidence.entities], ["ACME品牌"])
+        self.assertEqual(evidence.claims[0].value, "ACME品牌")
+        self.assertFalse(any(edge.relation == "Subsidiary" for edge in evidence.edges))
+        self.assertEqual(len(evidence.gaps), 1)
+        self.assertEqual(evidence.gaps[0].reason, "EXTRACTED_NOT_NORMALIZED")
+        self.assertEqual(evidence.gaps[0].attempted_query_ids, ["QUERY-PARENT"])
+        dropped = evidence.retrievals[0].diagnostics["dropped_references"]
+        self.assertEqual(dropped[0]["missing_parent_entity_key"], "acme_parent_not_emitted")
+
     # ---- 1. adapter metadata owns the snippet flag -------------------------
 
     def test_snippet_flag_comes_from_adapter_not_model(self) -> None:

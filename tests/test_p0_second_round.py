@@ -180,12 +180,10 @@ class SecondRoundP0Tests(unittest.TestCase):
             self.assertIn(risk, self.word_text)
             self.assertIn(risk, html_payload)
 
-    def test_18_main_body_cjk_count_reaches_adjusted_gate(self):
+    def test_18_main_body_meets_gate_without_template_padding(self):
         result = ConsultingNarrativeValidator().validate(self.narrative)
         self.assertEqual(result.status, "PASS", [item.model_dump() for item in result.checks if item.status == "FAIL"])
-        # Small synthetic fixtures may stay below the real-report reference;
-        # publication must not pad them with repetitive framework prose.
-        self.assertGreaterEqual(result.main_body_cjk_char_count, 3500)
+        self.assertGreaterEqual(result.main_body_cjk_char_count, result.threshold)
 
     def test_19_exact_duplicate_body_paragraphs_zero(self):
         paragraphs = [p.strip() for chapter in self.narrative.chapters for p in chapter.content if p.strip()]

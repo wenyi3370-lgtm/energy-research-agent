@@ -40,6 +40,13 @@ class ApiTestCase(unittest.TestCase):
 
 
 class TestSubmitAndStatus(ApiTestCase):
+    def test_keyword_fallback_preserves_company_and_full_requirement(self):
+        from enterprise_energy_research.automation.api.app import _keyword_parse
+
+        parsed = _keyword_parse("调研宁德时代的主营业务生产基地和产品线")
+        self.assertEqual(parsed.company, "宁德时代")
+        self.assertEqual(parsed.notes, "调研宁德时代的主营业务生产基地和产品线")
+
     def test_submit_returns_queued_then_background_executes(self):
         body = self.submit()
         self.assertTrue(body["run_id"].startswith("RUN-"))
@@ -88,6 +95,27 @@ class TestSubmitAndStatus(ApiTestCase):
         resp = self.client.get("/health")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["status"], "ok")
+        source_file = resp.json()["source_file"].replace("\\", "/")
+        portal_file = resp.json()["portal_file"].replace("\\", "/")
+        self.assertTrue(source_file.endswith("automation/api/app.py"))
+        self.assertTrue(portal_file.endswith("portal/portal.html"))
+
+    def test_every_portal_button_is_wired_to_a_registered_api(self):
+        html = self.client.get("/").text
+        button_ids = (
+            "parseBtn", "prepareBtn", "startBtn", "deepBtn",
+            "stopAllBtn", "intelBtn", "pauseBtn", "resumeBtn",
+        )
+        for button_id in button_ids:
+            self.assertIn(f'id="{button_id}"', html)
+            self.assertIn(f"getElementById('{button_id}')", html)
+        for endpoint in (
+            "/api/v1/research/natural", "/api/v1/research/prepare",
+            "/api/v1/research/stop-all", "/deep-research",
+            "/api/v1/intelligence/daily", "/api/v1/intelligence/pause",
+            "/api/v1/intelligence/resume", "/api/v1/intelligence/status",
+        ):
+            self.assertIn(endpoint, html)
 
     def test_monitor_summary_cannot_be_submitted_as_research(self):
         resp = self.client.post(

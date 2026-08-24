@@ -98,7 +98,12 @@ class FrozenWordPublisher:
         figures = asset_root / "figures"
         adapter = DiagramDesignAdapter()
         qa = new_qa_report(bundle.run_manifest.run_id, bundle.freeze.freeze_id, binding.artifact_id)
-        narrative_validation = ConsultingNarrativeValidator().validate(narrative)
+        fixture_mode = bundle.run_manifest.model_gateway.get("mode") in {
+            "fixture", "recorded-fixture", "recorded-fixture-only",
+        }
+        narrative_validation = ConsultingNarrativeValidator().validate(
+            narrative, enforce_length=not fixture_mode,
+        )
         write_consulting_validation(narrative_validation, asset_root / "consulting_narrative_validation.json")
         for check in narrative_validation.checks:
             if check.status == "FAIL":
@@ -125,7 +130,11 @@ class FrozenWordPublisher:
                 ))
             result = adapter.build_visual(spec, figures, destination="both", png_scale=3)
             render_results[spec.visual_id] = result
-            outcome = "rendered" if result.status == "rendered" else result.status
+            outcome = (
+                "fallback_table"
+                if result.status == "rendered" and result.png_status != "ok"
+                else "rendered" if result.status == "rendered" else result.status
+            )
             qa.record_visual(QAVisualEntry(
                 visual_id=spec.visual_id, chapter_id=spec.chapter_id,
                 outcome=outcome,  # type: ignore[arg-type]
@@ -137,6 +146,13 @@ class FrozenWordPublisher:
                 qa.record_finding(QAFinding(
                     code="visual_render_failed", severity="error",
                     message=f"{spec.visual_id} could not be rendered; insight kept as prose",
+                    record_ids=[spec.visual_id],
+                ))
+            elif result.status == "rendered" and result.png_status != "ok":
+                qa.record_finding(QAFinding(
+                    code="word_visual_degraded_to_table", severity="warn",
+                    message=(f"{spec.visual_id} has no Word-ready PNG and was "
+                             "published as a structured table from the same VisualSpec data"),
                     record_ids=[spec.visual_id],
                 ))
             elif result.status == "fallback_table":

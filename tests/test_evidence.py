@@ -59,6 +59,14 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaises(EvidenceStoreError):
             self.store.add("RUN-TEST", 1, "entity", Entity(entity_id="ENT-NEW", canonical_name="新企业"))
 
+    def test_freeze_is_idempotent_for_unchanged_evidence(self) -> None:
+        self.add_valid_evidence()
+        service = FreezeService(self.store)
+        first = service.create("RUN-TEST", 1, CoreValidator(self.store).validate("RUN-TEST", 1))
+        second = service.create("RUN-TEST", 1, CoreValidator(self.store).validate("RUN-TEST", 1))
+        self.assertEqual(second.freeze_id, first.freeze_id)
+        self.assertEqual(second.root_hash, first.root_hash)
+
     def test_weak_verified_source_blocks(self) -> None:
         self.add_valid_evidence(SourceLevel.SOURCE_D)
         report = CoreValidator(self.store).validate("RUN-TEST", 1)

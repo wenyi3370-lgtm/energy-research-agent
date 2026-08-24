@@ -78,7 +78,9 @@ class ArtifactConsistencyAuditor:
         findings: list[ConsistencyFinding],
     ) -> None:
         try:
-            fixture_mode = bundle.run_manifest.model_gateway.get("mode") in {"fixture", "recorded-fixture"}
+            fixture_mode = bundle.run_manifest.model_gateway.get("mode") in {
+                "fixture", "recorded-fixture", "recorded-fixture-only",
+            }
             if kind in {ArtifactType.ENTERPRISE_HTML, ArtifactType.PRODUCT_HTML}:
                 text = path.read_text(encoding="utf-8")
                 if bundle.freeze.root_hash not in text or bundle.freeze.freeze_id not in text:
@@ -100,13 +102,24 @@ class ArtifactConsistencyAuditor:
                 from openpyxl import load_workbook
                 workbook = load_workbook(path, read_only=True, data_only=False)
                 try:
-                    if "运行清单" not in workbook.sheetnames:
-                        raise ValueError("Excel workbook has no run manifest sheet")
                     values: dict[str, object] = {}
-                    for row in workbook["运行清单"].iter_rows(values_only=True):
-                        compact = [value for value in row if value is not None]
-                        if len(compact) >= 2 and compact[0] not in {"field", "运行清单"}:
-                            values[str(compact[0])] = compact[1]
+                    if "运行清单" in workbook.sheetnames:
+                        # Backward-compatible reader for historical releases.
+                        for row in workbook["运行清单"].iter_rows(values_only=True):
+                            compact = [value for value in row if value is not None]
+                            if len(compact) >= 2 and compact[0] not in {"field", "运行清单"}:
+                                values[str(compact[0])] = compact[1]
+                    elif "01_企业基本信息" in workbook.sheetnames:
+                        # Current Skill contract has exactly 17 business
+                        # sheets.  Provenance is stored as columns on the
+                        # canonical enterprise row instead of a hidden or
+                        # ad-hoc eighteenth sheet.
+                        rows = workbook["01_企业基本信息"].iter_rows(values_only=True)
+                        headers = [str(value or "") for value in next(rows, ())]
+                        first = next(rows, ())
+                        values = {header: value for header, value in zip(headers, first) if header}
+                    else:
+                        raise ValueError("Excel workbook has no canonical enterprise provenance sheet")
                     if values.get("freeze_id") != bundle.freeze.freeze_id or values.get("root_hash") != bundle.freeze.root_hash:
                         raise ValueError("Excel run manifest provenance mismatch")
                 finally:

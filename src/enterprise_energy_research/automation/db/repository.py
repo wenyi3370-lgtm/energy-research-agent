@@ -133,6 +133,28 @@ class TaskRepository:
         assert_transition(source, target)
         row.status = str(target)
         now = _utc_now()
+        if target == TaskStatus.RETRYING:
+            # The durable workflow_events table already preserves the failed
+            # attempt.  Clear its terminal/result projection before exposing
+            # the new attempt, otherwise QUEUED/RESEARCHING responses continue
+            # to display a stale failure and a later success can inherit it.
+            row.started_at = None
+            row.finished_at = None
+            row.duration_seconds = None
+            row.validation_status = None
+            row.confidence = None
+            row.risk_level = None
+            row.review_required = False
+            row.evidence_count = 0
+            row.conflict_count = 0
+            row.gap_count = 0
+            row.input_tokens = 0
+            row.output_tokens = 0
+            row.estimated_cost = 0.0
+            row.artifact_manifest = None
+            row.result_payload = None
+            row.error_type = None
+            row.error_message = None
         if started:
             # 每次进入执行态都刷新开始时间：重试后的 run 重新计时，
             # 避免陈旧 started_at 被僵尸检测误判为超时。
@@ -179,9 +201,8 @@ class TaskRepository:
             ref.model_dump(mode="json") for ref in result.artifact_manifest
         ]
         row.result_payload = result.model_dump(mode="json")
-        if result.error is not None:
-            row.error_type = result.error.error_type
-            row.error_message = result.error.message
+        row.error_type = result.error.error_type if result.error is not None else None
+        row.error_message = result.error.message if result.error is not None else None
         self.session.commit()
         return row
 

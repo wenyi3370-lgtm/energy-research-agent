@@ -36,12 +36,19 @@ from enterprise_energy_research.domain.models import Claim, FrozenResearchBundle
 from enterprise_energy_research.research.publication_relevance import (
     PublicationRelevanceFilter,
 )
+from enterprise_energy_research.research.entity_scope import (
+    canonical_entity,
+    scoped_factories,
+    scoped_products,
+    target_claims,
+)
 
 # Metric families the engine understands; unknown fields are ignored.
 FLOW_METRICS = {
     "revenue": "营业收入",
     "profit": "归母净利润",
     "net_profit": "归母净利润",
+    "net_profit_attributable_to_parent": "归母净利润",
     "rnd_expense": "研发投入",
     "operating_cash_flow": "经营活动现金流",
     "employee_count": "员工人数",
@@ -206,10 +213,11 @@ class ResearchAnalysisEngine:
     """Deterministic objective analysis of one frozen research bundle."""
 
     def analyze(self, bundle: FrozenResearchBundle) -> ResearchAnalysis:
-        entity = self._canonical_entity(bundle)
+        entity = canonical_entity(bundle)
         if entity is None:
-            raise ValueError("Frozen bundle contains no enterprise entity")
+            raise ValueError("Frozen bundle contains no canonical enterprise entity")
         body_claims, report = PublicationRelevanceFilter().filter(bundle)
+        body_claims = target_claims(bundle, body_claims)
         analysis = ResearchAnalysis(
             run_id=bundle.run_manifest.run_id,
             entity_name=entity.canonical_name,
@@ -322,7 +330,7 @@ class ResearchAnalysisEngine:
         ))
 
     def _product_families(self, analysis: ResearchAnalysis, bundle: FrozenResearchBundle, by_field: dict[str, list[Claim]]) -> None:
-        products = [item for item in bundle.products if item.verification_status == VerificationStatus.VERIFIED]
+        products = [item for item in scoped_products(bundle) if item.verification_status == VerificationStatus.VERIFIED]
         if not products:
             return
         families: dict[str, list[Product]] = defaultdict(list)
@@ -351,11 +359,12 @@ class ResearchAnalysisEngine:
         analysis.key_product_ids = [item.product_id for item in ranked[:8]]
 
     def _factory_regions(self, analysis: ResearchAnalysis, bundle: FrozenResearchBundle) -> None:
-        if not bundle.factories:
+        factories = scoped_factories(bundle)
+        if not factories:
             return
         distribution: Counter[str] = Counter()
         sites: set[str] = set()
-        for factory in bundle.factories:
+        for factory in factories:
             address = factory.address or ""
             overseas = OVERSEAS_RE.search(address)
             if overseas:
@@ -376,7 +385,7 @@ class ResearchAnalysisEngine:
                 sites.add(f"unknown:{address}")
         # Publication counts the collected factory records.  Unknown/partial
         # addresses must not be collapsed into one apparent physical site.
-        analysis.factory_site_count = len(bundle.factories)
+        analysis.factory_site_count = len(factories)
         analysis.region_distribution = dict(distribution.most_common())
         if analysis.region_distribution:
             top_regions = "、".join(f"{region} {count} 处" for region, count in list(analysis.region_distribution.items())[:5])
@@ -518,12 +527,14 @@ class ResearchAnalysisEngine:
                 unit=formatted.display_unit, period=self._period_of(best), scope=best.scope,
                 source_ids=[best.source_id], claim_ids=[best.claim_id],
             ))
-        if bundle.products:
+        products = scoped_products(bundle)
+        factories = scoped_factories(bundle)
+        if products:
             analysis.kpis.append(ResearchKpi(label="已核验产品族",
-                                             value=str(len({item.category or "未分类" for item in bundle.products if item.verification_status == VerificationStatus.VERIFIED})),
+                                             value=str(len({item.category or "未分类" for item in products if item.verification_status == VerificationStatus.VERIFIED})),
                                              unit="个"))
-        if bundle.factories:
-            analysis.kpis.append(ResearchKpi(label="公开基地记录", value=str(analysis.factory_site_count or len(bundle.factories)), unit="条"))
+        if factories:
+            analysis.kpis.append(ResearchKpi(label="公开基地记录", value=str(analysis.factory_site_count or len(factories)), unit="条"))
         position = by_field.get("market_share") or by_field.get("industry_position")
         if position:
             best = self._latest_valid(position)
@@ -712,10 +723,3 @@ class ResearchAnalysisEngine:
         if label in {"营业收入", "归母净利润"} and (yoy or 0) > 0:
             return f"从合作基础看，{label}保持增长说明公司具备跨业务线推进联合项目的资源基础；但具体能源项目仍需结合目标基地条件单独测算。"
         return f"{label}的最新公开披露为 {last.value_display}{last.unit or ''}（{last.period or '最新披露期'}）。"
-
-    @staticmethod
-    def _canonical_entity(bundle: FrozenResearchBundle):
-        return next(
-            (item for item in bundle.entities if item.entity_id == bundle.run_manifest.canonical_entity_id),
-            bundle.entities[0] if bundle.entities else None,
-        )

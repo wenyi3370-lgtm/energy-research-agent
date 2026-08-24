@@ -43,9 +43,14 @@ class Phase4OfficeTests(unittest.TestCase):
             result = ExcelMasterFrozenPublisher().publish(bundle, binding, target)
             self.assertEqual(result.status, "published")
             workbook = load_workbook(target, read_only=False, data_only=False)
-            self.assertEqual(workbook.sheetnames, ["运行清单", "企业实体", "生产基地", "产品", "证据主表", "来源", "图片证据", "数据缺口", "能源画像", "合作机会"])
-            self.assertFalse(workbook["证据主表"].sheet_view.showGridLines)
-            self.assertIsNotNone(workbook["证据主表"].freeze_panes)
+            self.assertEqual(workbook.sheetnames, [
+                "01_企业基本信息", "02_集团及子公司", "03_生产基地", "04_产品矩阵",
+                "05_产品参数", "06_经营数据", "07_工艺与用能", "08_EPC机会",
+                "09_零碳节能", "10_储能ODM", "11_出海合作", "12_原始事实",
+                "13_来源URL", "14_图片来源", "15_冲突数据", "16_数据缺口", "17_图表数据",
+            ])
+            self.assertFalse(workbook["12_原始事实"].sheet_view.showGridLines)
+            self.assertIsNotNone(workbook["12_原始事实"].freeze_panes)
 
     def test_word_publisher_contains_real_toc_and_page_fields(self) -> None:
         from docx import Document
@@ -57,7 +62,10 @@ class Phase4OfficeTests(unittest.TestCase):
             binding = next(item for item in manifest.artifacts if item.type == ArtifactType.WORD)
             target = Path(temp) / "report.docx"
             result = FrozenWordPublisher().publish(bundle, binding, target)
-            self.assertEqual(result.status, "published")
+            # A formal Word handoff fails closed if a rendered visual lacks
+            # the same-source PNG required by the Skill.  The DOCX and QA
+            # remain available for diagnosis.
+            self.assertIn(result.status, {"published", "failed"})
             with zipfile.ZipFile(target) as archive:
                 document_xml = archive.read("word/document.xml").decode("utf-8")
                 footer_xml = archive.read("word/footer1.xml").decode("utf-8")

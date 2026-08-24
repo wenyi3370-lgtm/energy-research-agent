@@ -36,23 +36,73 @@ class ExcelMasterFrozenPublisher:
         if spec is None or spec.loader is None:
             raise RuntimeError("无法加载 Excel Master")
         module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        canonical_id = bundle.run_manifest.canonical_entity_id
+        entities = [self._row(item) for item in bundle.entities]
+        canonical_rows = [row for row in entities if row.get("entity_id") == canonical_id]
+        for row in canonical_rows:
+            # Keep provenance inside the fixed 17-sheet workbook contract.
+            # Adding an 18th legacy metadata sheet would violate the Skill's
+            # required worksheet set.
+            row["run_id"] = bundle.run_manifest.run_id
+            row["freeze_id"] = bundle.freeze.freeze_id
+            row["root_hash"] = bundle.freeze.root_hash
+        products = [self._row(item) for item in bundle.products]
+        product_parameters = [
+            {
+                "product_id": product.product_id,
+                "entity_id": product.entity_id,
+                "product_name": product.name,
+                "parameter_name": parameter.name,
+                "value": parameter.value,
+                "unit": parameter.unit,
+                "claim_ids": str(parameter.claim_ids),
+            }
+            for product in bundle.products for parameter in product.parameters
+        ]
+        numeric_claims = [
+            self._row(claim) for claim in bundle.claims
+            if isinstance(claim.value, (int, float)) and not isinstance(claim.value, bool)
+        ]
+        solution_rows = [self._row(item) for item in bundle.solutions]
+
+        def solutions(*engines: str):
+            return pd.DataFrame([row for row in solution_rows if row.get("engine") in engines])
+
+        # The workbook contract is fixed even when a section has no rows: an
+        # empty, named sheet is an honest gap; silently omitting the sheet is
+        # not a valid Excel Master delivery.
         sheets = [
-            ("运行清单", pd.DataFrame([
-                {"field": "run_id", "value": bundle.run_manifest.run_id},
-                {"field": "freeze_id", "value": bundle.freeze.freeze_id},
-                {"field": "root_hash", "value": bundle.freeze.root_hash},
-                {"field": "evidence_version", "value": bundle.freeze.evidence_version},
-                {"field": "validation_status", "value": bundle.run_manifest.validation_status.value if bundle.run_manifest.validation_status else None},
+            ("01_企业基本信息", pd.DataFrame(canonical_rows)),
+            ("02_集团及子公司", pd.DataFrame([row for row in entities if row.get("entity_id") != canonical_id])),
+            ("03_生产基地", pd.DataFrame([self._row(item) for item in bundle.factories])),
+            ("04_产品矩阵", pd.DataFrame(products)),
+            ("05_产品参数", pd.DataFrame(product_parameters)),
+            ("06_经营数据", pd.DataFrame([self._row(item) for item in bundle.claims if item.field_name in {
+                "revenue", "profit", "gross_margin", "rnd_expense", "rnd_expense_ratio",
+                "operating_cash_flow", "employee_count", "investment", "business_segment",
+            }])),
+            ("07_工艺与用能", pd.DataFrame([
+                *[self._row(item) for item in bundle.energy_profiles],
+                *[self._row(item) for item in bundle.claims if item.field_name in {
+                    "process", "processes", "production_lines", "energy_consumption",
+                    "electricity_consumption", "energy_equipment", "electricity_load",
+                    "roof_area", "transformer_capacity",
+                }],
             ])),
-            ("企业实体", pd.DataFrame([self._row(x) for x in bundle.entities])),
-            ("生产基地", pd.DataFrame([self._row(x) for x in bundle.factories])),
-            ("产品", pd.DataFrame([self._row(x) for x in bundle.products])),
-            ("证据主表", pd.DataFrame([self._row(x) for x in bundle.claims])),
-            ("来源", pd.DataFrame([self._row(x) for x in bundle.sources])),
-            ("图片证据", pd.DataFrame([self._row(x) for x in bundle.images])),
-            ("数据缺口", pd.DataFrame([self._row(x) for x in bundle.gaps])),
-            ("能源画像", pd.DataFrame([self._row(x) for x in bundle.energy_profiles])),
-            ("合作机会", pd.DataFrame([self._row(x) for x in bundle.solutions])),
+            ("08_EPC机会", solutions("EPC", "PV_EPC")),
+            ("09_零碳节能", solutions("ZERO_CARBON", "ENERGY_EFFICIENCY", "GREEN_POWER", "ZERO_CARBON_FACTORY")),
+            ("10_储能ODM", solutions("STORAGE_ODM", "STORAGE", "ODM", "V2G")),
+            ("11_出海合作", solutions("OVERSEAS", "CHANNEL")),
+            ("12_原始事实", pd.DataFrame([self._row(item) for item in bundle.claims])),
+            ("13_来源URL", pd.DataFrame([self._row(item) for item in bundle.sources])),
+            ("14_图片来源", pd.DataFrame([self._row(item) for item in bundle.images])),
+            ("15_冲突数据", pd.DataFrame([self._row(item) for item in bundle.conflicts])),
+            ("16_数据缺口", pd.DataFrame([self._row(item) for item in bundle.gaps])),
+            ("17_图表数据", pd.DataFrame(numeric_claims)),
+        ]
+        sheets = [
+            (name, frame if not frame.empty else pd.DataFrame([{"数据状态": "暂无已核验数据"}]))
+            for name, frame in sheets
         ]
         output_path.parent.mkdir(parents=True, exist_ok=True)
         module.make_excel(sheets, output_path, theme=self.theme, freeze_rows=self.freeze_rows)

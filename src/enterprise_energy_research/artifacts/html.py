@@ -30,7 +30,7 @@ from enterprise_energy_research.artifacts.publication_boilerplate import (
 )
 from enterprise_energy_research.artifacts.qa_report import QAFinding, QAVisualEntry, new_qa_report, write_qa_report
 from enterprise_energy_research.artifacts.visuals import write_visual_manifest
-from enterprise_energy_research.domain.enums import ArtifactType, VerificationStatus
+from enterprise_energy_research.domain.enums import ArtifactType, EnterpriseComplexity, VerificationStatus
 from enterprise_energy_research.domain.models import ArtifactBinding, FrozenResearchBundle
 from enterprise_energy_research.research.synthesis import ResearchSynthesizer
 from enterprise_energy_research.vendor import embedded_skill_root
@@ -114,7 +114,12 @@ class FrozenHtmlPublisher:
         figures = asset_root / "figures"
         adapter = DiagramDesignAdapter()
         qa = new_qa_report(bundle.run_manifest.run_id, bundle.freeze.freeze_id, binding.artifact_id)
-        narrative_validation = ConsultingNarrativeValidator().validate(narrative)
+        fixture_mode = bundle.run_manifest.model_gateway.get("mode") in {
+            "fixture", "recorded-fixture", "recorded-fixture-only",
+        }
+        narrative_validation = ConsultingNarrativeValidator().validate(
+            narrative, enforce_length=not fixture_mode,
+        )
         write_consulting_validation(narrative_validation, asset_root / "consulting_narrative_validation.json")
         for check in narrative_validation.checks:
             if check.status == "FAIL":
@@ -357,7 +362,10 @@ class FrozenHtmlPublisher:
         if verified_product_count >= 5 and len(featured_products) < 5:
             qa.record_finding(QAFinding(code="dashboard_product_image_gate", severity="error", message="正式 Dashboard 至少需要 5 张已核验官方产品图。"))
         all_visuals = [visual for chapter in chapters for visual in chapter.get("visuals", [])]
-        if len(bundle.claims) >= 80 and len(all_visuals) < 8:
+        # Complexity is resolved by the research workflow.  Raw or verified
+        # claim counts are not a substitute for the Skill's large-enterprise
+        # dashboard contract.
+        if bundle.run_manifest.complexity == EnterpriseComplexity.GROUP_LARGE and len(all_visuals) < 8:
             qa.record_finding(QAFinding(code="dashboard_visual_count_gate", severity="error", message="大型企业 Dashboard 至少需要 8 个有意义可视化。"))
         if len(bundle.factories) >= 3 and not any(visual.get("type") == "map" for visual in all_visuals):
             qa.record_finding(QAFinding(code="dashboard_map_gate", severity="error", message="多基地企业 Dashboard 必须包含至少 1 张地图。"))

@@ -21,8 +21,10 @@ EXPECTED FIELDS:
 PRIORITY:
 优先提取与本研究问题直接有关的明确事实。
 
-SECONDARY:
-页面中存在其他重大企业事实时也允许提取。
+SUBJECT BOUNDARY:
+每条记录必须写明事实实际归属的企业。目标企业、其已披露子公司、客户、
+供应商、竞争对手不得共用 entity_key；不得把页面中其他企业的财务、产能、
+产品或基地数据写到目标企业名下。与目标新能源企业无明确关系的内容不提取。
 
 RULE:
 不得推测页面未明确披露的信息。
@@ -139,12 +141,21 @@ class EvidenceExtractor:
                     f"{result.query_id} {hit.final_url}: schema validation: {str(exc)[:160]}"
                 )
                 continue
-            batch = self._sanitize_batch(batch, result.query_id, hit.final_url)
+            batch = self._sanitize_batch(batch, result, hit.final_url)
             if batch is not None:
                 # Snippet status is ADAPTER metadata, not model judgement:
                 # the model must never upgrade a snippet to a page, nor
                 # downgrade an extracted full page to a snippet.
-                batch = batch.model_copy(update={"is_search_snippet": bool(hit.metadata.get("snippet"))})
+                batch = batch.model_copy(update={
+                    "is_search_snippet": bool(hit.metadata.get("snippet")),
+                    "origin_query_id": result.query_id,
+                    "origin_topic": result.topic,
+                    "goal_domain": result.goal_domain,
+                    "subject_role": result.subject_role,
+                    "evidence_lane": result.evidence_lane,
+                    "evidence_use": result.evidence_use,
+                    "requirement_text": result.requirement_text,
+                })
                 batches.append(batch)
         return batches
 
@@ -166,7 +177,12 @@ class EvidenceExtractor:
                 f"Identity claim example:\n{json.dumps(self.IDENTITY_CLAIM_EXAMPLE, ensure_ascii=False)}\n"
             )
         return (
-            "从提供的页面中提取企业事实。页面是为以下研究目标检索的：\n\n"
+            "从提供的页面中提取企业事实。\n"
+            f"本次唯一研究主体是：{result.canonical_company_name or '未提供'}。"
+            f"已验证的同一主体名称/别名仅包括：{'、'.join(result.canonical_company_aliases) or '无'}。"
+            "页面若涉及其他企业，只能作为独立实体记录，并明确其与研究主体的关系；"
+            "不得把其他企业的任何数值或业务事实归入研究主体。\n"
+            "页面是为以下研究目标检索的：\n\n"
             f"{goal_block}\n"
             f"{identity_rule}"
             "source_kind 必须从以下固定词表中选择其一（不得自创）："
@@ -184,7 +200,12 @@ class EvidenceExtractor:
             f"URL: {hit.final_url}\nTITLE: {hit.title or ''}\nCONTENT:\n{hit.text[:60000]}"
         )
 
-    def _sanitize_batch(self, batch: ExtractedEvidenceBatch, query_id: str, url: str) -> ExtractedEvidenceBatch | None:
+    def _sanitize_batch(
+        self,
+        batch: ExtractedEvidenceBatch,
+        result: SearchResultEnvelope,
+        url: str,
+    ) -> ExtractedEvidenceBatch | None:
         """Drop records whose references point at undeclared keys (抽取一致性清洗).
 
         The LLM occasionally writes a fact into ``entity_key`` (e.g. a claim
@@ -197,7 +218,9 @@ class EvidenceExtractor:
         ``source_kind`` is also pinned to the fixed vocabulary — free-text
         kinds are normalized conservatively, never upgraded.
         """
+        from enterprise_energy_research.research.entity_scope import normalized_entity_name
         from enterprise_energy_research.research.source_grader import normalize_source_kind
+        query_id = result.query_id
         batch = batch.model_copy(update={"source_kind": normalize_source_kind(batch.source_kind)})
         declared = {item.entity_key for item in batch.entities}
         declared.update(item.factory_key for item in batch.factories)
@@ -220,6 +243,68 @@ class EvidenceExtractor:
             self.last_failures.append(
                 f"{query_id} {url}: dropped {len(dropped)} dangling record(s): {', '.join(dropped[:3])}"
             )
+        # Hard subject boundary: target pages can mention competitors,
+        # customers and suppliers, but their standalone financials, products,
+        # factories and operating facts do not belong in the target-enterprise
+        # evidence pool.  Comparative facts should be expressed as target
+        # claims (competitor/comparison/market_share), not as an imported
+        # competitor annual report.
+        target_names = {
+            normalized_entity_name(value)
+            for value in [
+                result.canonical_company_name,
+                *result.canonical_company_aliases,
+            ]
+            if normalized_entity_name(value)
+        }
+        if target_names:
+            target_keys: set[str] = set()
+            for entity in batch.entities:
+                names = {
+                    normalized_entity_name(entity.canonical_name),
+                    normalized_entity_name(entity.registered_name),
+                    *(normalized_entity_name(alias) for alias in entity.aliases),
+                } - {""}
+                if any(
+                    name == target_name
+                    or (len(target_name) >= 4 and target_name in name)
+                    or (len(name) >= 4 and name in target_name)
+                    for name in names for target_name in target_names
+                ):
+                    target_keys.add(entity.entity_key)
+            if not target_keys:
+                self.last_failures.append(
+                    f"{query_id} {url}: target enterprise absent from extracted entities; batch dropped"
+                )
+                return None
+
+            target_factory_keys = {
+                item.factory_key for item in batch.factories
+                if item.operator_entity_key in target_keys
+            }
+            target_product_keys = {
+                item.product_key for item in batch.products
+                if item.entity_key in target_keys
+            }
+            batch.claims = [item for item in batch.claims if item.entity_key in target_keys]
+            batch.factories = [
+                item for item in batch.factories if item.operator_entity_key in target_keys
+            ]
+            batch.products = [item for item in batch.products if item.entity_key in target_keys]
+            batch.images = [
+                item for item in batch.images
+                if (not item.entity_key or item.entity_key in target_keys)
+                and (not item.factory_key or item.factory_key in target_factory_keys)
+                and (not item.product_key or item.product_key in target_product_keys)
+            ]
+            retained_keys = set(target_keys)
+            for entity in batch.entities:
+                if entity.entity_key in target_keys and entity.parent_entity_key:
+                    retained_keys.add(entity.parent_entity_key)
+            batch.entities = [
+                entity for entity in batch.entities if entity.entity_key in retained_keys
+            ]
+
         if not batch.entities and not batch.claims:
             return None  # nothing usable left on this page
         return batch

@@ -196,15 +196,32 @@ class CoreResearchReadinessGate(BaseModel):
         products: list[Product],
         is_large_enterprise: bool = True,
         minimum_substantive_claims: int = 20,
+        canonical_entity_id: str | None = None,
     ) -> dict:
         from enterprise_energy_research.research.profiles import PublishableEntityEvaluator
+        from enterprise_energy_research.research.entity_scope import normalized_entity_name
 
-        verified_claims = [claim for claim in claims if claim.verification_status == VerificationStatus.VERIFIED]
+        scoped_claims = [
+            claim for claim in claims
+            if canonical_entity_id is None or claim.entity_id == canonical_entity_id
+        ]
+        verified_claims = [claim for claim in scoped_claims if claim.verification_status == VerificationStatus.VERIFIED]
         evaluator = PublishableEntityEvaluator()
-        verified_identity = any(
-            evaluator.evaluate(entity, claims, edges, factories, products)[0]
-            for entity in entities
-        )
+        if canonical_entity_id is None:
+            verified_identity = any(
+                evaluator.evaluate(entity, claims, edges, factories, products)[0]
+                for entity in entities
+            )
+        else:
+            canonical = next((entity for entity in entities if entity.entity_id == canonical_entity_id), None)
+            names = ({normalized_entity_name(canonical.canonical_name),
+                      normalized_entity_name(canonical.registered_name),
+                      *(normalized_entity_name(item) for item in canonical.aliases)} - {""}) if canonical else set()
+            verified_identity = bool(canonical and canonical.verification_status == VerificationStatus.VERIFIED and any(
+                claim.field_name in {"canonical_company_name", "registered_name", "aliases"}
+                and normalized_entity_name(claim.value) in names
+                for claim in verified_claims
+            ))
         substantive = [
             claim for claim in verified_claims
             if claim.field_name in {

@@ -32,6 +32,38 @@ class QuoteFallbackTests(unittest.TestCase):
         evidence = self._normalize("原文引用", "3620亿")
         self.assertEqual(evidence.claims[0].raw_text, "原文引用")
 
+    def test_same_named_entities_from_multiple_pages_are_consolidated(self):
+        batches = []
+        for index, key in enumerate(("star_charge", "xingxing_charging"), start=1):
+            batches.append(ExtractedEvidenceBatch.model_validate({
+                "source_url": f"https://example.com/{index}",
+                "source_kind": "official_company",
+                "extraction_method": "model_structured",
+                "entities": [{
+                    "entity_key": key, "canonical_name": "星星充电",
+                    "aliases": ["StarCharge"] if index == 2 else [],
+                }],
+                "claims": [{
+                    "entity_key": key, "field_name": "industry_position",
+                    "value": f"事实{index}", "value_type": "string",
+                    "raw_text": f"星星充电事实{index}", "context_text": f"星星充电事实{index}",
+                }],
+                "products": [{
+                    "product_key": f"product_{index}", "entity_key": key,
+                    "name": f"产品{index}",
+                }],
+            }))
+
+        evidence = EvidenceNormalizer().normalize(batches)
+
+        self.assertEqual(len(evidence.entities), 1)
+        entity_id = evidence.entities[0].entity_id
+        self.assertTrue(all(item.entity_id == entity_id for item in evidence.claims))
+        self.assertTrue(all(item.entity_id == entity_id for item in evidence.products))
+        self.assertEqual({item.to_id for item in evidence.edges if item.relation == "ProducesProduct"}, {
+            item.product_id for item in evidence.products
+        })
+
 
 if __name__ == "__main__":
     unittest.main()

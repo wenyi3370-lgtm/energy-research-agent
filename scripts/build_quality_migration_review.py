@@ -16,7 +16,8 @@ def main() -> None:
 <h2>Word 正式交付门</h2><section class="grid"><article class="card"><b>内容深度</b><div class="bar"><span style="width:16.6%"></span></div><p>上一轮测试企业样稿：2,483 字 / 15,000 字最低线</p><p class="block">反向验收：BLOCKED</p></article><article class="card"><b>结构与密度</b><ul><li>13 个核心章节 + 4 个附录</li><li>每章 4–6 个实质分析段</li><li>标题后、图表前至少 50 字分析</li><li>每个核心章至少一个决策图表</li></ul></article><article class="card"><b>渲染验收</b><ul><li>同名 PDF 必须存在</li><li>默认至少 30 页</li><li>逐页检查 TOC、孤行表题、图题、附录</li><li>短报告须由用户明确要求</li></ul></article></section>
 <h2>PPT 高保真门</h2><table><tr><th>维度</th><th>正式要求</th></tr><tr><td>叙事</td><td>storyline + evidence map + design_spec + spec_lock；正文动作标题</td></tr><tr><td>视觉</td><td>每页至少一个有效视觉，至少 4 类版式，不允许连续 3 页同版式</td></tr><tr><td>品牌</td><td>深海军紫科技封面；白底咨询正文；克制紫/钴蓝/冷灰；SEVC 公司识别</td></tr><tr><td>证据</td><td>每页来源、更新日期、偏差/假设；真实产品/工厂/图表优先</td></tr><tr><td>注册</td><td>全页渲染 + contact sheet + 全页目检 + 至少一次修复后全量重渲染 + quality.json</td></tr></table>
 <h2>冲突处理</h2><ul><li>保留企业调研正常路径的自主执行，不增加常规大纲审批暂停。</li><li>人工批准仅用于范围/政策升级和数据缺口例外。</li><li>PPT Master 自身八项视觉确认继续保留。</li><li>联网仍只允许 AnySearch 与 Kimi WebBridge；没有引入 Web-Rooter、web-access 或其他搜索路径。</li></ul>
-<p class="label">Skill path: C:\\Users\\Wenyi Zhang\\Desktop\\企业调研skill\\enterprise-energy-research · version 0.7.0</p></main></body></html>"""
+<p class="label">Skill path: __SKILL_PATH__ · version 0.7.0</p></main></body></html>"""
+    html = html.replace("__SKILL_PATH__", str(ROOT))
     TARGET.write_text(html, encoding="utf-8")
     print(TARGET)
 

@@ -83,6 +83,8 @@ Large page text, images and artifact binaries live in stores and are addressed b
 - For `GROUP_LARGE`, create recursive entity work items with depth and count ceilings.
 - For `SMALL_SIMPLE`, omit group-depth work while retaining industry, factory, product, energy and cooperation modules.
 - Assign every query a purpose, expected output, preferred source class and budget.
+- For an initial natural-language request, preserve the fixed full plan unchanged and execute a separate additive reinforcement plan from the complete original sentence.
+- For continuation research, parse all intents from the complete sentence without using delimiters as semantic boundaries; run only cumulative targeted and coverage-gap queries.
 
 ### `SearchExecutor`
 
@@ -93,6 +95,7 @@ Large page text, images and artifact binaries live in stores and are addressed b
 - Store raw response metadata, canonical URL, retrieval timestamp and content hash.
 - Deduplicate normalized query + domain + entity combinations.
 - On failure, emit a typed diagnostic; do not improvise another web stack.
+- Block an enterprise query that does not explicitly contain its canonical company subject. A frontier query names both the canonical company and the discovered related entity/event.
 
 ### `DataSaturationValidator`
 
@@ -206,6 +209,22 @@ Enterprise Recall and the established R1 evidence plan use separate page
 budgets.  Recall may add leads but may never reduce the original page allowance
 or remove a Goal Family; verified-evidence yield and per-topic coverage remain
 the acceptance metrics, not raw hit count.
+
+### Supplemental requirement loop
+
+Every requirement entered on the portal is routed into one or more isolated
+topics plus an open custom topic. Each topic receives its own R1 official-source
+coverage, R2 hydrated full-text/detail-page extraction and R3 independent
+triangulation. These searches use the same source grading, extraction contract,
+claim verification and entity boundary as the fixed enterprise chapters.
+
+If a topic remains unsupported, publication stays internal and runs as many as
+ten additional recovery rounds using the configured distinct source strategies.
+Record the exact requirement hash, topic, query rounds, active/blocked adapter
+counts, hydrated pages, extracted batches and verified-claim delta on every
+round. Exhaustion is per requirement and per topic: failed or fully blocked
+rounds never count. Only ten executed rounds may authorize a visible public
+evidence gap; another topic's or another entity's facts cannot satisfy it.
 
 ## 5. Human review states
 

@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.adapters.base import AdapterHealth, SearchRequest, SearchResultEnvelope
+from enterprise_energy_research.adapters.base import AdapterHealth, SearchHit, SearchRequest, SearchResultEnvelope
 from enterprise_energy_research.automation.contracts import ResearchRequest
 from enterprise_energy_research.automation.db import AutomationDatabase
 from enterprise_energy_research.automation.enums import TaskStatus
@@ -71,6 +71,81 @@ def make_request(task_id: str, company: str) -> ResearchRequest:
 
 
 class OrchestratingExecutorTests(unittest.TestCase):
+    def test_portal_orchestrator_hydrates_search_snippets_before_extraction(self):
+        class HydratingAdapter:
+            name = "anysearch"
+
+            def __init__(self) -> None:
+                self.extract_calls = 0
+
+            def health(self) -> AdapterHealth:
+                return AdapterHealth(name=self.name, available=True, version="test")
+
+            def search(self, request: SearchRequest) -> SearchResultEnvelope:
+                if request.metadata.get("url"):
+                    self.extract_calls += 1
+                    return SearchResultEnvelope(
+                        adapter=self.name, query_id=request.query_id, status="ok",
+                        hits=[SearchHit(
+                            requested_url=request.metadata["url"],
+                            final_url=request.metadata["url"], title="企业官网全文",
+                            text="星星充电主营充电设备与储能系统，并建设生产基地。",
+                            status="ok", retrieved_at="2026-08-24T00:00:00Z",
+                            metadata={"format": "json"},
+                        )],
+                    )
+                raise AssertionError("only extract calls are expected in this unit test")
+
+        adapter = HydratingAdapter()
+        executor = OrchestratingExecutor(adapters={"anysearch": adapter})
+        source = SearchResultEnvelope(
+            adapter="anysearch", query_id="Q-PRODUCT", status="ok",
+            topic="products", purpose="核验产品", collection_round="R2",
+            canonical_company_name="星星充电", expected_fields=["product_family"],
+            hits=[SearchHit(
+                final_url="https://www.starcharge.com/products", title="搜索摘要",
+                text="星星充电产品中心搜索结果摘要", status="ok", retrieved_at="2026-08-24T00:00:00Z",
+                metadata={"snippet": True},
+            )],
+        )
+        # The same URL under another goal must reuse the network fetch while
+        # preserving both goal contexts.
+        second = source.model_copy(update={"query_id": "Q-FACTORY", "topic": "factories"})
+        hydrated = executor._hydrate_fulltext_envelopes([source, second])
+        material = [
+            envelope for envelope in hydrated
+            if envelope.hits and not envelope.hits[0].metadata.get("snippet")
+        ]
+        self.assertEqual(adapter.extract_calls, 1)
+        self.assertEqual({item.topic for item in material}, {"products", "factories"})
+        self.assertTrue(all(item.canonical_company_name == "星星充电" for item in material))
+        self.assertTrue(all("主营充电设备" in (item.hits[0].text or "") for item in material))
+
+    def test_portal_orchestrator_does_not_hydrate_unrelated_discovery_hit(self):
+        class MustNotFetch:
+            name = "anysearch"
+
+            @staticmethod
+            def health() -> AdapterHealth:
+                return AdapterHealth(name="anysearch", available=True, version="test")
+
+            @staticmethod
+            def search(_request: SearchRequest) -> SearchResultEnvelope:
+                raise AssertionError("unrelated discovery URL must not be hydrated")
+
+        executor = OrchestratingExecutor(adapters={"anysearch": MustNotFetch()})
+        source = SearchResultEnvelope(
+            adapter="anysearch", query_id="Q-IRRELEVANT", status="ok",
+            topic="sales_channels", canonical_company_name="星星充电",
+            hits=[SearchHit(
+                final_url="https://podcasts.example/unrelated", title="今夜说晚安",
+                text="播客节目列表", status="ok",
+                retrieved_at="2026-08-24T00:00:00Z", metadata={"snippet": True},
+            )],
+        )
+        hydrated = executor._hydrate_fulltext_envelopes([source])
+        self.assertEqual(hydrated, [source])
+
     def test_research_and_validate_over_fixture(self):
         adapter = DictFixtureAdapter(load_batch("small_simple.json"))
         executor = OrchestratingExecutor(adapters={"anysearch": adapter})

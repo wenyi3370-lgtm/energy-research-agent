@@ -36,7 +36,7 @@ class _CapturingAdapter:
 def _query(**overrides) -> ResearchQuery:
     payload = {
         "query_id": new_sortable_id("QUERY"), "entity_id": "ENT-1", "topic": "factories",
-        "query": '"ACME" 生产基地 工厂', "purpose": "R1 coverage: collect factories evidence for ACME",
+        "query": '"ACME科技有限公司" 新能源产业企业 生产基地 工厂', "purpose": "R1 coverage: collect factories evidence for ACME",
         "collection_round": "R1", "round_goal": "coverage", "trigger": "baseline",
         "canonical_company_name": "ACME科技有限公司",
         "expected_fields": ["factory_name", "operator", "capacity"],
@@ -126,6 +126,30 @@ class ExtractionContractTests(unittest.TestCase):
         self.assertEqual(envelope.topic, "factories")
         self.assertEqual(envelope.expected_fields, ["factory_name", "operator", "capacity"])
         self.assertEqual(envelope.target_gap_ids, ["GAP-7"])
+
+    def test_executor_opens_provider_circuit_after_first_quota_block(self) -> None:
+        class QuotaAdapter(_CapturingAdapter):
+            def search(self, request: SearchRequest) -> SearchResultEnvelope:
+                self.requests.append(request)
+                return SearchResultEnvelope(
+                    adapter=self.name, query_id=request.query_id, status="blocked",
+                    diagnostics=["py provider blocked: total free quota reached"],
+                )
+
+        adapter = QuotaAdapter()
+        queries = [_query(query_id=f"QUERY-{index}") for index in range(3)]
+        plan = ResearchPlan(
+            plan_id=new_sortable_id("PLAN"), run_id="RUN-CIRCUIT",
+            complexity=EnterpriseComplexity.UNKNOWN, queries=queries,
+            budget={"max_queries": 3, "max_pages": 10},
+            completion_contract=["factories"],
+            canonical_company_name="ACME科技有限公司",
+        )
+        envelopes = SearchExecutor({"anysearch": adapter}).execute(plan)
+        self.assertEqual(len(adapter.requests), 1)
+        self.assertEqual(len(envelopes), 3)
+        self.assertTrue(all(item.status == "blocked" for item in envelopes))
+        self.assertIn("circuit open", " ".join(envelopes[1].diagnostics).casefold())
 
     def test_every_goal_family_has_a_contract(self) -> None:
         for family, _ in GOAL_FAMILIES:

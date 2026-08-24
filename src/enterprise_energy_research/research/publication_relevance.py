@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from enterprise_energy_research.domain.enums import SourceLevel, VerificationStatus
 from enterprise_energy_research.domain.models import Claim, FrozenResearchBundle
+from enterprise_energy_research.research.entity_scope import allowed_publication_entity_ids
 
 # ── metric fields that answer real research questions ─────────────────────
 RESEARCH_METRIC_FIELDS = {
@@ -33,6 +34,7 @@ RESEARCH_METRIC_FIELDS = {
     "industry_position",
     # 分业务 / 区域
     "business_segment", "segment_revenue", "domestic_revenue", "overseas_revenue",
+    "sales_channel",
     "battery_revenue", "storage_revenue", "material_revenue", "energy_business_revenue",
     # 产能与制造
     "capacity", "production_capacity", "battery_production_capacity",
@@ -74,6 +76,7 @@ UNITLESS_FIELDS = {
     "employee_count", "factory_count", "production_lines", "ranking",
     "certification", "technology", "technology_route", "application",
     "business_segment", "product_catalog_scope", "industry_position",
+    "sales_channel",
 }
 
 # Identity/org fields: publishable in profile context, low visualization value.
@@ -101,6 +104,7 @@ PERIODLESS_FIELDS = IDENTITY_FIELDS | {
     "application", "product_catalog_scope", "factory_name", "factory_address",
     "process", "processes", "project_status", "commissioning_date",
     "industry_position",
+    "sales_channel",
 }
 
 # Separators are REQUIRED inside phone alternatives: without them any
@@ -137,6 +141,7 @@ class PublicationRelevanceScore(BaseModel):
 
 class RelevanceReport(BaseModel):
     total_verified: int = 0
+    target_scope_verified: int = 0
     body: list[PublicationRelevanceScore] = Field(default_factory=list)
     internal: list[PublicationRelevanceScore] = Field(default_factory=list)
 
@@ -270,6 +275,7 @@ class PublicationRelevanceFilter:
 
     def filter(self, bundle: FrozenResearchBundle) -> tuple[list[Claim], RelevanceReport]:
         verified = [claim for claim in bundle.claims if claim.verification_status == VerificationStatus.VERIFIED]
+        allowed_entities = allowed_publication_entity_ids(bundle)
         source_levels = {source.source_id: source.source_level for source in bundle.sources}
         body: list[Claim] = []
         internal: list[PublicationRelevanceScore] = []
@@ -277,10 +283,23 @@ class PublicationRelevanceFilter:
         by_id = {claim.claim_id: claim for claim in verified}
         for claim in verified:
             score = score_claim(claim, source_levels)
-            if score.relevance == Relevance.LOW:
+            if claim.entity_id not in allowed_entities:
+                internal.append(score.model_copy(update={
+                    "relevance": Relevance.LOW,
+                    "junk_guard": False,
+                    "reasons": [*score.reasons, "entity outside canonical enterprise group"],
+                }))
+            elif score.relevance == Relevance.LOW:
                 internal.append(score)
             else:
                 body.append(claim)
                 body_scores.append(score)
-        report = RelevanceReport(total_verified=len(verified), body=body_scores, internal=internal)
+        report = RelevanceReport(
+            total_verified=len(verified),
+            target_scope_verified=sum(
+                1 for claim in verified if claim.entity_id in allowed_entities
+            ),
+            body=body_scores,
+            internal=internal,
+        )
         return body, report

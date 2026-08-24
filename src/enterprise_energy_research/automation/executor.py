@@ -204,8 +204,22 @@ class SyntheticKernelExecutor:
             }
             evidence = EvidenceNormalizer().normalize(batches, official_domains=official_domains)
             self._ingest_normalized(store, run_id, evidence)
+            # Fixture execution still has to persist an explicit canonical
+            # subject before freeze.  Production obtains this id from the
+            # resolver; a fixture with one enterprise is an equally
+            # unambiguous contract and must not rely on downstream list-order
+            # fallback.
+            if len(evidence.entities) == 1:
+                run = store.get_run(run_id)
+                run.canonical_entity_id = evidence.entities[0].entity_id
+                store.replace_run_manifest(run)
         else:
-            self._ingest_minimal_synthetic(store, run_id, domain_request.raw_company_name)
+            canonical_entity_id = self._ingest_minimal_synthetic(
+                store, run_id, domain_request.raw_company_name
+            )
+            run = store.get_run(run_id)
+            run.canonical_entity_id = canonical_entity_id
+            store.replace_run_manifest(run)
         report = CoreValidator(store).validate(run_id, 1)
         return ExecutionOutcome(
             validation_status=report.status,
@@ -237,7 +251,7 @@ class SyntheticKernelExecutor:
                 store.add(run_id, 1, kind, record)
 
     @staticmethod
-    def _ingest_minimal_synthetic(store: EvidenceStore, run_id: str, company_name: str) -> None:
+    def _ingest_minimal_synthetic(store: EvidenceStore, run_id: str, company_name: str) -> str:
         """Mirror cli.synthetic_run: one verified entity/source/claim triple."""
         entity_id = new_sortable_id("ENT")
         sequence = RunSequence()
@@ -273,6 +287,7 @@ class SyntheticKernelExecutor:
             verification_status=VerificationStatus.VERIFIED,
             confidence=1.0,
         ))
+        return entity_id
 
     # -- phase B: freeze + publish (only after APPROVED) -------------------
 

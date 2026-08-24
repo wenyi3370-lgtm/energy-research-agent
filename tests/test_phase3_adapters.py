@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import os
 import subprocess
 import unittest
 from pathlib import Path
@@ -40,6 +41,42 @@ class Phase3AdapterTests(unittest.TestCase):
         result = AnySearchCliAdapter().search(request)
         self.assertEqual(result.status, "blocked")
         self.assertIn("get_sub_domains", " ".join(result.diagnostics))
+
+    def test_anysearch_zero_exit_quota_notice_is_not_a_search_hit(self) -> None:
+        adapter = AnySearchCliAdapter()
+        prefix = [["python", "anysearch_cli.py"]]
+        quota = subprocess.CompletedProcess(
+            prefix[0], 0,
+            "You’ve reached your API key’s total free quota for today. Please try again tomorrow.",
+            "",
+        )
+        with patch.object(adapter, "health", return_value=AdapterHealth(name="anysearch", available=True, version="3.0.1")), \
+             patch.object(adapter, "_command_prefixes", return_value=prefix), \
+             patch("enterprise_energy_research.adapters.anysearch.subprocess.run", return_value=quota):
+            result = adapter.search(self._request())
+        self.assertEqual(result.status, "blocked")
+        self.assertEqual(result.hits, [])
+        self.assertIn("quota", " ".join(result.diagnostics).casefold())
+
+    def test_anysearch_runtime_account_override_never_enters_process_argv(self) -> None:
+        adapter = AnySearchCliAdapter()
+        request = self._request()
+        previous = os.environ.get("EER_ANYSEARCH_API_KEY")
+        os.environ["EER_ANYSEARCH_API_KEY"] = "alternate-runtime-key"
+        try:
+            command = adapter._build_command(
+                ["python", "anysearch_cli.py"], request,
+                url=None, domain=None, sub_domain=None, sub_domain_params=None,
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("EER_ANYSEARCH_API_KEY", None)
+            else:
+                os.environ["EER_ANYSEARCH_API_KEY"] = previous
+        self.assertEqual(command[:2], ["python", "anysearch_cli.py"])
+        self.assertNotIn("alternate-runtime-key", command)
+        self.assertNotIn("--api_key", command)
+        self.assertIn("search", command)
 
     def test_anysearch_adapter_has_no_unapproved_backend_dependency(self) -> None:
         source = inspect.getsource(AnySearchCliAdapter).lower()

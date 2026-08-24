@@ -10,6 +10,7 @@ class SearchExecutor:
 
     def execute(self, plan: ResearchPlan) -> list[SearchResultEnvelope]:
         results: list[SearchResultEnvelope] = []
+        adapter_circuit: dict[str, str] = {}
         page_budget = int(plan.budget.get("max_pages", 120))
         used_pages = 0
         round_order = {"R1": 0, "R2": 1, "R3": 2, "R4": 3}
@@ -22,6 +23,19 @@ class SearchExecutor:
             if adapter is None:
                 results.append(self._blocked(
                     query, [f"Approved adapter is not configured: {query.adapter_preference}"],
+                ))
+                continue
+            if query.adapter_preference in adapter_circuit:
+                results.append(self._blocked(query, [
+                    "Adapter circuit open for this plan: "
+                    + adapter_circuit[query.adapter_preference]
+                ]))
+                continue
+            canonical_name = self._canonical_name_for(query, plan)
+            if canonical_name and self._normalized(canonical_name) not in self._normalized(query.query):
+                results.append(self._blocked(
+                    query,
+                    [f"Enterprise query is not anchored to canonical subject: {canonical_name}"],
                 ))
                 continue
             request = SearchRequest(
@@ -43,10 +57,36 @@ class SearchExecutor:
                 target_gap_ids=list(query.target_gap_ids),
                 target_conflict_ids=list(query.target_conflict_ids),
                 target_claim_ids=list(query.target_claim_ids),
-                canonical_company_name=self._canonical_name_for(query, plan),
+                canonical_company_name=canonical_name,
+                canonical_company_aliases=list(query.canonical_company_aliases),
                 expected_fields=self._expected_fields_for(query),
+                goal_domain=query.goal_domain,
+                subject_role=query.subject_role,
+                evidence_lane=query.evidence_lane,
+                evidence_use=query.evidence_use,
+                requirement_text=(
+                    query.requirement_text
+                    or (
+                        query.purpose.split("full requirement=", 1)[1]
+                        .split("; recovery_round=", 1)[0]
+                        if "full requirement=" in query.purpose else None
+                    )
+                ),
             )
             result = adapter.search(request)
+            provider_block = next(
+                (
+                    diagnostic for diagnostic in result.diagnostics
+                    if "provider blocked:" in diagnostic.casefold()
+                ),
+                None,
+            )
+            if result.status == "blocked" and provider_block:
+                # A provider-wide quota/auth/rate-limit condition cannot
+                # improve on the next query in the same plan. Open a local
+                # circuit so dozens of Goal Families fail once, honestly,
+                # instead of repeating the same external call.
+                adapter_circuit[query.adapter_preference] = provider_block
             # Echo the goal context onto the envelope so later pipeline stages
             # (EvidenceExtractor, trace) never lose it.
             result = result.model_copy(update={
@@ -59,7 +99,13 @@ class SearchExecutor:
                 "target_conflict_ids": list(query.target_conflict_ids),
                 "target_claim_ids": list(query.target_claim_ids),
                 "canonical_company_name": request.canonical_company_name,
+                "canonical_company_aliases": request.canonical_company_aliases,
                 "expected_fields": request.expected_fields,
+                "goal_domain": request.goal_domain,
+                "subject_role": request.subject_role,
+                "evidence_lane": request.evidence_lane,
+                "evidence_use": request.evidence_use,
+                "requirement_text": request.requirement_text,
             })
             used_pages += len(result.hits)
             results.append(result)
@@ -76,11 +122,22 @@ class SearchExecutor:
             target_gap_ids=list(query.target_gap_ids),
             target_conflict_ids=list(query.target_conflict_ids),
             target_claim_ids=list(query.target_claim_ids),
+            canonical_company_name=query.canonical_company_name,
+            canonical_company_aliases=list(query.canonical_company_aliases),
+            goal_domain=query.goal_domain,
+            subject_role=query.subject_role,
+            evidence_lane=query.evidence_lane,
+            evidence_use=query.evidence_use,
+            requirement_text=query.requirement_text,
         )
 
     @staticmethod
     def _canonical_name_for(query, plan: ResearchPlan) -> str | None:
         return query.canonical_company_name or plan.canonical_company_name
+
+    @staticmethod
+    def _normalized(value: str) -> str:
+        return "".join(str(value).casefold().split()).replace('"', "")
 
     @staticmethod
     def _expected_fields_for(query) -> list[str]:

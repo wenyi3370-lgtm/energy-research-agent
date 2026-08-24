@@ -1,7 +1,7 @@
 {
   "components": {
     "anysearch": {
-      "byte_count": 146635,
+      "byte_count": 146872,
       "file_count": 19,
       "required": [
         "SKILL.md",
@@ -131,8 +131,8 @@
       "sha256": "1cad0cb7fb9d198bd177084828259095109e704cc22fdc5d255c8753f474aec1"
     },
     "anysearch/scripts/anysearch_cli.py": {
-      "bytes": 20993,
-      "sha256": "ddbc9e0c77d4745ce0104ee0789aff87cb37c12abbbc6033af1b17e6fff481b4"
+      "bytes": 21230,
+      "sha256": "cf28bc24f37a2850e342db13c9d70c64a3bda188c74f4bc70618c1b2aa5caf79"
     },
     "anysearch/scripts/anysearch_cli.sh": {
       "bytes": 15394,

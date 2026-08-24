@@ -67,6 +67,7 @@ class StubExecutor:
         self.publish_error = publish_error
         self.research_calls = 0
         self.freeze_calls = 0
+        self.repair_calls = 0
         self.on_research = None
 
     def research_and_validate(self, run_id, request, workdir):
@@ -82,6 +83,10 @@ class StubExecutor:
         if self.publish_error is not None:
             raise self.publish_error
         return self.freeze_outcome
+
+    def repair_publication(self, run_id, workdir, *, failed_artifacts, attempt):
+        self.repair_calls += 1
+        return f"fixture repair {attempt}"
 
 
 class ServiceTestCase(unittest.TestCase):
@@ -318,6 +323,102 @@ class TestFailuresAndRetry(ServiceTestCase):
         self.assertEqual(final.status, TaskStatus.FAILED)
         self.assertEqual(final.error.error_type, "RuntimeError")
 
+    def test_required_artifact_qa_failure_cannot_publish_run(self):
+        self.executor.freeze_outcome = ExecutionOutcome(
+            validation_status=ValidationStatus.PASS_WITH_WARNINGS,
+            artifacts=[ArtifactRef(
+                artifact_type=ArtifactType.WORD,
+                status=ArtifactStatus.FAILED,
+                location="out/failed.docx",
+            )],
+        )
+        result = self.service.submit(make_request())
+
+        final = self.service.execute_run(result.run_id)
+
+        self.assertEqual(final.status, TaskStatus.FAILED)
+        self.assertEqual(final.error.error_type, "RequiredArtifactPublicationError")
+        self.assertIn("word", final.error.message.lower())
+        self.assertEqual(self.executor.freeze_calls, 11)
+        self.assertEqual(self.executor.repair_calls, 10)
+
+    def test_recoverable_first_publication_failure_retries_before_notifying(self):
+        adapter = MockFeishuAdapter()
+        self.service.notifier = FeishuNotifier(adapter)
+        failed = ExecutionOutcome(
+            validation_status=ValidationStatus.PASS,
+            artifacts=[ArtifactRef(
+                artifact_type=ArtifactType.WORD,
+                status=ArtifactStatus.FAILED,
+                location="out/first.docx",
+            )],
+        )
+        recovered = ExecutionOutcome(
+            validation_status=ValidationStatus.PASS,
+            artifacts=[ArtifactRef(
+                artifact_type=ArtifactType.WORD,
+                status=ArtifactStatus.PUBLISHED,
+                location="out/recovered.docx",
+            )],
+        )
+        outcomes = iter((failed, recovered))
+
+        def publish_with_recovery(run_id, workdir):
+            self.executor.freeze_calls += 1
+            return next(outcomes)
+
+        self.executor.freeze_and_publish = publish_with_recovery
+        submitted = self.service.submit(make_request())
+
+        final = self.service.execute_run(submitted.run_id)
+
+        self.assertEqual(final.status, TaskStatus.PUBLISHED)
+        self.assertEqual(self.executor.freeze_calls, 2)
+        self.assertEqual(self.executor.repair_calls, 1)
+        self.assertTrue(any("auto-recovery succeeded" in item for item in final.review_reasons))
+        self.assertEqual(len(adapter.sent), 1)
+        self.assertEqual(adapter.sent[0].status, "PUBLISHED")
+
+    def test_manual_retry_after_artifact_failure_reuses_existing_evidence(self):
+        self.executor.freeze_outcome = ExecutionOutcome(
+            validation_status=ValidationStatus.PASS,
+            artifacts=[ArtifactRef(
+                artifact_type=ArtifactType.WORD,
+                status=ArtifactStatus.FAILED,
+                location="out/failed.docx",
+            )],
+        )
+        submitted = self.service.submit(make_request())
+        run_dir = Path(self.tmp.name) / submitted.run_id
+        def leave_evidence(run_id):
+            run_dir.mkdir(parents=True, exist_ok=True)
+            (run_dir / "evidence.sqlite3").touch()
+
+        self.executor.on_research = leave_evidence
+        failed = self.service.execute_run(submitted.run_id)
+        self.assertEqual(failed.status, TaskStatus.FAILED)
+        self.assertEqual(self.executor.research_calls, 1)
+        self.assertEqual(self.executor.freeze_calls, 11)
+
+        queued = self.service.retry(submitted.run_id)
+        self.assertEqual(queued.status, TaskStatus.QUEUED)
+        self.assertTrue((run_dir / "publication_retry.json").is_file())
+        self.executor.freeze_outcome = ExecutionOutcome(
+            validation_status=ValidationStatus.PASS,
+            artifacts=[ArtifactRef(
+                artifact_type=ArtifactType.WORD,
+                status=ArtifactStatus.PUBLISHED,
+                location="out/recovered.docx",
+            )],
+        )
+
+        recovered = self.service.execute_run(submitted.run_id)
+
+        self.assertEqual(recovered.status, TaskStatus.PUBLISHED)
+        self.assertEqual(self.executor.research_calls, 1)
+        self.assertEqual(self.executor.freeze_calls, 12)
+        self.assertFalse((run_dir / "publication_retry.json").exists())
+
     def test_retry_requeues_until_exhausted(self):
         self.executor.validate_error = RuntimeError("search backend down")
         service = ResearchService(self.db, self.executor, Path(self.tmp.name), max_retries=1)
@@ -325,9 +426,32 @@ class TestFailuresAndRetry(ServiceTestCase):
         service.execute_run(result.run_id)
         first = service.retry(result.run_id)
         self.assertEqual(first.status, TaskStatus.QUEUED)
+        self.assertIsNone(first.error)
+        self.assertIsNone(first.started_at)
+        self.assertIsNone(first.finished_at)
         service.execute_run(result.run_id)
         with self.assertRaises(RetryExhaustedError):
             service.retry(result.run_id)
+
+    def test_successful_retry_does_not_retain_previous_error(self):
+        self.executor.validate_error = RuntimeError("temporary search failure")
+        submitted = self.service.submit(make_request())
+        failed = self.service.execute_run(submitted.run_id)
+        self.assertIsNotNone(failed.error)
+
+        queued = self.service.retry(submitted.run_id)
+        self.assertIsNone(queued.error)
+        self.executor.validate_error = None
+        published = self.service.execute_run(submitted.run_id)
+
+        self.assertEqual(published.status, TaskStatus.PUBLISHED)
+        self.assertIsNone(published.error)
+        with self._session() as session:
+            from enterprise_energy_research.automation.db import TaskRepository
+
+            row = TaskRepository(session).get_run(submitted.run_id)
+            self.assertIsNone(row.error_type)
+            self.assertIsNone(row.error_message)
 
     def test_retry_only_from_failed_or_blocked(self):
         result = self.service.submit(make_request())
@@ -389,7 +513,7 @@ class TestSyntheticKernelExecutorSmoke(unittest.TestCase):
             store = EvidenceStore(Path(tmp) / "RUN-SMOKE" / "evidence.sqlite3")
             self.assertGreater(len(store.list("RUN-SMOKE", "entity")), 0)
 
-    def test_service_full_path_with_real_executor(self):
+    def test_service_full_path_publishes_when_fixture_artifact_qa_passes(self):
         import json
 
         from enterprise_energy_research.automation.executor import SyntheticKernelExecutor
@@ -406,8 +530,8 @@ class TestSyntheticKernelExecutorSmoke(unittest.TestCase):
             result = service.submit(make_request(task_id="TASK-REAL", company="简单企业"))
             final = service.execute_run(result.run_id)
             db.engine.dispose()
-        self.assertEqual(final.status, TaskStatus.PUBLISHED, final.error)
-        self.assertGreater(len(final.artifact_manifest), 0)
+        self.assertEqual(final.status, TaskStatus.PUBLISHED)
+        self.assertIsNone(final.error)
 
 
 if __name__ == "__main__":

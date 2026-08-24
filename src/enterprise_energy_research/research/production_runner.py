@@ -44,8 +44,13 @@ from enterprise_energy_research.research.content_contract import (
     chapter_substantive_facts,
 )
 from enterprise_energy_research.research.entity_mapper import EntityMapper
+from enterprise_energy_research.research.entity_scope import entity_name_matches
 from enterprise_energy_research.research.evidence_delta import DeltaSaturation, EvidenceDelta, EvidenceSnapshot
 from enterprise_energy_research.research.extractor import EvidenceExtractor
+from enterprise_energy_research.research.fulltext_hydration import (
+    hydrate_target_pages,
+    is_material_envelope,
+)
 from enterprise_energy_research.research.image_archiver import ImageAssetArchiver, ImageArchiveResult
 from enterprise_energy_research.research.image_discovery import (
     ImageEvidenceBuilder, KimiImageDiscovery, KimiUsageTelemetry,
@@ -403,8 +408,11 @@ class AdaptiveResearchRunner:
             print(f"[{round_name}] image_discovery_done candidates={telemetry.image_candidates_found}", flush=True)
             # Parallel structured extraction across pages (network-bound).
             batches: list[ExtractedEvidenceBatch] = []
+            material_envelopes = [
+                envelope for envelope in envelopes if is_material_envelope(envelope)
+            ]
             with ThreadPoolExecutor(max_workers=self.extraction_workers) as pool:
-                results = pool.map(self._extract_one, envelopes)
+                results = pool.map(self._extract_one, material_envelopes)
                 for envelope, extracted, failures in results:
                     batches.extend(extracted)
                     if failures:
@@ -536,7 +544,10 @@ class AdaptiveResearchRunner:
             for claim in self.cumulative.claims
         )
         coverage_round = 0
-        while coverage_round < 2:
+        # Keep every hard coverage gate intact.  Searchable evidence gaps are
+        # supplemented for at most ten internal rounds before the run may be
+        # declared blocked; a thin first pass is never silently downgraded.
+        while coverage_round < 10:
             audit = coverage_validator.audit(
                 entity_name=raw_company_name,
                 claims=self.cumulative.claims,
@@ -549,7 +560,9 @@ class AdaptiveResearchRunner:
             retry_gaps = [gap for gap in audit.gaps if gap.searchable and gap.severity in {"high", "medium"}]
             if not retry_gaps:
                 break
-            coverage_queries = planner.coverage_queries(raw_company_name, retry_gaps)[:6]
+            coverage_queries = planner.coverage_queries(
+                raw_company_name, retry_gaps, retry_round=coverage_round + 1,
+            )[:6]
             if not coverage_queries:
                 break
             coverage_round += 1
@@ -1011,52 +1024,12 @@ class AdaptiveResearchRunner:
         Extraction runs CONCURRENTLY (each call is a CLI subprocess), bounded
         by a worker pool.
         """
-        anysearch = self.adapters.get("anysearch")
-        if anysearch is None:
-            return envelopes
-        extended: list[SearchResultEnvelope] = list(envelopes)
-        tasks: list[tuple[SearchResultEnvelope, SearchHit]] = []
-        for envelope in envelopes:
-            if envelope.adapter != "anysearch":
-                continue
-            for hit in envelope.hits:
-                if hit.final_url and hit.metadata.get("snippet"):
-                    tasks.append((envelope, hit))
-        workers = max(2, min(self.extraction_workers, len(tasks)))
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {
-                pool.submit(self._extract_fulltext, anysearch, envelope, hit): (envelope, hit)
-                for envelope, hit in tasks[: self.fulltext_pages_per_query * len(envelopes)]
-            }
-            from concurrent.futures import as_completed
-            for future in as_completed(futures):
-                envelope, hit = futures[future]
-                try:
-                    full = future.result()
-                except Exception:  # noqa: BLE001 - one page failure never sinks the round
-                    continue
-                if full is None:
-                    continue
-                for full_hit in full.hits:
-                    if not full_hit.text:
-                        continue
-                    context = {
-                        "topic": envelope.topic, "purpose": envelope.purpose,
-                        "collection_round": envelope.collection_round,
-                        "round_goal": envelope.round_goal, "trigger": envelope.trigger,
-                        "target_gap_ids": envelope.target_gap_ids,
-                        "target_conflict_ids": envelope.target_conflict_ids,
-                        "target_claim_ids": envelope.target_claim_ids,
-                        "canonical_company_name": envelope.canonical_company_name,
-                        "expected_fields": envelope.expected_fields,
-                    }
-                    extended.append(full.model_copy(update={
-                        **context,
-                        "hits": [full_hit.model_copy(update={
-                            "metadata": {**full_hit.metadata, "snippet": False},
-                        })],
-                    }))
-        return extended
+        return hydrate_target_pages(
+            envelopes,
+            self.adapters,
+            pages_per_query=self.fulltext_pages_per_query,
+            workers=self.extraction_workers,
+        ).envelopes
 
     @staticmethod
     def _extract_fulltext(anysearch, envelope: SearchResultEnvelope, hit: SearchHit):
@@ -1205,9 +1178,7 @@ class AdaptiveResearchRunner:
         image_owner = canonical_entity or next(
             (
                 entity for entity in round_evidence.entities
-                if entity.canonical_name == selected_candidate.canonical_name
-                or MergeEvidence._norm_name(entity.canonical_name)
-                == MergeEvidence._norm_name(selected_candidate.canonical_name)
+                if entity_name_matches(entity, selected_candidate.canonical_name)
             ),
             None,
         )
@@ -1284,8 +1255,7 @@ class AdaptiveResearchRunner:
         else:
             selected_entity = next(
                 (entity for entity in self.cumulative.entities
-                 if entity.canonical_name == selected_candidate.canonical_name
-                 or MergeEvidence._norm_name(entity.canonical_name) == MergeEvidence._norm_name(selected_candidate.canonical_name)),
+                 if entity_name_matches(entity, selected_candidate.canonical_name)),
                 None,
             )
         if selected_entity is None:
@@ -1539,6 +1509,16 @@ class AdaptiveResearchRunner:
             return None, []
         from enterprise_energy_research.evidence.freeze import FreezeService
         bundle = FreezeService(store).load_bundle(final_state.freeze_id)
+        from enterprise_energy_research.validation.formal_publication import FormalPublicationEligibilityValidator
+        eligibility = FormalPublicationEligibilityValidator().validate(bundle)
+        quality_dir = output_dir / "02_research_quality"
+        quality_dir.mkdir(parents=True, exist_ok=True)
+        (quality_dir / "formal_publication_eligibility.json").write_text(
+            json.dumps(eligibility.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        if eligibility.status != "PASS":
+            raise RuntimeError("formal publication eligibility blocked: " + "; ".join(eligibility.diagnostics))
         publishers = self.publishers or default_publishers()
         results = ArtifactPublicationService(publishers).publish(bundle, manifest, output_dir / "artifacts")
         failed = [result for result in results if result.status == "failed"]

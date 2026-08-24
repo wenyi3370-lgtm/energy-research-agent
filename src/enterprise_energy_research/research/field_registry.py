@@ -35,7 +35,7 @@ FIELD_FAMILIES: dict[str, str] = {
 # Canonical field -> accepted aliases (English + Chinese + variants).
 ALIASES: dict[str, tuple[str, ...]] = {
     "revenue": ("annual_revenue", "operating_revenue", "sales_revenue", "营业收入", "营收", "年度营收", "营业总收入", "total_revenue"),
-    "profit": ("net_profit", "净利润", "归母净利润", "attributable_profit", "net_income"),
+    "profit": ("net_profit", "净利润", "归母净利润", "attributable_profit", "net_income", "net_profit_attributable_to_parent"),
     "gross_profit": ("毛利", "gross_income"),
     "gross_margin": ("毛利率", "gross_profit_margin"),
     "operating_profit": ("营业利润", "profit_from_operations"),
@@ -67,6 +67,7 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "description": ("产品描述", "product_description", "介绍"),
     "application": ("应用", "应用领域", "applications", "application_area", "适用场景"),
     "customer_segment": ("客户群体", "目标客户", "客户类型", "target_customer"),
+    "sales_channel": ("销售渠道", "渠道结构", "经销渠道", "分销渠道", "distribution_channel", "sales network"),
     "commercial_status": ("商业化状态", "在售状态", "上市状态", "commercialization", "launch_status"),
     "parameter_name": ("参数名称", "parameter", "spec_name"),
     "value": ("数值", "参数值", "parameter_value", "spec_value"),

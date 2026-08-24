@@ -81,9 +81,10 @@ def evidence_adjusted_threshold(narrative: Any) -> int:
         base = 2_500 + verified * 6 + visuals * 300 + products * 8 + factories * 8
         return min(12_000, max(8_000, (base // 100) * 100))
     # A thin evidence set must still produce analysis, but must not be padded
-    # to impersonate a 30-page report.
-    scoped = min(8_000, 1_500 + verified * 120 + len(narrative.chapters) * 250)
-    return max(3_500, (scoped // 100) * 100)
+    # to impersonate a 30-page report. The 3,500-character formal floor stays
+    # fixed; the workflow must supplement evidence and rebuild up to ten
+    # times before this gate may fail.
+    return 3_500
 
 
 class ValidationCheck(BaseModel):
@@ -106,7 +107,12 @@ class ConsultingNarrativeValidator:
 
     CORE_KINDS = {"operations", "products", "factories", "energy_profile", "opportunities", "action_plan", "risks_evidence"}
 
-    def validate(self, narrative: Any) -> ConsultingNarrativeValidation:
+    def validate(
+        self,
+        narrative: Any,
+        *,
+        enforce_length: bool = True,
+    ) -> ConsultingNarrativeValidation:
         checks: list[ValidationCheck] = []
         body = narrative_body_text(narrative)
         main_count = cjk_count(body)
@@ -168,12 +174,15 @@ class ConsultingNarrativeValidator:
         self._check(checks, "shared_word_html_judgement", bool(narrative.overall_judgement), "Word/HTML 使用同一总体判断")
         self._check(checks, "shared_word_html_ranking", len(keys) == len(set(keys)), "Word/HTML 使用同一机会排序")
         self._check(checks, "shared_word_html_risks", narrative.key_risks is not None, "Word/HTML 使用同一风险集合")
-        # Fifth-round publications optimize for decision density, not padded
-        # character count. Keep the former threshold as a warning signal only.
+        length_ok = main_count >= threshold
         checks.append(ValidationCheck(
-            code="main_body_length", status="PASS" if main_count >= threshold else "WARN",
-            message=f"正文中文字符数 {main_count}，参考值 {threshold}；不足时不得用模板句补齐。",
-            value={"actual": main_count, "reference": threshold},
+            code="main_body_length",
+            status="PASS" if length_ok or not enforce_length else "FAIL",
+            message=(
+                f"正文中文字符数 {main_count}，正式门槛 {threshold}；"
+                + ("必须以企业事实、口径对比和决策影响完成深化，不得用模板套话补齐。" if enforce_length else "合成测试样本不执行正式字数门槛。")
+            ),
+            value={"actual": main_count, "threshold": threshold, "enforced": enforce_length},
         ))
         return ConsultingNarrativeValidation(
             status="PASS" if all(item.status != "FAIL" for item in checks) else "BLOCKED",

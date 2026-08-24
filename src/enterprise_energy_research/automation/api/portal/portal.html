@@ -221,7 +221,7 @@ button.btn-inline{margin-left:10px}
     <line class="radar-sweep" x1="12" y1="12" x2="12" y2="3.5" stroke="#4DE3FF" stroke-width="1.8"/>
     <circle class="radar-blip" cx="16.5" cy="9" r="1.6" fill="#4DE3FF" stroke="none"/>
   </svg></span>① 用一句话描述调研需求</h2>
-<label>例如：「调研宁德时代的主营业务和生产基地」或「研究泰国户用储能市场进入机会」</label>
+<label>系统先执行固定全量企业调研，再按这句话补充或加强指定主题；例如：「调研宁德时代的主营业务、生产基地和产品线」</label>
 <textarea id="prompt" placeholder="用自然语言描述你的调研需求…"></textarea>
 <button id="parseBtn">解析需求并准备任务</button>
 <div id="status"></div>
@@ -258,12 +258,12 @@ button.btn-inline{margin-left:10px}
     <path d="M4 16 12 21 20 16" opacity=".45"/>
     <circle class="core-pulse" cx="12" cy="8" r="4" fill="#4DE3FF" stroke="none" opacity=".8"/>
   </svg></span>③ 继续深度研究（完善报告 / HTML / Excel）</h2>
-<div class="sub" style="margin-bottom:6px">对已完成或进行中的调查提出补充与修改需求：系统会定向检索新证据（必要时恢复官方产品图片），重新校验并重新生成 Word 报告、HTML 看板与 Excel 数据。</div>
+<div class="sub" style="margin-bottom:6px">对已有调查做强解析定向补充：整句话会被完整识别，不需要逗号、分号或分条；系统只追加相关检索，不重跑固定全量路径。</div>
 <label>任务定位（输入公司名或关键词自动匹配，如「宁德时代」；也可直接粘贴 RUN ID）</label>
 <input id="deepQuery" placeholder="例如：宁德时代 / 储能 / RUN-01M0…">
 <div id="deepMatches" style="margin-top:6px"></div>
-<label>补充 / 修改需求（直接输入自然语言，分条写更精准）</label>
-<textarea id="deepRequirements" placeholder="例如：&#10;补充 2022 年与 2023 年的营业收入和归母净利润；&#10;增加产品图片；&#10;补充海外基地的产能数据"></textarea>
+<label>补充 / 修改需求（自然语言整句即可，无需分隔符）</label>
+<textarea id="deepRequirements" placeholder="例如：补充2022年与2023年营业收入归母净利润产品图片海外基地和产能数据"></textarea>
 <label class="check-row"><input type="checkbox" id="deepDesktop" checked> 完成后同时保存一份到桌面</label>
 <label class="check-row"><input type="checkbox" id="deepFeishu" checked> 完成后推送飞书（文本 + Word/HTML/Excel 文件）</label>
 <button id="deepBtn">🔍 继续深度研究</button>

@@ -24,6 +24,10 @@ services:
     environment:
       EER_AUTOMATION_DATABASE_URL: postgresql+psycopg://research:${POSTGRES_PASSWORD}@postgres:5432/research
       EER_AUTOMATION_WORKDIR: /data/automation_work
+      # The local portal must execute the currently mounted skill source, not
+      # a stale /app/src copy left from the previous image build.
+      PYTHONPATH: /skill/src
+      ENTERPRISE_ENERGY_SKILL_ROOT: /skill
       # 宿主机仓库挂载点：继续深度研究可在 /skill/build/live_acceptance 下
       # 定位历史 live 调查的证据库与产物。
       EER_SKILL_ROOT: /skill
@@ -33,6 +37,9 @@ services:
       EER_AUTOMATION_EXECUTOR: orchestrating
       # LLM gateway for real extraction (至少配置一个 provider):
       EER_DEEPSEEK_API_KEY: ${EER_DEEPSEEK_API_KEY:-}
+      # Runtime-only account rotation; passed to AnySearch as --api_key and
+      # never baked into the image or committed configuration.
+      EER_ANYSEARCH_API_KEY: ${EER_ANYSEARCH_API_KEY:-}
       # EER_OPENAI_API_KEY: ""
       # Kimi WebBridge browser session (daemon runs on host, port 10086):
       EER_KIMI_WEB_SESSION: default

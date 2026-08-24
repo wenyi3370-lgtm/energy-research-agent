@@ -12,7 +12,8 @@ from pathlib import Path
 from enterprise_energy_research.domain.enums import RunStatus, VerificationStatus
 from enterprise_energy_research.domain.ids import new_sortable_id
 from enterprise_energy_research.domain.models import (
-    Claim, Entity, ExtractedEvidenceBatch, RunManifest, Source,
+    Claim, CompanyCandidate, CompanyResolution, Entity, ExtractedEvidenceBatch,
+    RunManifest, Source,
 )
 from enterprise_energy_research.evidence.store import EvidenceStore
 from enterprise_energy_research.graph.phase3_runner import Phase3Runner
@@ -84,6 +85,41 @@ def normalized(batches) -> tuple:
 
 
 class IdentityVerificationTests(unittest.TestCase):
+    def test_brand_candidate_maps_to_legal_name_after_entity_merge(self) -> None:
+        batch = ExtractedEvidenceBatch.model_validate({
+            "source_url": "https://www.starcharge.com/about",
+            "source_title": "星星充电公司介绍",
+            "source_kind": "official_company",
+            "extraction_method": "model_structured",
+            "entities": [{
+                "entity_key": "star", "canonical_name": "星星充电",
+                "registered_name": "万帮星星充电科技有限公司",
+                "aliases": ["StarCharge"],
+            }],
+        })
+        evidence = EvidenceNormalizer().normalize([batch])
+        # Entity consolidation may retain the legal name as its primary while
+        # the resolver's winning candidate is the public brand.
+        legal = evidence.entities[0].model_copy(update={
+            "canonical_name": "万帮星星充电科技有限公司",
+            "aliases": ["星星充电", "StarCharge"],
+        })
+        resolution = CompanyResolution(
+            raw_company_name="星星充电",
+            candidates=[CompanyCandidate(
+                candidate_id="star", canonical_name="星星充电", score=0.95,
+            )],
+            selected_candidate_id="star", confidence=0.95,
+            status="RESOLVED", rationale="test",
+        )
+
+        claims = IdentityEvidenceSynthesizer().synthesize(
+            resolution, [batch], [legal], evidence.sources,
+        )
+
+        self.assertTrue(claims)
+        self.assertTrue(all(item.entity_id == legal.entity_id for item in claims))
+
     def test_official_company_page_creates_identity_claims(self) -> None:
         batch = official_batch()
         resolution = CompanyResolver().resolve("ACME", [batch])

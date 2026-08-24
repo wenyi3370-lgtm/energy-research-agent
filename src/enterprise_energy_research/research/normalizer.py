@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 from urllib.parse import urlparse
 
 from enterprise_energy_research.domain.enums import VerificationStatus
@@ -22,8 +23,12 @@ from enterprise_energy_research.domain.models import (
 )
 
 from .canonicalizers import FactoryCanonicalizer, ProductCanonicalizer, UnitNormalizer
+from .entity_scope import normalized_entity_name
 from .field_registry import CanonicalFieldRegistry
 from .source_grader import SourceGrader
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -91,8 +96,19 @@ class EvidenceNormalizer:
                 requested_url=batch.source_url,
                 final_url=batch.source_url,
                 status_code=200,
-                query_id=(query_ids[batch_index] if query_ids and batch_index < len(query_ids) else None),
-                diagnostics={"extraction_method": batch.extraction_method},
+                query_id=(
+                    query_ids[batch_index]
+                    if query_ids and batch_index < len(query_ids)
+                    else batch.origin_query_id
+                ),
+                diagnostics={
+                    "extraction_method": batch.extraction_method,
+                    "origin_topic": batch.origin_topic,
+                    "goal_domain": batch.goal_domain,
+                    "subject_role": batch.subject_role,
+                    "evidence_lane": batch.evidence_lane,
+                    "evidence_use": batch.evidence_use,
+                },
             ))
 
             for extracted in batch.entities:
@@ -188,7 +204,18 @@ class EvidenceNormalizer:
                     source_id=source_id,
                     raw_text=raw_text,
                     context_text=context_text,
-                    locator=extracted.locator,
+                    locator={
+                        **extracted.locator,
+                        "_routing": {
+                            "origin_query_id": batch.origin_query_id,
+                            "topic": batch.origin_topic,
+                            "goal_domain": batch.goal_domain,
+                            "subject_role": batch.subject_role,
+                            "evidence_lane": batch.evidence_lane,
+                            "evidence_use": batch.evidence_use,
+                            "requirement_text": batch.requirement_text,
+                        },
+                    },
                     confidence=0.0,
                     notes="search snippet discovery-only" if batch.is_search_snippet else None,
                 ))
@@ -224,11 +251,141 @@ class EvidenceNormalizer:
             for extracted in batch.entities:
                 if extracted.parent_entity_key:
                     if extracted.parent_entity_key not in declared_entity_keys:
-                        raise ValueError(f"Entity {extracted.entity_key} references undeclared parent {extracted.parent_entity_key}")
+                        # Parent linkage is optional extraction metadata.  A model
+                        # can legitimately identify a brand/subsidiary on one page
+                        # while naming a parent key that was not emitted as a full
+                        # entity record.  Keep the independently usable entity and
+                        # evidence, but omit the dangling edge and retain an
+                        # auditable gap instead of aborting the whole research run.
+                        detail = {
+                            "record_type": "entity_parent",
+                            "entity_key": extracted.entity_key,
+                            "missing_parent_entity_key": extracted.parent_entity_key,
+                            "action": "edge_omitted",
+                        }
+                        output.retrievals[-1].diagnostics.setdefault(
+                            "dropped_references", []
+                        ).append(detail)
+                        output.gaps.append(DataGap(
+                            gap_id=new_sortable_id("GAP"),
+                            entity_id=entity_ids[extracted.entity_key],
+                            field_name="parent_entity_relationship",
+                            importance="major",
+                            reason="EXTRACTED_NOT_NORMALIZED",
+                            attempted_query_ids=(
+                                [query_ids[batch_index]]
+                                if query_ids and batch_index < len(query_ids)
+                                else []
+                            ),
+                            next_action=(
+                                "补充检索并声明父实体 "
+                                f"{extracted.parent_entity_key}，再核验其与 "
+                                f"{extracted.entity_key} 的关系"
+                            ),
+                        ))
+                        logger.warning(
+                            "omitted dangling parent edge entity=%s parent=%s source=%s",
+                            extracted.entity_key,
+                            extracted.parent_entity_key,
+                            url,
+                        )
+                        continue
                     child_id = entity_ids[extracted.entity_key]
                     parent_id = entity_ids[extracted.parent_entity_key]
                     self._edge(output, edge_keys, parent_id, "Subsidiary", child_id, [])
         self._canonicalize(output)
+        return self._consolidate_duplicate_entities(output)
+
+    @staticmethod
+    def _consolidate_duplicate_entities(output: NormalizedEvidence) -> NormalizedEvidence:
+        """Merge model-varying entity keys that resolve to the same company.
+
+        LLM batches frequently emit ``star_charge``, ``starcharge`` and
+        ``xingxing_charging`` for the same page-stated enterprise. Stable
+        evidence IDs must follow the normalized enterprise name, not those
+        per-call temporary keys.
+        """
+        groups: dict[str, list[Entity]] = {}
+        for entity in output.entities:
+            key = normalized_entity_name(entity.registered_name or entity.canonical_name)
+            groups.setdefault(key or entity.entity_id, []).append(entity)
+
+        remap: dict[str, str] = {}
+        merged: list[Entity] = []
+        for entities in groups.values():
+            primary = max(
+                entities,
+                key=lambda item: (
+                    bool(item.registered_name), bool(item.official_website),
+                    len(item.aliases), -output.entities.index(item),
+                ),
+            )
+            aliases: list[str] = []
+            for entity in entities:
+                remap[entity.entity_id] = primary.entity_id
+                aliases.extend(entity.aliases)
+                if entity.canonical_name != primary.canonical_name:
+                    aliases.append(entity.canonical_name)
+            merged.append(primary.model_copy(update={
+                "registered_name": primary.registered_name or next(
+                    (item.registered_name for item in entities if item.registered_name), None
+                ),
+                "official_website": primary.official_website or next(
+                    (item.official_website for item in entities if item.official_website), None
+                ),
+                "registration_region": primary.registration_region or next(
+                    (item.registration_region for item in entities if item.registration_region), None
+                ),
+                "aliases": list(dict.fromkeys(alias for alias in aliases if alias)),
+            }))
+
+        output.entities = [
+            entity.model_copy(update={
+                "parent_entity_id": remap.get(entity.parent_entity_id, entity.parent_entity_id),
+            })
+            for entity in merged
+        ]
+        output.claims = [
+            item.model_copy(update={"entity_id": remap.get(item.entity_id, item.entity_id)})
+            for item in output.claims
+        ]
+        output.factories = [
+            item.model_copy(update={
+                "operator_entity_id": remap.get(item.operator_entity_id, item.operator_entity_id),
+            })
+            for item in output.factories
+        ]
+        output.products = [
+            item.model_copy(update={"entity_id": remap.get(item.entity_id, item.entity_id)})
+            for item in output.products
+        ]
+        output.images = [
+            item.model_copy(update={
+                "entity_id": remap.get(item.entity_id, item.entity_id) if item.entity_id else None,
+            })
+            for item in output.images
+        ]
+        output.gaps = [
+            item.model_copy(update={
+                "entity_id": remap.get(item.entity_id, item.entity_id) if item.entity_id else None,
+            })
+            for item in output.gaps
+        ]
+        deduped_edges: dict[tuple[str, str, str], EnterpriseEdge] = {}
+        for edge in output.edges:
+            updated = edge.model_copy(update={
+                "from_id": remap.get(edge.from_id, edge.from_id),
+                "to_id": remap.get(edge.to_id, edge.to_id),
+            })
+            key = (updated.from_id, updated.relation, updated.to_id)
+            if key in deduped_edges:
+                previous = deduped_edges[key]
+                deduped_edges[key] = previous.model_copy(update={
+                    "claim_ids": list(dict.fromkeys([*previous.claim_ids, *updated.claim_ids])),
+                })
+            else:
+                deduped_edges[key] = updated
+        output.edges = list(deduped_edges.values())
         return output
 
     @staticmethod

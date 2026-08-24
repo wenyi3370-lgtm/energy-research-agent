@@ -23,6 +23,7 @@ Chapters now aggregate the ResearchAnalysis dataset into paragraph / table
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 import re
 from typing import Any, Literal
 
@@ -59,6 +60,12 @@ from enterprise_energy_research.research.product_images import ProductImageResol
 from enterprise_energy_research.research.research_analysis import (
     ResearchAnalysis,
     ResearchAnalysisEngine,
+)
+from enterprise_energy_research.research.entity_scope import (
+    canonical_entity,
+    scoped_factories,
+    scoped_products,
+    target_claims,
 )
 from enterprise_energy_research.artifacts.publication_terminology import (
     PublicationNumberFormatter,
@@ -112,6 +119,7 @@ class StoryModule(BaseModel):
         "operations", "factories", "products", "energy_profile", "opportunities",
         "action_plan", "risks_evidence",
         "strategic_interpretation",
+        "custom_research",
     ]
     title: str
     assertion_title: str
@@ -172,6 +180,7 @@ class ResearchNarrative(BaseModel):
     kpis: list[dict[str, Any]] = Field(default_factory=list)
     product_images: dict[str, str] = Field(default_factory=dict)
     counts: dict[str, int] = Field(default_factory=dict)
+    supplemental_requirements: list[dict[str, Any]] = Field(default_factory=list)
     appendices: NarrativeAppendices = Field(default_factory=NarrativeAppendices)
     client_profile: ClientProfile | None = None
     strategic_interpretation: StrategicInterpretation | None = None
@@ -221,9 +230,19 @@ class NarrativeBuilder:
 
     # ── entry ──
     def build(self, bundle: FrozenResearchBundle, synthesis: ResearchSynthesis | None = None) -> ResearchNarrative:
-        entity = self._canonical_entity(bundle)
+        full_bundle = bundle
+        entity = canonical_entity(full_bundle)
         if entity is None:
             raise ValueError("Frozen bundle contains no enterprise entity")
+        # Publication always operates on the resolved enterprise boundary.
+        # Adjacent new-energy companies remain in the evidence store for
+        # comparison, but cannot leak into the target's claims, products or
+        # factories through renderer iteration.
+        bundle = full_bundle.model_copy(update={
+            "claims": target_claims(full_bundle),
+            "products": scoped_products(full_bundle),
+            "factories": scoped_factories(full_bundle),
+        })
         synthesis = synthesis or self._default_synthesis(bundle, entity)
         analysis = ResearchAnalysisEngine().analyze(bundle)
         client = client_profile_from_manifest(bundle.run_manifest)
@@ -278,7 +297,7 @@ class NarrativeBuilder:
         if structure is not None:
             add(structure)
 
-        add(self._strategic_module(strategic))
+        add(self._strategic_module(strategic, bundle, analysis))
 
         finding_by_domain = {item.semantic_domain: item for item in decision.findings}
         add(self._operations_module(bundle, analysis, finding_by_domain, narrative, synthesis))
@@ -287,6 +306,8 @@ class NarrativeBuilder:
         if bundle.factories:
             add(self._factories_module(bundle, analysis, finding_by_domain.get("manufacturing"), narrative, images_for))
         add(self._energy_module(bundle, analysis, finding_by_domain.get("energy"), narrative))
+        for supplemental in self._supplemental_modules(full_bundle, narrative):
+            add(supplemental)
         if opportunities:
             add(self._opportunity_module(opportunities, narrative))
             add(self._action_module(opportunities, narrative))
@@ -325,6 +346,151 @@ class NarrativeBuilder:
         self._deduplicate_chapter_paragraphs(narrative)
         narrative.counts = self._counts(bundle, narrative)
         return narrative
+
+    def _supplemental_modules(
+        self,
+        bundle: FrozenResearchBundle,
+        narrative: ResearchNarrative,
+    ) -> list[StoryModule]:
+        """Build one auditable chapter for every portal/deep requirement route."""
+        scope = bundle.run_manifest.research_scope or {}
+        requirement = str(scope.get("requirements") or "").strip()
+        routes = scope.get("requirement_routes") or []
+        if not requirement or not routes:
+            return []
+        attempts = int(scope.get("supplemental_attempts") or 0)
+        requirement_key = str(scope.get("supplemental_requirement_key") or hashlib.sha256(
+            " ".join(requirement.split()).encode("utf-8")
+        ).hexdigest())
+        attempt_history = [
+            item for item in (scope.get("supplemental_attempt_history") or [])
+            if item.get("requirement_key") == requirement_key
+        ]
+        source_by_id = {source.source_id: source for source in bundle.sources}
+        entity_by_id = {entity.entity_id: entity for entity in bundle.entities}
+        topic_labels = {
+            "sales_channels": "销售渠道",
+            "policy_regulation": "政策与监管",
+            "competitive_position": "竞争分析",
+            "customers": "客户与市场",
+            "suppliers": "供应链",
+            "factories": "生产基地",
+            "locations": "地理布局",
+            "financials": "财务经营",
+            "products": "产品体系",
+            "product_parameters": "产品参数",
+            "custom_requirement": "原始专项问题",
+        }
+        modules: list[StoryModule] = []
+        seen_topics: set[str] = set()
+        for route in routes:
+            topic = str(route.get("topic") or "custom_requirement")
+            if topic in seen_topics:
+                continue
+            seen_topics.add(topic)
+            direct = [
+                claim for claim in bundle.claims
+                if claim.verification_status == VerificationStatus.VERIFIED
+                and isinstance(claim.locator, dict)
+                and (claim.locator.get("_routing") or {}).get("topic") == topic
+                and " ".join(str(
+                    (claim.locator.get("_routing") or {}).get("requirement_text") or ""
+                ).split()) == " ".join(requirement.split())
+            ]
+            source_ids = list(dict.fromkeys(
+                claim.source_id for claim in direct if claim.source_id in source_by_id
+            ))
+            satisfied = bool(direct and source_ids)
+            completed_topic_rounds = {
+                int(item.get("round") or 0)
+                for item in attempt_history
+                if item.get("execution_status") == "completed"
+                and topic in (item.get("queried_topics") or [])
+                and topic in (item.get("active_topics") or [])
+            }
+            # Failed/blocked infrastructure calls do not prove a public-data
+            # gap.  Exhaustion is per topic and requires ten actually executed
+            # recovery rounds for this same exact requirement.
+            exhausted = attempts >= 10 and len(completed_topic_rounds) >= 10
+            status = "satisfied" if satisfied else "exhausted_gap" if exhausted else "pending_retry"
+            title_label = topic_labels.get(topic, field_label(topic))
+            chapter_id = f"supplement-{len(modules) + 1}-{re.sub(r'[^a-z0-9]+', '-', topic.casefold()).strip('-') or 'custom'}"
+            rows: list[dict[str, Any]] = []
+            fact_sentences: list[str] = []
+            formatter = PublicationNumberFormatter()
+            for claim in direct[:30]:
+                subject = entity_by_id.get(claim.entity_id)
+                formatted = formatter.format(claim.value, claim.unit)
+                period = (
+                    claim.period_end.isoformat() if claim.period_end else
+                    claim.as_of_date.isoformat() if claim.as_of_date else ""
+                )
+                rows.append({
+                    "主体": subject.canonical_name if subject else claim.entity_id,
+                    "指标": field_label(claim.field_name),
+                    "事实": f"{formatted.display_value}{formatted.display_unit}",
+                    "期间": period,
+                    "口径": claim.scope or "",
+                    "来源": source_by_id[claim.source_id].source_title or source_by_id[claim.source_id].source_domain,
+                })
+                fact_sentences.append(
+                    f"{subject.canonical_name if subject else '相关主体'}的{field_label(claim.field_name)}"
+                    f"为{formatted.display_value}{formatted.display_unit}"
+                    + (f"（{period}，口径：{claim.scope}）" if period and claim.scope else f"（{period}）" if period else "")
+                )
+            paragraphs: list[str] = []
+            if fact_sentences:
+                for start in range(0, min(len(fact_sentences), 12), 4):
+                    facts = "；".join(fact_sentences[start:start + 4]) + "。"
+                    paragraphs.append(
+                        facts
+                        + "上述事实均按实际所属主体保留，目标企业、集团成员、竞品、渠道伙伴与政策机构未相互合并；"
+                        "比较或影响判断仅在指标、期间、地区和业务口径一致时成立。"
+                    )
+            limitation = []
+            if not satisfied:
+                limitation.append(
+                    (
+                        f"初始 R1/R2/R3 检索后又完成 10 轮专项原文补采，仍未取得可核验事实；本章仅记录公开证据缺口，不以其他主体或其他需求的数据替代。"
+                        if exhausted else
+                        f"专项证据尚未达到发布条件，已完成初始检索及 {attempts} 次补采；发布前必须继续内部补采。"
+                    )
+                )
+            narrative.supplemental_requirements.append({
+                "topic": topic,
+                "title": title_label,
+                "requirement": requirement,
+                "goal_domain": route.get("goal_domain"),
+                "subject_role": route.get("subject_role"),
+                "evidence_lane": route.get("evidence_lane"),
+                "evidence_use": route.get("evidence_use"),
+                "verified_claim_count": len(direct),
+                "source_count": len(source_ids),
+                "attempts": attempts + 1,
+                "completed_recovery_rounds": len(completed_topic_rounds),
+                "status": status,
+            })
+            modules.append(StoryModule(
+                module_id=f"mod-{chapter_id}",
+                chapter_id=chapter_id,
+                kind="custom_research",
+                title=f"专项补充：{title_label}",
+                assertion_title=(
+                    f"专项要求已形成 {len(direct)} 条可追溯事实"
+                    if satisfied else "专项公开证据不足，结论保持空缺"
+                ),
+                decision_question=requirement,
+                executive_takeaway=(
+                    f"专项检索覆盖 {len(source_ids)} 个来源，所有事实按主体和用途隔离。"
+                    if satisfied else limitation[0]
+                ),
+                analysis_paragraphs=paragraphs,
+                limitations=limitation,
+                source_ids=source_ids,
+                claim_ids=[claim.claim_id for claim in direct],
+                table_rows=rows,
+            ))
+        return modules
 
     @staticmethod
     def _deduplicate_chapter_paragraphs(narrative: ResearchNarrative) -> None:
@@ -382,11 +548,16 @@ class NarrativeBuilder:
         module.image_ids = images_for(chapter="executive_summary", entity_id=entity.entity_id)
         return module
 
-    def _strategic_module(self, strategic: StrategicInterpretation) -> StoryModule:
+    def _strategic_module(
+        self,
+        strategic: StrategicInterpretation,
+        bundle: FrozenResearchBundle,
+        analysis: ResearchAnalysis,
+    ) -> StoryModule:
         trajectories = ([
             "跨期轨迹覆盖" + "；".join(
                 f"{item.title}（{'—'.join(item.periods)}）" for item in strategic.trajectories
-            ) + "。具体数值变化在经营章节呈现；本章比较这些轨迹是否共同指向资源投向、能力建设或合作窗口的变化。"
+            ) + "。各指标只有在同口径变化方向一致时，才用于判断资源投向、能力建设或合作窗口的变化。"
         ] if strategic.trajectories else [])
         turning_points = [f"{item.period}｜{item.event}：{item.implication}" for item in strategic.turning_points]
         priorities = [f"{item.name}：{item.rationale}" for item in strategic.priorities]
@@ -395,7 +566,25 @@ class NarrativeBuilder:
         customer = [f"{item.customer_or_market}（资料支持程度：{strength_labels.get(item.strength, '待确认')}）：{item.conclusion}" for item in strategic.customer_market_proofs]
         body = [*trajectories[:4], *turning_points[:4], *priorities[:4], *competition[:2], *customer[:4]]
         if not body:
-            body = ["现有证据不足以形成跨期战略轨迹；本章不以单期规模、产品列表或通用行业叙事替代战略变化判断。"]
+            entity = self._canonical_entity(bundle)
+            product_families = sorted({item.category or "未分类" for item in bundle.products})
+            factory_regions = list(analysis.region_distribution)[:5]
+            current_footprint = []
+            if product_families:
+                current_footprint.append(f"产品覆盖{'、'.join(product_families)}")
+            if factory_regions:
+                current_footprint.append(f"生产记录分布于{'、'.join(factory_regions)}")
+            body = [
+                "目前没有覆盖多个期间的同口径证据，无法判断企业的资源投向、能力建设或合作窗口是否发生变化。",
+                (
+                    f"{entity.canonical_name if entity else '目标企业'}当前可确认的经营截面为"
+                    + "；".join(current_footprint)
+                    + "。这些信息能说明现有业务载体和制造落点，但不能单独证明企业正在扩张、收缩或转换技术路线。"
+                    if current_footprint else
+                    f"{entity.canonical_name if entity else '目标企业'}当前披露只能确认静态经营轮廓，尚不足以识别资源配置方向的变化。"
+                ),
+                "战略变化判断需要带明确时点的产品发布、资本开支、产线投产、客户定点或组织调整相互印证；在这些时序事实缺失时，合作策略应按现有业务轮廓设定小范围验证，不将单次披露解读为战略拐点。",
+            ]
         claim_ids = list(dict.fromkeys(
             claim_id for collection in (
                 strategic.trajectories, strategic.turning_points, strategic.priorities,
@@ -437,7 +626,7 @@ class NarrativeBuilder:
         elif revenue is not None or revenue_claims:
             assertion = "现有经营数据只能证明当前规模，不能据此声称长期增长趋势"
         else:
-            assertion = "公开经营数据的年度可比口径有限，本章以已核验事实呈现企业业务结构"
+            assertion = "公开经营数据的年度可比口径有限，目前只能确认企业已披露的业务结构"
 
         context: list[str] = []
         business_insight = next((item for item in analysis.insights if item.insight_id == "INS-BUSINESS"), None)
@@ -456,11 +645,11 @@ class NarrativeBuilder:
         profile_text = self._profile_paragraph(bundle)
         if profile_text:
             analysis_paragraphs.append(profile_text)
+        analysis_paragraphs.extend(self._operating_disclosure_paragraphs(bundle))
         if synthesis is not None and synthesis.business_summary:
             analysis_paragraphs.append(
                 f"{synthesis.business_summary.strip('。')}。"
-                "该表述来自公开披露的综合归纳，用于定位企业的业务底盘与合作议题；具体业务占比以分业务披露数据为准，"
-                "后续章节按经营、产品、制造与能源四个维度逐项展开。"
+                "该业务边界决定企业内部的责任部门和可讨论的合作议题；具体业务占比仅在企业提供分业务收入或分部资产口径时计算。"
             )
         financial_paragraphs: list[str] = []
         for trend in analysis.trends:
@@ -480,8 +669,8 @@ class NarrativeBuilder:
             financial_paragraphs.append(comparison.statement)
         if not financial_paragraphs:
             financial_paragraphs.append(
-                "公开披露的经营数据以单年口径为主：目前可确认企业当前经营规模，但年度可比序列不足，"
-                "暂不外推长期增长趋势；后续将通过年报与交易所披露补齐可比年度数据，用于增速与盈利质量分析。"
+                "当前仅有单期经营披露，无法计算收入、利润或研发投入的同比变化和复合增长率，"
+                "也无法判断盈利变化来自售价、销量还是成本，因此暂不形成跨期经营趋势结论。"
             )
         analysis_paragraphs.extend(dict.fromkeys(financial_paragraphs))
         # Scale & structure facts beyond the core income statement.
@@ -500,7 +689,7 @@ class NarrativeBuilder:
             best = max(investment_rows, key=lambda item: item.confidence)
             analysis_paragraphs.append(
                 f"对外投资方面，公开披露显示公司{str(best.value).strip()}（{best.unit or '待核验口径'}）；"
-                "投资布局指向产能扩张与产业链配套，是判断后续合作项目空间的参考。"
+                "投资布局指向产能扩张与产业链配套，可用于判断合作窗口是否与企业资本开支节奏同步。"
             )
         # Enterprise-level risk disclosures feed the risk chapter, but the
         # operations chapter states their business context once.
@@ -508,13 +697,8 @@ class NarrativeBuilder:
         if business_risks:
             analysis_paragraphs.append(
                 "经营层面，公司公开披露提示" + "；".join(list(dict.fromkeys(business_risks))[:3]) + "等事项；"
-                "上述事项的应对情况需结合后续披露跟踪，对合作项目的影响在风险章节列示。"
+                "这些事项只有在能够改变技术边界、交付能力或对方合作意愿时，才计入项目风险判断。"
             )
-        # Same-scope comparability statement closes the chapter honestly.
-        analysis_paragraphs.append(
-            "与同业比较方面，本报告仅使用公开披露口径数据；当可比公司的披露范围、币种或会计政策不一致时，"
-            "本章不直接计算横向比率，行业定位以第三方行业统计为准，避免口径混用对读者造成误导。"
-        )
         # Profitability & market position: latest disclosed facts, per metric.
         gross_margin_rows = [claim for claim in self._verified_claims(bundle) if claim.field_name == "gross_margin"]
         if gross_margin_rows:
@@ -539,7 +723,7 @@ class NarrativeBuilder:
             period = f"（{best.period_end.year}）" if best.period_end else ""
             analysis_paragraphs.append(
                 f"市场地位方面，公开披露显示公司{str(best.value)}{period}；"
-                "产业地位数据用于判断公司在产业链中的议价与合作层级，本章以可靠公开来源为准。"
+                "产业地位数据用于判断公司在产业链中的议价与合作层级，其统计期间、地理范围和产品范围必须与原始披露一致。"
             )
             share_claims = {
                 claim.field_name: claim for claim in self._verified_claims(bundle)
@@ -555,8 +739,8 @@ class NarrativeBuilder:
                 )
         else:
             analysis_paragraphs.append(
-                "公开资料暂未披露可独立核验的市场份额、装机量排名或行业地位数据；"
-                "产业地位判断需以行业机构统计或官方披露为准，本章不作推测；该缺口不影响经营规模判断，但影响行业地位结论，后续以权威行业数据为准。"
+                "尚未取得可独立核验的市场份额、装机量排名或行业地位数据，无法把企业规模转换为行业位置判断；"
+                "在披露口径、统计期间和地理范围统一前，不输出市场地位或同业排名结论。"
             )
         consulting = "；".join(dict.fromkeys(item.business_implication for item in findings))
         if consulting:
@@ -564,23 +748,6 @@ class NarrativeBuilder:
                 consulting + "经营数据用于合作对象筛选与资源基础判断，项目层面的经济性仍以基地级数据独立测算；"
                 "经营规模与项目收益分账管理，避免把企业层数字重复包装为项目层价值。"
             )
-        analysis_paragraphs.append(
-            "从合作基础看，现有公开事实支持以产品与基地为切入点的合作讨论；"
-            "多年收入与利润序列等高价值数据补齐后，可进一步评估经营趋势与盈利质量，并形成跨期可比图表，该补齐工作由定向检索完成。"
-        )
-        analysis_paragraphs.append(
-            "本章回答的经营问题是：公司多大、经营如何变化、收入来自哪里、盈利与研发投入如何；"
-            "针对公开数据可支撑的维度逐项给出结论，未披露的维度如实记录为数据缺口，该口径同样适用于表格与图表数据。"
-        )
-        analysis_paragraphs.append(
-            "本章小结：经营规模、盈利能力、研发投入与市场地位共同构成合作对象的资源基础画像；"
-            "收入与利润的年度序列用于趋势与增速判断，分业务与区域构成用于识别合作切入点，"
-            "具体项目价值仍须以基地级现场数据独立测算，经营口径与项目口径分账管理。"
-        )
-        analysis_paragraphs.append(
-            "经营章节的数据基础为公开披露口径：收入、利润等指标以原始披露的时间、范围与单位为准，不进行行业均值替代；"
-            "数据缺口在文末附录中列示，并转化为待补资料清单，每项缺口标注责任部门与承诺日期。"
-        )
 
         module = StoryModule(
             module_id="mod-operations", chapter_id="operations", kind="operations",
@@ -611,7 +778,7 @@ class NarrativeBuilder:
 
         context: list[str] = []
         if families is not None:
-            context.append(families.statement + "产品族结构反映产品线重心与公开披露深度，该结构是技术适配讨论的起点，并与目标场景匹配，减少重复确认工作。")
+            context.append(families.statement + "产品族结构显示企业对外供给的重点方向，也决定技术适配时需要对照的型号、接口和应用边界。")
         else:
             context.append(f"已核验产品合计 {len(verified_products)} 项。")
         if finding is not None:
@@ -633,7 +800,7 @@ class NarrativeBuilder:
                 sentence += f"；商业状态：{product.commercial_status}"
             sentence += "。" if not application else f"；主要应用于{application}。"
             if index == 0:
-                sentence += "该产品构成双方产品接口核验与技术适配讨论的起点，参数完整性直接影响适配判断效率，并列出应用场景便于与目标场景匹配，减少重复确认。"
+                sentence += "该产品是当前公开参数最完整的对照样本；技术适配应围绕其已披露指标设定边界，对未披露的环境条件、安全认证和接口要求不作默认假设。"
             else:
                 sentence += "该型号是公司公开产品目录中的重点产品，其公开参数完整清单见附录产品清单，可作为对比选型的基础记录。"
             analysis_paragraphs.append(sentence)
@@ -656,8 +823,7 @@ class NarrativeBuilder:
         if family_clauses:
             analysis_paragraphs.append(
                 "产品族结构上，" + "；".join(family_clauses)
-                + "。各产品族分别回答动力、储能与换电等场景需求，具体参数差异见下方对比表与附录产品清单，"
-                "技术路线的差异以系列与型号口径为准。"
+                + "。产品族之间的可比性取决于系列、型号和参数口径；对不同应用场景不使用单一额定指标直接排名。"
             )
         # Technology routes & application landscape across the catalog.
         routes = list(dict.fromkeys(
@@ -706,21 +872,25 @@ class NarrativeBuilder:
         families_text = "、".join(sorted({product.category or "未分类" for product in verified_products}))
         analysis_paragraphs.append(
             f"从产品组合看，公司当前公开产品集中在{families_text}等产品族；"
-            "产品路线与技术差异需结合系列、型号与参数信息进一步核验，本节只呈现公开披露可支撑的结论，技术路线时间轴需以发布时间等数据支撑。"
-        )
-        analysis_paragraphs.append(
-            "产品分析章节回答“有哪些核心产品族、参数有何差异”；正文聚焦重点产品，完整矩阵与参数明细放附录，"
-            "避免以数据库打印件代替研究报告，同时保留 HTML 端的搜索与对比能力，以提升可交互性并降低读者查找成本。"
+            "产品路线与技术差异必须落到同一系列、同一型号和同一测试条件下比较；缺少发布时间时，不将产品名录顺序解读为技术演进路线。"
         )
         if len(verified_products) > len(key_products):
             analysis_paragraphs.append(
                 f"其余 {len(verified_products) - len(key_products)} 项产品明细见附录产品清单；"
                 "HTML 版本支持按产品族筛选与最多 4 项参数对比，便于快速定位与目标场景相关的产品族。"
             )
+        parameter_names = list(dict.fromkeys(
+            parameter.name for product in verified_products for parameter in product.parameters
+        ))
+        product_ids = {product.product_id for product in verified_products}
+        verified_image_count = sum(
+            image.visual_verified and image.product_id in product_ids
+            for image in bundle.images
+        )
         analysis_paragraphs.append(
-            "产品实景与图片证据遵循“来源可追溯、产品可绑定、视觉已核验”的发布规则；"
-            "无合格图片的产品以文本卡片呈现，不放置占位图，也不使用搜索结果缩略图；"
-            "图片缺失在质量检查中以覆盖缺口记录，并触发定向补采流程。"
+            f"资料完整度方面，{len(verified_products)} 项产品中有 {parameterized} 项披露可结构化参数，"
+            f"已出现的参数维度为{'、'.join(parameter_names[:8]) or '暂无'}，可绑定至具体产品的已核验图片为 {verified_image_count} 张。"
+            "该完整度足以支持产品族级初筛，但型号级选型还需同时核对认证版本、测试条件、工作温度、循环寿命和系统接口，不将产品展示图或单一额定参数作为采购结论。"
         )
 
         rows = [translate_table_row({
@@ -764,17 +934,18 @@ class NarrativeBuilder:
     # ── 4. factories: geo distribution + core bases ────────────────────────
     def _factories_module(self, bundle, analysis: ResearchAnalysis, finding: DecisionFinding | None, narrative: ResearchNarrative, images_for) -> StoryModule:
         entity = self._canonical_entity(bundle)
+        factories = list(bundle.factories)
         region_insight = next((item for item in analysis.insights if item.insight_id == "INS-REGIONS"), None)
         context: list[str] = []
         if region_insight is not None:
             context.append(
                 f"{region_insight.findings[0] if region_insight.findings else ''}"
-                "基地名录（含地址与工艺）完整保留在附录，供选址与切入顺序判断。"
+                "地域分布可用于识别制造重心和候选切入区域，但具体基地仍需结合工艺、运行状态和责任主体评估。"
             )
         if finding is not None:
-            context.append(finding.fact_summary + "基地清单为公开渠道可核验口径，可能并非法定完整名录。")
+            context.append(finding.fact_summary + "当前可确认的基地范围以企业具名披露为准，不将未具名项目或合作方厂区计入目标企业生产布局。")
         if not context:
-            context.append(f"公开资料识别生产基地 {analysis.factory_site_count or len(bundle.factories)} 处，完整名录见附录基地清单。")
+            context.append(f"公开资料可确认生产基地 {analysis.factory_site_count or len(factories)} 处，地址、工艺和运行状态分别按具体基地核对。")
 
         analysis_paragraphs: list[str] = []
         distribution = analysis.region_distribution
@@ -799,7 +970,7 @@ class NarrativeBuilder:
         region_factories: dict[str, list[Any]] = {}
         region_re = re.compile(r"([\u4e00-\u9fff]{2,10}?(?:省|自治区))")
         overseas_re = re.compile(r"(德国|匈牙利|印尼|印度尼西亚|泰国|越南|美国|西班牙|墨西哥|日本|韩国|波兰|荷兰|比利时)")
-        for factory in bundle.factories:
+        for factory in factories:
             address = factory.address or ""
             overseas = overseas_re.search(address)
             if overseas:
@@ -821,7 +992,7 @@ class NarrativeBuilder:
                 analysis_paragraphs.append(templates[index](region, factories))
         if analysis.overseas_factory_count:
             overseas_names = list(dict.fromkeys(
-                factory.name for factory in bundle.factories
+                factory.name for factory in factories
                 if overseas_re.search(factory.address or "") and factory.name
             ))[:4]
             analysis_paragraphs.append(
@@ -829,10 +1000,10 @@ class NarrativeBuilder:
                 "海外基地的并网、标准与供应链条件与国内不同，合作项目需按所在国法规单独评估。"
             )
         analysis_paragraphs.append(
-            "地址信息不完整或未标注地区的基地保留原文待核验，不强行归类；"
-            "基地清单随新增公开披露滚动更新，区位判断以最新披露为准。"
+            "地址信息不完整或未标注地区的基地不强行归类；"
+            "在无法确认运营主体、投产状态或具体工艺时，该基地不进入产能加总和首批试点排序。"
         )
-        for index, factory in enumerate(bundle.factories[:6]):
+        for index, factory in enumerate(factories[:6]):
             location = f"，位于{factory.address}" if factory.address else ""
             process = f"，主要工艺为{'、'.join(factory.processes)}" if factory.processes else ""
             status = f"，状态：{factory.operating_status}" if factory.operating_status else ""
@@ -859,24 +1030,29 @@ class NarrativeBuilder:
                 "公开资料暂未形成多年度可比产能序列；产能口径描述制造输出，与企业自身用电规模是两类指标，"
                 "项目测算不使用产能数字替代负荷与电量数据，用电与负荷须以现场计量为准，测算边界须双方书面确认。"
             )
+        address_count = sum(bool(factory.address) for factory in factories)
+        process_count = sum(bool(factory.processes) for factory in factories)
+        status_count = sum(bool(factory.operating_status) for factory in factories)
         analysis_paragraphs.append(
-            "制造章节小结：生产基地的地域分布、区域职能与产能变化共同构成制造组织画像；"
-            "首批合作基地的选择以业务相关性、数据可得性与责任链路为依据，基地名录与工艺明细见附录，并随新披露滚动更新。"
+            f"基地资料完整度方面，{len(factories)} 处基地中有 {address_count} 处具备明确地址、"
+            f"{process_count} 处具备工艺信息、{status_count} 处具备运行状态。"
+            "首批候选基地应同时满足业务场景相关、运营主体明确、工程边界可核对和能源数据可提供四项条件；"
+            "仅有地址或仅有产能名称的基地，只能作为调研对象，不直接进入方案设计和投资测算。"
         )
 
         # Body shows only the most informative bases; full ledger is an appendix.
         core_rows: list[dict[str, Any]] = []
-        for factory in bundle.factories[:10]:
+        for factory in factories[:10]:
             core_rows.append(translate_table_row({
                 "name": factory.name or "未命名基地", "address": factory.address or "",
                 "processes": "、".join(factory.processes), "status": factory.operating_status or "",
             }))
-        if len(bundle.factories) > len(core_rows):
+        if len(factories) > len(core_rows):
             analysis_paragraphs.append(
-                f"完整 {analysis.factory_site_count or len(bundle.factories)} 处基地（含同名近似记录）名录见附录基地清单，正文仅列核心基地。"
+                f"共确认 {analysis.factory_site_count or len(factories)} 处基地；其中优先展开工程条件分析的是地址、工艺和运行主体信息相对完整的基地。"
             )
 
-        assertion = finding.conclusion if finding is not None else f"公开资料识别生产基地 {analysis.factory_site_count or len(bundle.factories)} 处"
+        assertion = finding.conclusion if finding is not None else f"公开资料识别生产基地 {analysis.factory_site_count or len(factories)} 处"
         module = StoryModule(
             module_id="mod-factories", chapter_id="factories", kind="factories",
             title="生产布局与产能组织", assertion_title=assertion,
@@ -897,7 +1073,7 @@ class NarrativeBuilder:
                 module.visual_ids.append(spec.visual_id)
         module.image_ids = images_for(
             chapter="factories", entity_id=entity.entity_id,
-            factory_ids={factory.factory_id for factory in bundle.factories},
+            factory_ids={factory.factory_id for factory in factories},
         )
         return module
 
@@ -948,7 +1124,7 @@ class NarrativeBuilder:
         else:
             analysis_paragraphs.append(
                 "现有证据不能比较各基地的用能成本、峰谷差或可接入容量，也不能确定光伏装机、储能功率与时长。"
-                "因此本章不提供项目规模、投资额或收益估算。"
+                "因此当前不提供项目规模、投资额或收益估算。"
             )
         zero_carbon_insight = next((item for item in analysis.insights if item.insight_id == "INS-ZERO-CARBON"), None)
         if zero_carbon_insight and zero_carbon_insight.findings:
@@ -1108,7 +1284,7 @@ class NarrativeBuilder:
             decision_question="哪些企业风险或反证会改变当前合作判断？",
             executive_takeaway="立项前需核实会影响技术范围、投入规模和合作意愿的关键事项。",
             context_paragraphs=[
-                "本章只列公司公开披露的经营风险，以及会直接影响合作判断但尚待确认的事项。"
+                "风险判断仅纳入公司已披露的经营风险，以及会直接改变合作方向、投入规模或停止条件的待确认事项。"
             ],
             analysis_paragraphs=[
                 *(decision.key_risks or ["当前已核验披露未识别需要单列的企业特定风险；这不等于企业不存在风险。"]),
@@ -1198,7 +1374,7 @@ class NarrativeBuilder:
         canonical_id = bundle.run_manifest.canonical_entity_id
         return next(
             (item for item in bundle.entities if item.entity_id == canonical_id),
-            bundle.entities[0] if bundle.entities else None,
+            None,
         )
 
     def _profile_paragraph(self, bundle: FrozenResearchBundle) -> str:
@@ -1218,13 +1394,138 @@ class NarrativeBuilder:
         employee = verified.get("employee_count")
         if employee is not None and str(employee.value).strip():
             facts.append(f"员工人数 {str(employee.value).strip()}{employee.unit or ''}")
-        prefix = f"{entity.canonical_name}：{'；'.join(facts)}"
-        return prefix + "。上述信息用于识别研究主体与合作责任边界，构成经营分析的组织背景；"
-        "相关登记与工商信息以公开页面为准，如后续发现登记信息变化，以最新官方公示为准。"
+        if not facts:
+            return f"研究主体为{entity.canonical_name}。"
+        return f"{entity.canonical_name}：{'；'.join(facts)}。"
+
+    def _operating_disclosure_paragraphs(self, bundle: FrozenResearchBundle) -> list[str]:
+        """Describe the enterprise's actual disclosure scope in market-research prose.
+
+        The paragraph content is assembled from target-bound claim values,
+        reporting periods and named sources.  It adds analytical depth without
+        repeating chapter scaffolding or narrating the research workflow.
+        """
+        entity = self._canonical_entity(bundle)
+        if entity is None:
+            return []
+        all_claims = self._verified_claims(bundle)
+        grouped_fields = {
+            "registered_name", "brand_operator", "parent_company",
+            "customer_name", "customer_segment", "supplier_relationship", "sales_channel",
+            "contract", "application_case",
+            "strategic_priority", "strategy_event", "technology_route",
+        }
+        evidence_claims = [
+            claim for claim in all_claims
+            if claim.field_name not in {
+                "canonical_company_name", "registered_name", "aliases", "former_names",
+                "official_website", "registration_region", "headquarters", "founded_date",
+            }
+        ]
+        claims = [claim for claim in evidence_claims if claim.field_name not in grouped_fields]
+        sources = {source.source_id: source for source in bundle.sources}
+        fact_samples: list[str] = []
+        for claim in claims:
+            if isinstance(claim.value, (dict, list, tuple, set)):
+                continue
+            value = str(claim.value).strip()
+            if not value:
+                continue
+            label = field_label(claim.field_name)
+            if "_" in label:
+                continue
+            display = f"{label}为{value}{claim.unit or ''}"
+            if display not in fact_samples:
+                fact_samples.append(display)
+        source_names = list(dict.fromkeys(
+            (sources[claim.source_id].source_title or sources[claim.source_id].publisher or sources[claim.source_id].source_domain)
+            for claim in evidence_claims if claim.source_id in sources
+        ))
+        periods = sorted({
+            str(claim.period_end.year if claim.period_end else claim.as_of_date.year)
+            for claim in evidence_claims if claim.period_end or claim.as_of_date
+        })
+        paragraphs: list[str] = []
+
+        def values(*fields: str, limit: int = 4) -> list[str]:
+            return list(dict.fromkeys(
+                str(claim.value).strip().rstrip("。；;")
+                for claim in all_claims
+                if claim.field_name in fields
+                and not isinstance(claim.value, (dict, list, tuple, set))
+                and str(claim.value).strip().rstrip("。；;")
+            ))[:limit]
+
+        legal_names = values("registered_name", "brand_operator", limit=2)
+        parents = values("parent_company", limit=2)
+        if legal_names or parents:
+            boundary = (
+                f"主体边界方面，公开披露将{entity.canonical_name}对应的注册或品牌运营主体识别为"
+                f"{'、'.join(legal_names) if legal_names else '待进一步核对的法人主体'}"
+            )
+            if parents:
+                boundary += f"，并披露其母公司为{'、'.join(parents)}"
+            paragraphs.append(
+                boundary
+                + "。这一边界直接影响商务对接：品牌运营、合同签署、知识产权归属、付款责任和集团资源调用可能由不同主体承担。"
+                "在进入合作方案或报价前，应以工商信息、合同抬头和授权文件逐项核对责任主体，不把集团层能力直接视为目标公司的可支配资源。"
+            )
+
+        market_signals = values(
+            "customer_name", "customer_segment", "supplier_relationship", "sales_channel",
+            limit=5,
+        )
+        if market_signals:
+            paragraphs.append(
+                "市场与渠道证据显示，" + "；".join(market_signals) + "。"
+                "这些事实可以证明公司已进入相应客户触点、设备市场或公共充电服务链条，但客户关系、供应商关系、渠道触达和资产运营并不是同一收入确认口径。"
+                "下一步应分别核对获客入口、充电资产归属、订单或框架协议、结算方式、服务费口径及合作期限，才能判断渠道的商业贡献与持续性。"
+            )
+
+        contracts = values("contract", limit=3)
+        cases = values("application_case", limit=3)
+        if contracts or cases:
+            disclosed = "；".join([*contracts, *cases])
+            paragraphs.append(
+                f"交付与运营改善方面，现有公开案例披露{disclosed}。"
+                "该证据说明公司曾在具体项目或管理场景中取得可观察结果，可用于识别其运营改善诉求和外部协同经验；"
+                "但单一案例不能直接外推为全公司、全基地或未来期间的稳定表现。后续尽调需确认基期、统计周期、适用组织、计算方法及改善措施的可归因性。"
+            )
+
+        strategic_signals = values(
+            "strategic_priority", "strategy_event", "technology_route", limit=5,
+        )
+        if strategic_signals:
+            paragraphs.append(
+                "战略与技术协同方面，公开披露集中指向" + "；".join(strategic_signals) + "。"
+                "这些事项共同界定了现阶段可讨论的技术方向与合作场景，适合转化为充电功率、检测能力、站点建设、系统接口和运营指标等可验收课题。"
+                "是否形成真实合作窗口，仍取决于对方业务部门是否给出明确需求、预算责任和项目时点，不能仅凭合作新闻或技术表述推定立项。"
+            )
+
+        if fact_samples:
+            paragraphs.append(
+                f"{entity.canonical_name}当前可直接确认的经营事实包括"
+                + "；".join(fact_samples[:6])
+                + "。这些披露确定了业务边界和现有经营载体；对未同时给出期间、范围或单位的数值，不进行增长率、市场份额或产能利用率推算。"
+            )
+        if source_names or periods:
+            period_text = "、".join(periods) + "年" if periods else "未标明统一报告期"
+            source_text = "、".join(source_names[:4]) if source_names else "企业公开披露"
+            paragraphs.append(
+                f"现有经营口径主要来自{source_text}，涉及期间为{period_text}。"
+                "同一指标只有在主体、会计口径、币种和报告期一致时才进行比较；"
+                "单期披露用于判断当前规模，不替代跨期增长、盈利质量或现金流持续性分析。"
+            )
+        return paragraphs
 
     @staticmethod
     def _verified_claims(bundle: FrozenResearchBundle) -> list[Claim]:
-        return [claim for claim in bundle.claims if claim.verification_status == VerificationStatus.VERIFIED]
+        canonical_id = bundle.run_manifest.canonical_entity_id
+        return [
+            claim for claim in bundle.claims
+            if claim.entity_id == canonical_id
+            and claim.verification_status == VerificationStatus.VERIFIED
+        ]
 
     def _default_synthesis(self, bundle: FrozenResearchBundle, entity) -> ResearchSynthesis:
         from enterprise_energy_research.research.synthesis import ResearchSynthesizer

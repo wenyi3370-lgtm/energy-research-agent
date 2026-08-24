@@ -162,6 +162,19 @@ class AnySearchCliAdapter:
                 if runtime == "py" and "connection error" in error_text.lower():
                     diagnostics.extend(self._proxy_diagnostics())
                 continue
+            provider_error = self._provider_error_message(output)
+            if provider_error:
+                # Some AnySearch runtimes exit 0 while returning a plain-text
+                # quota/auth/rate-limit notice. Treating that notice as page
+                # content creates fake material evidence and false "no data"
+                # exhaustion. This is an infrastructure block, not a hit.
+                return SearchResultEnvelope(
+                    adapter=self.name,
+                    query_id=request.query_id,
+                    status="blocked",
+                    hits=[],
+                    diagnostics=[*diagnostics, f"{runtime} provider blocked: {provider_error}"],
+                )
             hits = self._parse_output(output, requested_url=str(url) if url else None)
             if hits:
                 if index:
@@ -189,6 +202,20 @@ class AnySearchCliAdapter:
         )
 
     @staticmethod
+    def _provider_error_message(output: str) -> str | None:
+        text = " ".join((output or "").strip().split())
+        folded = text.casefold()
+        if not text or len(text) > 1000 or "http://" in folded or "https://" in folded:
+            return None
+        markers = (
+            "total free quota", "quota exceeded", "insufficient quota",
+            "rate limit exceeded", "too many requests", "invalid api key",
+            "unauthorized", "access denied", "api key is required",
+            "免费额度", "额度已用完", "请求过于频繁", "无效的 api key",
+        )
+        return text[:500] if any(marker in folded for marker in markers) else None
+
+    @staticmethod
     def _build_command(
         prefix: list[str],
         request: SearchRequest,
@@ -198,9 +225,13 @@ class AnySearchCliAdapter:
         sub_domain: object,
         sub_domain_params: object,
     ) -> list[str]:
+        # Runtime account rotation is carried only in the child process
+        # environment. Never place a credential in argv: process listings and
+        # timeout diagnostics may expose command-line arguments.
+        base = list(prefix)
         if url:
-            return [*prefix, "extract", str(url)]
-        command = [*prefix, "search", request.query, "--max_results", str(min(request.max_results, 10))]
+            return [*base, "extract", str(url)]
+        command = [*base, "search", request.query, "--max_results", str(min(request.max_results, 10))]
         if domain and sub_domain:
             command.extend(["--domain", str(domain), "--sub_domain", str(sub_domain)])
             if sub_domain_params is not None:

@@ -463,10 +463,10 @@ class DecisionSynthesisEngine:
         client_name = client.client_name if client else "委托方"
         business_text = business or ("、".join(segments) if segments else "已核验主营业务")
         trajectory_text = "；".join(
-            f"{item.title}已收录{'、'.join(item.periods)}年度数据，可用于观察这些年份的变化"
+            f"{item.title}（{'、'.join(item.periods)}）"
             for item in strategic.trajectories[:2]
-        ) if isinstance(strategic, StrategicInterpretation) and strategic.trajectories else "现有年度数据不足以判断长期变化"
-        turning_text = "；".join(f"{item.period}年{item.event}" for item in strategic.turning_points[:2]) if isinstance(strategic, StrategicInterpretation) and strategic.turning_points else "尚未识别足以改变业务边界的具名战略转折"
+        ) if isinstance(strategic, StrategicInterpretation) and strategic.trajectories else ""
+        turning_text = "；".join(f"{item.period}年{item.event}" for item in strategic.turning_points[:2]) if isinstance(strategic, StrategicInterpretation) and strategic.turning_points else ""
         priority_items = [item for item in hypotheses if item.status == CooperationHypothesisStatus.PRIORITY_OPPORTUNITY]
         potential_items = [item for item in hypotheses if item.status == CooperationHypothesisStatus.POTENTIAL_HYPOTHESIS]
         ranked = [*priority_items, *potential_items]
@@ -474,13 +474,38 @@ class DecisionSynthesisEngine:
             f"{item.opportunity_name}：{item.recommended_action.rstrip('。；;')}"
             for item in ranked[:3]
         ) or "暂无建议主动接洽的方向"
-        risks_text = "；".join(risks[:3]) if risks else "未从已核验披露中识别需要单列的企业特定风险"
+        risks_text = "；".join(risks[:3])
         unknowns = [item.item for item in requirements if item.decision_blocker][:4]
         operating_fact_items = [
             item.conclusion for item in findings
             if item.semantic_domain in {"financial", "product", "manufacturing"}
         ]
-        operating_facts = "；".join(operating_fact_items)
+        trend_facts = [
+            trend.statement for trend in (revenue, profit)
+            if trend is not None and trend.statement
+        ]
+        product_fact = next(
+            (item.statement for item in analysis.comparisons if item.comparison_id == "CMP-FAMILIES"),
+            "",
+        )
+        factory_fact = next(
+            (item.findings[0] for item in analysis.insights if item.insight_id == "INS-REGIONS" and item.findings),
+            "",
+        )
+        operating_facts = "；".join(dict.fromkeys([
+            *trend_facts, *operating_fact_items, product_fact, factory_fact,
+        ]))
+        metric_ledger = "、".join(
+            f"{item.period or '最新披露期'}{item.label}{item.value}{item.unit or ''}"
+            for item in analysis.kpis[:6]
+        )
+        annual_ledger = "；".join(
+            f"{trend.label}序列为" + "、".join(
+                f"{point.period}年{point.value_display}{point.unit or ''}"
+                for point in trend.points
+            )
+            for trend in (revenue, profit) if trend is not None and trend.points
+        )
         strength_labels = {"strong": "强", "medium": "中", "weak": "弱"}
         customer_text = "；".join(
             f"{item.customer_or_market}（资料支持程度：{strength_labels.get(item.strength, '待确认')}）"
@@ -490,12 +515,16 @@ class DecisionSynthesisEngine:
         top = ranked[0] if ranked else None
         contact_department = top.target_department if top else "相关业务部门"
         top_direction = top.opportunity_name if top else "候选合作方向"
+        strategy_parts = [item for item in (trajectory_text, turning_text) if item]
+        if customer_text:
+            strategy_parts.append("客户与市场披露包括" + customer_text)
+        limitation_parts = [item for item in (risks_text, ("待取得" + "、".join(unknowns)) if unknowns else "") if item]
         return [
-            f"企业定位：{entity_name}以{business_text}为核心业务。{operating_facts or '公开资料已覆盖公司的主要经营、产品和制造情况'}。这些信息反映了公司的主营方向和现有交付基础，首轮沟通宜聚焦具体产品或工艺课题。据现有资料，{rationale}",
-            f"经营与战略：{trajectory_text}；{turning_text}。{('已披露的客户与市场信息包括' + customer_text + '。') if customer_text else '公开资料尚未充分说明持续订单、排他关系或稳定收入。'}",
-            f"合作建议：{opportunity_text}。{client_name}可投入的相关能力包括{capability_text or '尚无已确认的专项能力'}。当前建议先聚焦{top_direction}，与{contact_department}确认一项具体课题，不同时铺开多个方向。",
-            f"主要限制：{risks_text}。" + (f"立项前还需取得{'、'.join(unknowns)}。" if unknowns else "当前没有发现会立即推翻上述判断的重大信息缺口。") + "如对方没有明确需求、双方技术路线或交付范围无法对齐，建议停止接洽。",
-            f"下一步：30 天内与{contact_department}确认需求和负责人；60 天内由{client_name}与对方选定一个课题，明确指标、分工、数据和知识产权边界；90 天根据验证结果决定立项、缩小范围或结束接洽。",
+            f"企业定位：{entity_name}以{business_text}为核心业务。{operating_facts or rationale}。{('最新可核验指标包括' + metric_ledger + '。') if metric_ledger else ''}",
+            f"经营与战略：{'；'.join(strategy_parts) or rationale}。{annual_ledger}。总体判断为{judgement}。",
+            f"合作建议：{opportunity_text}。{priority_summary}。{client_name}现有可投入能力为{capability_text or '尚待确认'}；优先与{contact_department}围绕{top_direction}确认具体问题、责任人和预期结果。",
+            f"主要限制：{'；'.join(limitation_parts) or '尚无足够企业事实支持扩大合作范围'}。如需求、技术路线或交付范围无法对齐，停止该方向；扩大范围前先核对公开披露的企业主体、报告期间和业务口径。",
+            f"下一步：30 天内由{contact_department}确认需求范围和负责人；60 天内由{client_name}与对方明确{top_direction}的指标、分工、数据和知识产权边界；90 天依据验证结果决定立项、缩小范围或结束接洽。30 天节点以对方书面确认问题并形成双方签字纪要为完成标准，60 天节点以双方确认测试数据和验收指标为完成标准，90 天仅在验证结果达到约定指标时申请后续资源；测试结果同时记录未达标指标、责任人和停止原因。",
         ]
 
     @staticmethod

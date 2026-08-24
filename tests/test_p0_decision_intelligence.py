@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from enterprise_energy_research.artifacts.html import FrozenHtmlPublisher
 from enterprise_energy_research.artifacts.narrative import NarrativeBuilder
 from enterprise_energy_research.artifacts.publication_terminology import source_type_label
 from enterprise_energy_research.domain.enums import (
@@ -20,6 +21,8 @@ from enterprise_energy_research.research.cooperation_hypothesis import (
 )
 from enterprise_energy_research.research.decision_synthesis import DecisionSynthesisEngine
 from enterprise_energy_research.research.research_analysis import ResearchAnalysisEngine
+from enterprise_energy_research.research.publication_relevance import PublicationRelevanceFilter
+from enterprise_energy_research.research.entity_scope import publication_identity_errors
 from enterprise_energy_research.research.strategic_interpretation import StrategicInterpretationEngine
 from enterprise_energy_research.validation.publication_quality import AI_TONE_PHRASES, DecisionIntelligenceValidator
 from enterprise_energy_research.validation.consulting_narrative import narrative_body_text
@@ -80,6 +83,37 @@ def test_latest_kpi_uses_latest_completed_verified_period_not_highest_confidence
     revenue = next(item for item in ResearchAnalysisEngine().analyze(b).kpis if item.label == "营业收入")
     assert revenue.period == "2024"
     assert revenue.claim_ids == ["C24"]
+
+
+def test_unrelated_new_energy_company_claims_cannot_populate_target_metrics():
+    target = claim("TARGET-24", "revenue", 100, 2024)
+    other = claim("OTHER-24", "revenue", 999, 2024).model_copy(update={"entity_id": "ENT-OTHER"})
+    b = bundle(claims=[target, other]).model_copy(update={
+        "entities": [
+            Entity(entity_id="ENT-1", canonical_name="样本企业", verification_status=VerificationStatus.VERIFIED),
+            Entity(entity_id="ENT-OTHER", canonical_name="其他新能源企业", verification_status=VerificationStatus.VERIFIED),
+        ],
+    })
+    analysis = ResearchAnalysisEngine().analyze(b)
+    revenue = next(item for item in analysis.kpis if item.label == "营业收入")
+    assert revenue.value == "100"
+    body, report = PublicationRelevanceFilter().filter(b)
+    assert [item.claim_id for item in body] == ["TARGET-24"]
+    assert any("outside canonical enterprise group" in " ".join(item.reasons) for item in report.internal)
+
+
+def test_mismatched_identity_and_official_domain_block_formal_subject():
+    bad_identity = claim("IDENTITY-BAD", "canonical_company_name", "巴斯夫", 2024)
+    b = bundle(claims=[bad_identity]).model_copy(update={
+        "entities": [Entity(
+            entity_id="ENT-1", canonical_name="杉杉股份",
+            official_website="https://basf.com/",
+            verification_status=VerificationStatus.VERIFIED,
+        )],
+    })
+    errors = publication_identity_errors(b)
+    assert any("does not match" in error for error in errors)
+    assert any("official website host" in error for error in errors)
 
 
 def test_carbon_report_title_is_not_misread_as_energy_consumption_value():
@@ -195,6 +229,42 @@ def test_publication_narrative_contains_client_strategy_and_shared_decision_mode
     assert narrative.strategic_interpretation.trajectories
     assert narrative.chapter("strategic_interpretation") is not None
     assert len(narrative.executive_summary) == 5
+
+
+def test_dashboard_large_report_gate_counts_only_verified_claims():
+    class QA:
+        def __init__(self) -> None:
+            self.findings = []
+
+        def record_finding(self, finding) -> None:
+            self.findings.append(finding)
+
+    candidates = [
+        claim(f"C-{index}", "revenue", index + 1, 2024).model_copy(update={
+            "verification_status": VerificationStatus.UNVERIFIED,
+        })
+        for index in range(100)
+    ]
+    qa = QA()
+    FrozenHtmlPublisher._record_dashboard_contract_qa(
+        qa,
+        bundle(claims=candidates),
+        [{"kpis": [{}, {}, {}], "insights": [{}, {}, {}], "visuals": [{"type": "bar"}] * 4}],
+        [],
+    )
+    assert not any(item.code == "dashboard_visual_count_gate" for item in qa.findings)
+
+
+def test_executive_summary_does_not_pad_thin_evidence_to_length_contract():
+    narrative = NarrativeBuilder().build(bundle(claims=[
+        claim("R22", "revenue", 100, 2022),
+        claim("R23", "revenue", 130, 2023),
+        claim("R24", "revenue", 180, 2024),
+    ]))
+    assert narrative.counts["executive_summary_cjk_char_count"] < 800
+    payload = "".join(narrative.executive_summary)
+    assert "判断企业资源基础时，应把" not in payload
+    assert "经营变化应同时观察" not in payload
 
 
 def test_publication_narrative_localizes_hypothesis_statuses():

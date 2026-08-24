@@ -39,7 +39,13 @@ class SearchRequest(BaseModel):
     target_conflict_ids: list[str] = Field(default_factory=list)
     target_claim_ids: list[str] = Field(default_factory=list)
     canonical_company_name: str | None = None
+    canonical_company_aliases: list[str] = Field(default_factory=list)
     expected_fields: list[str] = Field(default_factory=list)
+    goal_domain: str = "general_enterprise_research"
+    subject_role: str = "target_enterprise"
+    evidence_lane: str = "target"
+    evidence_use: str = "target_fact"
+    requirement_text: str | None = None
 
 
 class SearchHit(BaseModel):
@@ -70,7 +76,13 @@ class SearchResultEnvelope(BaseModel):
     target_conflict_ids: list[str] = Field(default_factory=list)
     target_claim_ids: list[str] = Field(default_factory=list)
     canonical_company_name: str | None = None
+    canonical_company_aliases: list[str] = Field(default_factory=list)
     expected_fields: list[str] = Field(default_factory=list)
+    goal_domain: str = "general_enterprise_research"
+    subject_role: str = "target_enterprise"
+    evidence_lane: str = "target"
+    evidence_use: str = "target_fact"
+    requirement_text: str | None = None
 
 
 class ArtifactResult(BaseModel):

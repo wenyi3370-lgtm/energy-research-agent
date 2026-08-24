@@ -389,7 +389,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--api_key",
-        default=os.environ.get("ANYSEARCH_API_KEY", ""),
+        # Service-level rotation override stays out of argv/process listings.
+        # The ordinary standalone skill continues to use ANYSEARCH_API_KEY.
+        default=(
+            os.environ.get("EER_ANYSEARCH_API_KEY", "")
+            or os.environ.get("ANYSEARCH_API_KEY", "")
+        ),
         help="API key for authentication. Read from: --api_key > .env ANYSEARCH_API_KEY > env ANYSEARCH_API_KEY. "
         "Without a key, anonymous access is used with lower rate limits.",
     )

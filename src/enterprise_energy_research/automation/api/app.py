@@ -41,6 +41,7 @@ from ..contracts import (
     DeepResearchPayload,
     FeedbackPayload,
     FeishuFormPayload,
+    NaturalResearchRequest,
     NaturalLanguagePrompt,
     ResearchRequest,
     ResearchResult,
@@ -162,13 +163,17 @@ def _parse_natural_request(prompt: str, gateway) -> NaturalResearchRequest:
         f"{prompt}"
     )
     try:
-        return gateway.structured(StructuredRequest[NaturalResearchRequest](
+        parsed = gateway.structured(StructuredRequest[NaturalResearchRequest](
             purpose="natural_research_parsing",
             messages=[{"role": "user", "content": extraction_prompt}],
             response_model=NaturalResearchRequest,
             temperature=0.0,
             metadata={"purpose": "research-parsing"},
         ))
+        # The original sentence is the authoritative targeted requirement.
+        # Model-produced topics help routing, but may never replace or shorten
+        # what the user actually asked the research planner to reinforce.
+        return parsed.model_copy(update={"notes": prompt})
     except Exception:  # noqa: BLE001 - fall back to keyword rules
         return _keyword_parse(prompt)
 
@@ -177,7 +182,16 @@ def _keyword_parse(prompt: str) -> NaturalResearchRequest:
     """关键词兜底：识别常见公司名/国家/产品词（LLM 不可用时）。"""
     import re
 
-    company_match = re.search(r"(?:调研|调查|研究|分析)?([\u4e00-\u9fa5A-Za-z0-9]{2,20}?(?:公司|集团|科技|能源|股份|有限|制造))", prompt)
+    company_match = re.search(
+        r"(?:调研|调查|研究|分析)\s*[「『“\"']?([^，,；;。\n的]{2,30})",
+        prompt,
+    ) or re.search(
+        r"([\u4e00-\u9fa5A-Za-z0-9（）()·-]{2,30}?(?:公司|集团|科技|能源|股份|有限|制造))",
+        prompt,
+    )
+    company = company_match.group(1).strip(" 「」『』“”\"'") if company_match else None
+    if company and any(token in company for token in ("市场进入", "行业趋势", "政策法规")):
+        company = None
     research_type = ResearchType.OTHER
     if "竞品" in prompt or "竞争对手" in prompt:
         research_type = ResearchType.COMPETITOR_ANALYSIS
@@ -192,9 +206,9 @@ def _keyword_parse(prompt: str) -> NaturalResearchRequest:
     elif "公司" in prompt or "企业" in prompt or "画像" in prompt:
         research_type = ResearchType.COMPANY_PROFILE
     return NaturalResearchRequest(
-        company=company_match.group(1) if company_match else None,
+        company=company,
         research_type=research_type,
-        topics=[" ".join(item) for item in re.findall(r"[\u4e00-\u9fa5]{2,8}(?:、|和|以及|,|，|与)?", prompt) if item.strip()][:5],
+        topics=[],
         notes=prompt,
     )
 
@@ -390,6 +404,9 @@ def create_app(
     def _deep_research_status_file(run_dir: Path) -> Path:
         return run_dir / "deep_research_result.json"
 
+    def _deep_research_lock_file(run_dir: Path) -> Path:
+        return run_dir / ".deep_research.lock"
+
     def _run_deep_research(run_id: str, payload: DeepResearchPayload, run_dir: Path) -> None:
         from enterprise_energy_research.research.deep_retry import deep_retry, find_evidence_store
 
@@ -416,8 +433,12 @@ def create_app(
                     if Path(translated).is_dir():
                         candidate = Path(translated)
                 if candidate.is_dir():
-                    fixed = sorted(candidate.glob("evidence_fixed*.sqlite3"))
-                    store = EvidenceStore(fixed[-1]) if fixed else None
+                    fixed = sorted(
+                        candidate.glob("evidence_fixed*.sqlite3"),
+                        key=lambda path: (path.stat().st_mtime_ns, str(path)),
+                        reverse=True,
+                    )
+                    store = EvidenceStore(fixed[0]) if fixed else None
                     run_dir = candidate
             if store is None:
                 store = find_evidence_store(run_id, search_roots)
@@ -440,19 +461,55 @@ def create_app(
                         ("https://www.catl.com/solution/commercialEV/", "商业应用解决方案"),
                         ("https://www.catl.com/solution/recycling/", "循环回收"),
                     ]
-                result = deep_retry(
-                    store, run_dir,
-                    requirements=payload.requirements,
-                    company=company,
-                    adapters={
-                        "anysearch": AnySearchCliAdapter(),
-                        "kimi_webbridge": KimiWebBridgeSearchAdapter(session=f"deep-research-{run_id[-6:]}"),
-                    },
-                    gateway=gateway,
-                    fetcher=lambda url, referer: archiver._fetch_direct(url, referer)[0],
-                    include_images=payload.include_images,
-                    catalog_pages=catalog_pages,
-                )
+                adapters = {
+                    "anysearch": AnySearchCliAdapter(),
+                    "kimi_webbridge": KimiWebBridgeSearchAdapter(session=f"deep-research-{run_id[-6:]}"),
+                }
+                current_store = store
+                attempt_history: list[dict] = []
+                result = {}
+                for recovery_round in range(1, 11):
+                    result = deep_retry(
+                        current_store, run_dir,
+                        requirements=payload.requirements,
+                        company=company,
+                        adapters=adapters,
+                        gateway=gateway,
+                        fetcher=lambda url, referer: archiver._fetch_direct(url, referer)[0],
+                        include_images=payload.include_images,
+                        catalog_pages=catalog_pages,
+                        recovery_round=recovery_round,
+                        scope_requirement=payload.requirements,
+                    )
+                    attempt_history.append({
+                        "round": recovery_round,
+                        "status": result.get("status"),
+                        "published": bool(result.get("published")),
+                        "verified_claims_before": result.get("verified_claims_before"),
+                        "verified_claims_after": result.get("verified_claims_after"),
+                        "high_coverage_gaps": result.get("high_coverage_gaps", []),
+                        "publish_error": result.get("publish_error"),
+                        "search_execution_status": result.get("search_execution_status"),
+                    })
+                    if result.get("published"):
+                        break
+                    if result.get("search_execution_status") in {"blocked", "discovery_failed"}:
+                        # Evidence-absence recovery is ten rounds; provider
+                        # outage/quota/auth failure is not. Stop immediately
+                        # without misreporting it as a public-data gap.
+                        break
+                    next_store = result.get("evidence_store")
+                    if not next_store:
+                        break
+                    candidate_store = Path(str(next_store))
+                    if not candidate_store.is_file():
+                        break
+                    # Continue from the store created by THIS exact request.
+                    # A generic newest-file scan can cross-contaminate two
+                    # concurrent deep-research requests for the same run.
+                    current_store = EvidenceStore(candidate_store)
+                result["attempts"] = len(attempt_history)
+                result["attempt_history"] = attempt_history
                 result["requested_by"] = payload.requested_by
                 if payload.save_to_desktop and result.get("published"):
                     desktop_root = Path(os.environ.get("EER_DESKTOP_PATH", "/desktop"))
@@ -509,11 +566,42 @@ def create_app(
                 "requested_by": payload.requested_by,
             }
         status_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        _deep_research_lock_file(run_dir).unlink(missing_ok=True)
 
     @app.post("/api/v1/research/{run_id}/deep-research", status_code=202)
     def deep_research(run_id: str, payload: DeepResearchPayload, background: BackgroundTasks) -> dict:
         """继续深度研究：按用户补充/修改需求补充证据并重新发布 Word/HTML/Excel。"""
         run_dir = Path(payload.run_dir) if payload.run_dir else (service.workdir / run_id)
+        run_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = _deep_research_lock_file(run_dir)
+        try:
+            # Atomic create makes one deep-research request the sole owner of
+            # this run's cumulative evidence chain.
+            with lock_path.open("x", encoding="utf-8") as handle:
+                handle.write(json.dumps({
+                    "run_id": run_id,
+                    "requirements": payload.requirements,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }, ensure_ascii=False))
+        except FileExistsError:
+            # A process crash can leave a stale lock. Keep active locks for two
+            # hours; older ones are recoverable and replaced atomically.
+            age = max(0.0, datetime.now(timezone.utc).timestamp() - lock_path.stat().st_mtime)
+            if age <= 7200:
+                raise HTTPException(status_code=409, detail="该任务的深度研究已在运行，不能并发启动")
+            lock_path.unlink(missing_ok=True)
+            with lock_path.open("x", encoding="utf-8") as handle:
+                handle.write(json.dumps({
+                    "run_id": run_id,
+                    "requirements": payload.requirements,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "recovered_stale_lock": True,
+                }, ensure_ascii=False))
+        _deep_research_status_file(run_dir).write_text(json.dumps({
+            "status": "queued", "run_id": run_id,
+            "requested_by": payload.requested_by,
+            "requirements": payload.requirements,
+        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         background.add_task(_run_deep_research, run_id, payload, run_dir)
         return {
             "run_id": run_id,
@@ -641,7 +729,10 @@ def create_app(
             research_type=parsed.research_type or ResearchType.OTHER,
             topics=parsed.topics,
             priority=parsed.priority or Priority.NORMAL,
-            notes=parsed.notes or payload.prompt,
+            # The parsed fields select the primary subject; the exact portal
+            # sentence remains the supplemental-research contract. A model
+            # summary must never replace or shorten unusual user requirements.
+            notes=payload.prompt,
             language="zh-CN",
         )
         session = db.session()
@@ -827,7 +918,14 @@ def create_app(
         try:
             with db.session() as session:
                 session.execute(text("SELECT 1"))
-            return JSONResponse({"status": "ok", "version": app.version})
+            return JSONResponse({
+                "status": "ok",
+                "version": app.version,
+                # Makes Docker/source drift directly auditable from the local
+                # portal. In this deployment the path must begin /skill/src.
+                "source_file": str(Path(__file__).resolve()),
+                "portal_file": str((_PORTAL_DIR / "portal.html").resolve()),
+            })
         except Exception:  # noqa: BLE001 - health must never raise
             return JSONResponse({"status": "error", "version": app.version}, status_code=503)
 

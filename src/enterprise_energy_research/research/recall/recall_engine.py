@@ -97,9 +97,12 @@ class RecallEngine:
                 SearchPass.UPDATE: ("R3", "triangulation"),
                 SearchPass.ANOMALY: ("R3", "triangulation"),
             }[spec.search_pass]
+            query_text = spec.query
+            if canonical_name and canonical_name.casefold() not in query_text.casefold():
+                query_text = f'"{canonical_name}" 新能源产业企业 关联主体 {query_text}'
             queries.append(ResearchQuery(
                 query_id=spec.query_id, entity_id="intel" if not canonical_name else "PENDING-ENTITY",
-                topic=spec.topic, query=spec.query,
+                topic=spec.topic, query=query_text,
                 purpose=(f"{spec.search_pass.value} recall; lane={spec.source_lane.value}; "
                          f"language={spec.language}; priority={spec.priority.value}"),
                 preferred_source_levels=[SourceLevel.SOURCE_A, SourceLevel.SOURCE_B],

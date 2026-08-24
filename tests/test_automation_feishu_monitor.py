@@ -266,7 +266,11 @@ class MonitorRunnerTests(unittest.TestCase):
     def test_run_due_submits_and_executes(self):
         results = self.runner.run_due(datetime(2026, 8, 19, 12, 0))
         self.assertEqual(len(results), 1)
+        # The fixture now satisfies the formal Word/HTML contract and should
+        # complete normally; explicit failed-artifact coverage remains in the
+        # service tests.
         self.assertEqual(results[0].status, TaskStatus.PUBLISHED)
+        self.assertIsNone(results[0].error)
         # not due again on the same day: last run just happened
         again = self.runner.run_due(datetime(2026, 8, 19, 13, 0))
         self.assertEqual(len(again), 0)

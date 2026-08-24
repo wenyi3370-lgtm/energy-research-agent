@@ -520,9 +520,52 @@ class ThirdRoundP0Tests(unittest.TestCase):
         from enterprise_energy_research.research.planner import ResearchPlanner
         queries = ResearchPlanner().requirement_queries("宁德时代", "补充2022年营业收入和利润；增加产品图片")
         topics = {query.topic for query in queries}
-        self.assertIn("financials", topics)
+        self.assertIn("revenue", topics)
+        self.assertIn("profit", topics)
         self.assertIn("image_evidence", topics)
         self.assertTrue(any("2022" in query.query for query in queries))
+        self.assertTrue(all("宁德时代" in query.query for query in queries))
+        self.assertTrue(all(
+            query.adapter_preference == ("kimi_webbridge" if query.topic == "image_evidence" else "anysearch")
+            for query in queries
+        ))
+
+    def test_requirement_parser_recognizes_all_intents_without_delimiters(self):
+        from enterprise_energy_research.research.planner import ResearchPlanner
+        text = "请把主营业务生产基地产品线产能财务核心客户全部补齐"
+        queries = ResearchPlanner().requirement_queries("杉杉股份", text)
+        topics = [query.topic for query in queries]
+        for expected in ("company_identity", "factories", "production_lines", "capacity", "financials", "customers"):
+            self.assertIn(expected, topics)
+        self.assertTrue(all(text in query.purpose for query in queries))
+        self.assertTrue(all(query.adapter_preference == "anysearch" for query in queries))
+
+    def test_requirement_parser_routes_competition_and_sales_channels(self):
+        from enterprise_energy_research.research.planner import ResearchPlanner
+        text = "补充星星充电产品情况加工工厂竞争情况以及销售渠道"
+        queries = ResearchPlanner().requirement_queries("星星充电", text)
+        topics = {query.topic for query in queries}
+        self.assertTrue({
+            "products", "factories", "competitive_position", "sales_channels",
+        }.issubset(topics))
+        self.assertTrue(all(text in query.purpose for query in queries))
+        self.assertTrue(all(query.adapter_preference == "anysearch" for query in queries))
+
+    def test_targeted_plan_is_additive_and_does_not_change_fixed_full_plan(self):
+        from enterprise_energy_research.domain.enums import EnterpriseComplexity
+        from enterprise_energy_research.research.planner import ResearchPlanner
+        planner = ResearchPlanner()
+        budget = {"max_queries": 180, "max_pages": 240}
+        base = planner.build("RUN", "ENT", "宁德时代", EnterpriseComplexity.GROUP_LARGE, budget)
+        before = [(query.topic, query.collection_round, query.query) for query in base.queries]
+        targeted = planner.targeted_plan("RUN", "宁德时代", "主营业务生产基地和产品线", entity_id="ENT")
+        self.assertEqual(before, [(query.topic, query.collection_round, query.query) for query in base.queries])
+        self.assertTrue(targeted.queries)
+        rounds_by_topic = {
+            topic: {query.collection_round for query in targeted.queries if query.topic == topic}
+            for topic in {query.topic for query in targeted.queries}
+        }
+        self.assertTrue(all(rounds == {"R1", "R2", "R3"} for rounds in rounds_by_topic.values()))
 
     def test_lesson_deep_research_payload_contract(self):
         from enterprise_energy_research.automation.contracts import DeepResearchPayload
@@ -533,6 +576,29 @@ class ThirdRoundP0Tests(unittest.TestCase):
         self.assertTrue(payload.notify_feishu, "默认完成推送飞书（与主调查流程一致）")
         with self.assertRaises(Exception):
             DeepResearchPayload(requirements="")
+
+    def test_deep_research_store_lookup_prefers_latest_fixed_evidence(self):
+        import os
+        from enterprise_energy_research.domain.enums import RunStatus
+        from enterprise_energy_research.domain.models import RunManifest
+        from enterprise_energy_research.evidence.store import EvidenceStore
+        from enterprise_energy_research.research.deep_retry import find_evidence_store
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "company-run"
+            root.mkdir()
+            run_id = "RUN-CUMULATIVE"
+            paths = [root / "evidence.sqlite3", root / "evidence_fixed2.sqlite3"]
+            for index, path in enumerate(paths):
+                store = EvidenceStore(path)
+                store.create_run(RunManifest(
+                    run_id=run_id, request_id=f"REQ-{index}", status=RunStatus.RUNNING,
+                    config_hash="test", code_version="test", model_gateway={},
+                ))
+                os.utime(path, (100 + index, 100 + index))
+            selected = find_evidence_store(run_id, [Path(temp)])
+            self.assertIsNotNone(selected)
+            self.assertEqual(selected.path.name, "evidence_fixed2.sqlite3")
 
     def test_supporting_visual_opportunity_planner_no_fake_charts(self):
         analysis = ResearchAnalysisEngine().analyze(self.rich_bundle)

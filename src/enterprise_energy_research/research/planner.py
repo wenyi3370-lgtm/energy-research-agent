@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import re
-
 from enterprise_energy_research.domain.enums import EnterpriseComplexity, SourceLevel
 from enterprise_energy_research.domain.ids import RunSequence, new_sortable_id
 from enterprise_energy_research.domain.models import ConflictGroup, DataGap, ResearchPlan, ResearchQuery
 
 from .contracts import contract_for
+from .requirement_routing import route_for_topic
 
 
 GOAL_FAMILIES: tuple[tuple[str, str], ...] = (
@@ -27,6 +26,7 @@ GOAL_FAMILIES: tuple[tuple[str, str], ...] = (
     ("product_models", "产品型号 牌号 series model SKU"),
     ("product_parameters", "技术参数 规格书 datasheet 手册 PDF"),
     ("customers", "核心客户 中标 供应关系 应用案例"),
+    ("sales_channels", "销售渠道 经销商 直销 分销 代理商 渠道结构"),
     ("suppliers", "供应商 采购 招标 供应链"),
     ("certifications", "认证 体系 证书 检测报告"),
     ("technology", "核心技术 研发平台 技术路线"),
@@ -36,6 +36,7 @@ GOAL_FAMILIES: tuple[tuple[str, str], ...] = (
     ("business_drivers", "增长驱动 利润驱动 需求变化 政策 客户 技术路线"),
     ("customer_market_proof", "具名客户 合同 订单 市场份额 应用证明 时间"),
     ("competitive_position", "同口径 市场份额 排名 可比企业 竞争位置"),
+    ("policy_regulation", "产业政策 监管规则 补贴 准入 标准 政府文件"),
     ("enterprise_risks", "年报 风险因素 监管 客户集中 供应链 减值"),
     ("cooperation_timing", "战略优先级 当前时点 资源投向 合作窗口 反证"),
     ("energy_consumption", "综合能耗 用电量 能源消费"),
@@ -67,6 +68,19 @@ ROUND_SUFFIXES = {
     "R3": ("triangulation", "交叉验证 独立来源 冲突 补漏"),
 }
 
+RECOVERY_STRATEGIES = (
+    "企业官网 原始公告 官方目录",
+    "政府网站 监管文件 招投标 环评",
+    "年度报告 审计报告 工商及债券披露",
+    "产品手册 规格书 认证机构 原始PDF",
+    "客户公告 中标合同 应用案例",
+    "销售渠道 经销商名录 区域代理 官方合作",
+    "产线基地 产能 投资备案 投产进度",
+    "行业协会 权威数据库 同口径统计",
+    "历史版本 最近五年 时间序列 口径变化",
+    "英文名称 别名 区域官网 海外披露 交叉验证",
+)
+
 BROWSER_DEPTH_TOPICS = {
     # Kimi WebBridge is reserved for two jobs: IMAGE discovery on real pages,
     # and PRODUCT CATALOG traversal (official product centers are SPA pages
@@ -75,6 +89,11 @@ BROWSER_DEPTH_TOPICS = {
     "image_evidence",
     "products", "product_series", "product_models", "product_parameters",
 }
+
+
+def discovery_adapter_for(topic: str) -> str:
+    """Choose the search-discovery adapter, not the later page renderer."""
+    return "kimi_webbridge" if topic == "image_evidence" else "anysearch"
 
 ANALYTICAL_TOPICS = {
     "strategic_trajectory", "business_drivers", "customer_market_proof",
@@ -125,7 +144,7 @@ class ResearchPlanner:
                 # Product-catalog topics DISCOVER via AnySearch, then Kimi
                 # opens the REAL official product pages (SPA) in the depth
                 # pass. Only image goals run their own search on the bridge.
-                adapter = "kimi_webbridge" if topic == "image_evidence" else "anysearch"
+                adapter = discovery_adapter_for(topic)
                 queries.append(ResearchQuery(
                     query_id=sequence.next("query"),
                     entity_id=entity_id,
@@ -140,6 +159,7 @@ class ResearchPlanner:
                     round_goal=round_goal,
                     high_priority=topic != "image_evidence",
                     trigger=("official_discovery" if round_name == "R1" else "catalog_enumeration" if topic in {"products", "product_series", "product_models", "product_parameters"} else "triangulation" if round_name == "R3" else "baseline"),
+                    **route_for_topic(topic).model_updates(),
                     canonical_company_name=canonical_name,
                     expected_fields=list(contract_for(topic).expected_fields),
                     interpretation_goal=contract_for(topic).interpretation_goal,
@@ -168,10 +188,11 @@ class ResearchPlanner:
                 query_id=new_sortable_id("QRY-GAP"), entity_id=gap.entity_id or "UNKNOWN", topic=family,
                 query=query_text, purpose=f"R2 gap-driven search for {gap.gap_id}: {gap.reason}",
                 preferred_source_levels=[SourceLevel.SOURCE_A, SourceLevel.SOURCE_B],
-                adapter_preference="kimi_webbridge" if family in BROWSER_DEPTH_TOPICS else "anysearch",
+                adapter_preference=discovery_adapter_for(family),
                 max_results=10, requires_browser=family in BROWSER_DEPTH_TOPICS,
                 collection_round="R2", round_goal="depth", high_priority=gap.importance != "minor",
                 trigger="gap", target_gap_ids=[gap.gap_id],
+                **route_for_topic(family).model_updates(),
                 canonical_company_name=canonical_name,
                 expected_fields=list(contract_for(family).expected_fields),
             ))
@@ -192,13 +213,16 @@ class ResearchPlanner:
                 adapter_preference="anysearch", max_results=10,
                 collection_round="R3", round_goal="triangulation", high_priority=True,
                 trigger="conflict", target_conflict_ids=[conflict.conflict_group_id],
+                **route_for_topic(family).model_updates(),
                 target_claim_ids=list(conflict.claim_ids),
                 canonical_company_name=canonical_name,
                 expected_fields=list(contract_for(family).expected_fields),
             ))
         return queries
 
-    def coverage_queries(self, canonical_name: str, gaps: list) -> list[ResearchQuery]:
+    def coverage_queries(
+        self, canonical_name: str, gaps: list, *, retry_round: int = 1
+    ) -> list[ResearchQuery]:
         """Generate R4 targeted searches for high-value DATA COVERAGE gaps.
 
         Coverage gaps come from ResearchDataCoverageValidator (P0 third
@@ -207,6 +231,7 @@ class ResearchPlanner:
         product photos needs an image pass over official product pages.
         """
         queries: list[ResearchQuery] = []
+        strategy = RECOVERY_STRATEGIES[(max(1, retry_round) - 1) % len(RECOVERY_STRATEGIES)]
         for gap in gaps:
             if not getattr(gap, "searchable", False):
                 continue
@@ -216,65 +241,183 @@ class ResearchPlanner:
             )
             queries.append(ResearchQuery(
                 query_id=new_sortable_id("QRY-COVERAGE"), entity_id="UNKNOWN", topic=family,
-                query=f'"{canonical_name}" {gap.retry_hint}',
-                purpose=f"R4 coverage retry for {gap.gap_code}: {gap.description}（现有：{gap.found}）",
+                query=f'"{canonical_name}" {gap.retry_hint} {strategy}',
+                purpose=f"R4 coverage retry round {retry_round} for {gap.gap_code}: {gap.description}（现有：{gap.found}）; strategy={strategy}",
                 preferred_source_levels=[SourceLevel.SOURCE_A, SourceLevel.SOURCE_B],
-                adapter_preference="kimi_webbridge" if family in BROWSER_DEPTH_TOPICS else "anysearch",
+                adapter_preference=discovery_adapter_for(family),
                 max_results=10, requires_browser=family in BROWSER_DEPTH_TOPICS,
                 collection_round="R4", round_goal="coverage", high_priority=gap.severity != "low",
                 trigger="coverage",
+                **route_for_topic(family).model_updates(),
                 canonical_company_name=canonical_name,
                 expected_fields=list(contract_for(family).expected_fields),
             ))
         return queries
 
-    # Keyword -> topic routing for USER-DRIVEN deep-research requirements.
-    # image_evidence sits FIRST so equal-length ties ("产品图片" → "图片")
-    # route to the image pipeline rather than the product catalog.
+    # Whole-sentence semantic routing for user requirements.  This catalogue
+    # deliberately maps one sentence to *all* matching goal families.  It does
+    # not depend on punctuation, conjunctions, or an LLM deciding where a
+    # clause ends.  Specific concepts precede broader concepts only to make
+    # the generated search focus clearer; matches are de-duplicated by family.
     REQUIREMENT_TOPIC_KEYWORDS = (
-        ("image_evidence", ("图片", "照片", "实景", "logo")),
-        ("financials", ("财务", "收入", "营收", "利润", "净利", "毛利", "年报", "现金流", "分红", "业绩")),
-        ("products", ("产品", "参数", "型号", "规格", "技术", "认证")),
-        ("factories", ("基地", "工厂", "产能", "产线", "生产")),
-        ("energy_consumption", ("用电", "能耗", "负荷", "能源", "零碳", "光伏", "储能")),
-        ("subsidiaries", ("子公司", "股权", "集团", "控股")),
-        ("customers", ("客户", "订单", "供应", "合作方")),
+        ("company_identity", ("主营业务", "主要业务", "业务范围", "企业定位", "公司概况", "基本情况")),
+        ("ownership_structure", ("股权结构", "实际控制人", "实控人", "控股股东", "母公司")),
+        ("organization", ("组织架构", "管理层", "部门设置")),
+        ("subsidiaries", ("子公司", "成员企业", "控股公司", "参股公司")),
+        ("factories", ("生产基地", "制造基地", "工厂", "厂区", "基地布局")),
+        ("locations", ("总部地址", "地理位置", "园区", "区域布局")),
+        ("capacity", ("产能", "年产", "产量", "扩产", "技改")),
+        ("production_lines", ("生产线", "产品线", "产线", "制造工艺", "生产工艺", "设备")),
+        ("product_parameters", ("技术参数", "产品参数", "规格书", "数据手册", "datasheet")),
+        ("product_models", ("产品型号", "型号", "牌号", "SKU")),
+        ("product_series", ("产品系列", "产品族", "系列")),
+        ("products", ("产品矩阵", "产品清单", "产品中心", "产品分类", "产品")),
+        ("image_evidence", ("产品图片", "工厂图片", "产线图片", "图片", "照片", "实景", "logo")),
+        ("revenue", ("营业收入", "营收", "收入")),
+        ("profit", ("归母净利润", "净利润", "利润", "毛利率")),
+        ("financials", ("财务", "年报", "现金流", "研发投入", "分红", "业绩")),
+        ("employees", ("员工人数", "人员规模", "员工")),
+        ("customers", ("核心客户", "客户", "订单", "中标", "应用案例", "合作方")),
+        ("sales_channels", ("销售渠道", "渠道结构", "经销渠道", "分销渠道", "经销商", "代理商", "直销", "分销")),
+        ("customer_market_proof", ("市场证明", "市场接受度", "客户案例", "合同订单", "客户结构")),
+        ("suppliers", ("供应商", "采购", "供应链")),
+        ("technology", ("核心技术", "技术路线", "研发平台")),
+        ("certifications", ("认证", "证书", "检测报告")),
+        ("industry_position", ("市场份额", "市占率", "行业地位", "排名", "竞争力")),
+        ("competitive_position", ("竞争情况", "竞争格局", "竞争对手", "竞品", "竞争位置", "同业对比")),
+        ("policy_regulation", ("政策", "产业政策", "监管", "法规", "补贴", "准入", "行业标准", "政府文件")),
+        ("energy_consumption", ("用电量", "综合能耗", "能耗", "能源消费")),
+        ("electricity_load", ("电力负荷", "峰谷", "需量", "负荷曲线")),
+        ("energy_equipment", ("变压器", "锅炉", "空压机", "冷机", "能源设备")),
+        ("renewable_energy", ("绿电", "可再生能源", "分布式光伏")),
+        ("energy_projects", ("能源项目", "光伏项目", "储能项目", "充电站")),
+        ("carbon_projects", ("碳盘查", "零碳工厂", "碳项目", "碳排放")),
+        ("storage_opportunities", ("储能合作", "储能机会", "削峰填谷", "需量管理")),
+        ("V2G_opportunities", ("V2G", "车网互动", "双向充放电")),
+        ("overseas_opportunities", ("海外工厂", "出海", "出口", "海外市场", "经销商")),
+        ("enterprise_risks", ("经营风险", "合规风险", "风险因素", "诉讼", "减值")),
     )
 
-    def requirement_queries(self, canonical_name: str, requirements: str) -> list[ResearchQuery]:
+    @classmethod
+    def requirement_intents(cls, requirements: str) -> list[tuple[str, str]]:
+        """Return every goal family expressed anywhere in a full sentence.
+
+        The focus label is the longest matching phrase for that family.  The
+        complete original requirement is still carried into every query, so
+        conjunction-heavy input and input with no separator lose no context.
+        """
+        text = " ".join((requirements or "").split())
+        folded = text.casefold()
+        matches: list[tuple[int, int, str, str]] = []
+        for family_index, (family, keywords) in enumerate(cls.REQUIREMENT_TOPIC_KEYWORDS):
+            hits = [keyword for keyword in keywords if keyword.casefold() in folded]
+            if not hits:
+                continue
+            focus = max(hits, key=len)
+            matches.append((folded.find(focus.casefold()), family_index, family, focus))
+        if not text:
+            return []
+        routed = [(family, focus) for _, _, family, focus in sorted(matches)]
+        # Open requirement lane: the complete user sentence is always kept as
+        # its own contract. Known families get precise searches; genuinely new
+        # or unusual requirements still receive a dedicated query/chapter
+        # instead of being misclassified as company identity.
+        routed.append(("custom_requirement", text[:160]))
+        return routed
+
+    def requirement_queries(
+        self,
+        canonical_name: str,
+        requirements: str,
+        *,
+        recovery_round: int = 0,
+    ) -> list[ResearchQuery]:
         """Turn a user's deep-research requirement text into targeted queries.
 
-        Each clause (split on ；;，,。\\n) becomes one search query.  Topics
-        route by keyword so extraction receives the right field contract.
+        The entire sentence is parsed for every expressed business intent;
+        punctuation is optional and never controls completeness.
         """
-        clauses = [
-            clause.strip() for clause in re.split(r"[；;，,。\n]+", requirements or "")
-            if len(clause.strip()) >= 2
-        ]
+        complete_requirement = " ".join((requirements or "").split())
         queries: list[ResearchQuery] = []
-        for clause in clauses[:8]:
-            # Longest keyword wins; ties go to the earlier tuple entry
-            # (image_evidence first, so "产品图片" routes to images).
-            family = "financials"
-            best_length = 0
-            for topic, keywords in self.REQUIREMENT_TOPIC_KEYWORDS:
-                for keyword in keywords:
-                    if keyword in clause and len(keyword) > best_length:
-                        family = topic
-                        best_length = len(keyword)
-            queries.append(ResearchQuery(
-                query_id=new_sortable_id("QRY-REQ"), entity_id="UNKNOWN", topic=family,
-                query=f'"{canonical_name}" {clause} 官网 年报 公告 数据',
-                purpose=f"user-requested deep research: {clause}",
-                preferred_source_levels=[SourceLevel.SOURCE_A, SourceLevel.SOURCE_B],
-                adapter_preference="kimi_webbridge" if family in BROWSER_DEPTH_TOPICS else "anysearch",
-                max_results=10, requires_browser=family in BROWSER_DEPTH_TOPICS,
-                collection_round="R4", round_goal="coverage", high_priority=True,
-                trigger="user_requirement",
-                canonical_company_name=canonical_name,
-                expected_fields=list(contract_for(family).expected_fields),
-            ))
+        recovery_strategy = (
+            RECOVERY_STRATEGIES[(recovery_round - 1) % len(RECOVERY_STRATEGIES)]
+            if recovery_round > 0 else ""
+        )
+        for family, focus in self.requirement_intents(complete_requirement):
+            contract = contract_for(family)
+            # A portal/deep-research requirement receives the SAME three
+            # collection layers as a fixed Goal Family.  One broad result
+            # page is not accepted as a completed supplemental investigation:
+            # R1 finds primary/official coverage, R2 opens detailed originals,
+            # and R3 seeks an independent source or counter-evidence.
+            for round_name, (round_goal, round_suffix) in ROUND_SUFFIXES.items():
+                source_focus = {
+                    "R1": "官网 企业公告 政府 监管 原始来源",
+                    "R2": "全文 明细 期间 单位 口径 PDF 详情页",
+                    "R3": "独立来源 交叉验证 反证 同口径比较",
+                }[round_name]
+                # Keep the complete requirement in the extraction contract
+                # (purpose/requirement_text), not redundantly in every search
+                # string. Long conjunction-heavy sentences caused search
+                # engines to ignore the company and return unrelated pages.
+                # Known routes search the precise focus; the open custom route
+                # searches the exact request once (bounded for provider limits).
+                search_focus = (
+                    complete_requirement[:240]
+                    if family == "custom_requirement" else focus
+                )
+                queries.append(ResearchQuery(
+                    query_id=new_sortable_id("QRY-REQ"), entity_id="UNKNOWN", topic=family,
+                    query=(f'"{canonical_name}" 新能源产业企业 {search_focus} '
+                           f'{source_focus} {round_suffix} '
+                           f'{recovery_strategy}').strip(),
+                    purpose=(f"supplemental {round_name} {round_goal} for {canonical_name}; "
+                             f"focus={focus}; full requirement={complete_requirement}; "
+                             f"recovery_round={recovery_round or 'initial'}"),
+                    preferred_source_levels=[SourceLevel.SOURCE_A, SourceLevel.SOURCE_B],
+                    adapter_preference=discovery_adapter_for(family),
+                    max_results=10, requires_browser=family in BROWSER_DEPTH_TOPICS,
+                    collection_round=round_name, round_goal=round_goal, high_priority=True,
+                    trigger="user_requirement",
+                    **route_for_topic(family).model_updates(),
+                    requirement_text=complete_requirement,
+                    canonical_company_name=canonical_name,
+                    expected_fields=list(contract.expected_fields),
+                    interpretation_goal=contract.interpretation_goal or contract.business_question,
+                    evidence_patterns=list(contract.evidence_patterns),
+                    counter_evidence_patterns=list(contract.counter_evidence_patterns),
+                    time_scope=contract.time_scope,
+                    comparison_required=contract.comparison_required,
+                    historical_required=contract.historical_required,
+                ))
         return queries
+
+    def targeted_plan(
+        self,
+        run_id: str,
+        canonical_name: str,
+        requirements: str,
+        *,
+        entity_id: str = "UNKNOWN",
+        max_queries: int = 120,
+        max_pages: int = 60,
+    ) -> ResearchPlan:
+        """Build the isolated additive plan used by both portal paths."""
+        queries = self.requirement_queries(canonical_name, requirements)
+        queries = [query.model_copy(update={"entity_id": entity_id}) for query in queries]
+        effective_query_budget = max(max_queries, len(queries))
+        return ResearchPlan(
+            plan_id=new_sortable_id("PLAN-REQ"), run_id=run_id,
+            complexity=EnterpriseComplexity.UNKNOWN, queries=queries,
+            budget={
+                "max_queries": max(1, effective_query_budget),
+                "max_pages": max(max_pages, len(queries) * 3),
+            },
+            completion_contract=list(dict.fromkeys(query.topic for query in queries)),
+            scoped_goal_families=list(dict.fromkeys(query.topic for query in queries)),
+            requires_catalog_enumeration=any(query.topic in BROWSER_DEPTH_TOPICS for query in queries),
+            canonical_company_name=canonical_name,
+        )
 
     @staticmethod
     def _family_for_field(field_name: str) -> str:

@@ -21,7 +21,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..domain.enums import ValidationStatus
+from ..domain.enums import ArtifactStatus, ValidationStatus
 from ..domain.ids import new_sortable_id
 from .contracts import (
     ArtifactRef,
@@ -44,6 +44,10 @@ from .state_machine import InvalidTransitionError, assert_transition
 
 class RetryExhaustedError(ValueError):
     """Raised when a run has consumed all allowed retries."""
+
+
+class RequiredArtifactPublicationError(ValueError):
+    """Raised when a required publisher or its QA gate returns FAILED."""
 
 
 class ConflictNotFoundError(KeyError):
@@ -148,11 +152,13 @@ class ResearchService:
             request = ResearchRequest.model_validate(
                 self._require_task(repo, row.task_id).request_payload
             )
+            publication_retry_marker = self._publication_retry_marker(run_id)
+            publication_only_retry = publication_retry_marker.is_file()
             # Re-execution means "research from scratch": drop any evidence
             # left by a previous FAILED/BLOCKED attempt (never reachable for
             # PUBLISHED/REJECTED runs, which cannot be re-executed).
             run_dir = self.workdir / run_id
-            if run_dir.exists():
+            if run_dir.exists() and not publication_only_retry:
                 import shutil
 
                 shutil.rmtree(run_dir)
@@ -160,6 +166,27 @@ class ResearchService:
                 run_id, TaskStatus.RESEARCHING, reason="worker started", started=True
             )
             try:
+                if publication_only_retry:
+                    # The previous attempt already passed research and
+                    # validation; only formal artifact publication failed.
+                    # Preserve its immutable evidence instead of deleting it
+                    # and paying for another search/extraction cycle.
+                    repo.update_run_status(
+                        run_id, TaskStatus.EVIDENCE_COLLECTED,
+                        reason="preserved approved evidence for publication recovery",
+                    )
+                    repo.update_run_status(
+                        run_id, TaskStatus.VALIDATING,
+                        reason="reusing prior approved validation snapshot",
+                    )
+                    repo.update_run_status(
+                        run_id, TaskStatus.APPROVED,
+                        reason="artifact-only automatic recovery",
+                    )
+                    result = self._freeze_and_publish(repo, run_id)
+                    if result.status == TaskStatus.PUBLISHED:
+                        publication_retry_marker.unlink(missing_ok=True)
+                    return result
                 with run_span("research", run_id=run_id):
                     outcome = self.executor.research_and_validate(
                         run_id, request, self.workdir
@@ -206,14 +233,61 @@ class ResearchService:
     ) -> ResearchResult:
         """Freeze -> publish -> audit; only ever invoked from APPROVED."""
         try:
-            with run_span("publishing", run_id=run_id):
-                outcome = self.executor.freeze_and_publish(run_id, self.workdir)
+            # Publication has an initial pass plus ten bounded evidence/
+            # rendering self-correction rounds.  A
+            # failed QA pass is inspected by the production executor, which
+            # may perform targeted evidence/image/location supplementation
+            # before the next immutable freeze.  No terminal status or Feishu
+            # failure notification is emitted until all ten repairs fail.
+            outcome = None
+            failed_artifacts = []
+            publication_errors: list[str] = []
+            max_publication_attempts = 11
+            for attempt in range(1, max_publication_attempts + 1):
+                try:
+                    with run_span("publishing", run_id=run_id):
+                        candidate = self.executor.freeze_and_publish(run_id, self.workdir)
+                except Exception as exc:  # noqa: BLE001 - bounded internal recovery
+                    publication_errors.append(f"attempt {attempt}: {type(exc).__name__}: {exc}")
+                    if attempt < max_publication_attempts:
+                        self._repair_publication(
+                            run_id, [], attempt, publication_errors,
+                        )
+                        continue
+                    raise
+                failed_artifacts = [
+                    artifact for artifact in candidate.artifacts
+                    if artifact.status == ArtifactStatus.FAILED
+                ]
+                outcome = candidate
+                if not failed_artifacts:
+                    if attempt > 1:
+                        outcome.review_reasons.append(
+                            f"publication auto-recovery succeeded on attempt {attempt}"
+                        )
+                    break
+                publication_errors.append(
+                    f"attempt {attempt}: "
+                    + ", ".join(str(item.artifact_type) for item in failed_artifacts)
+                )
+                if attempt < max_publication_attempts:
+                    self._repair_publication(
+                        run_id, failed_artifacts, attempt, publication_errors,
+                    )
+            if outcome is None:
+                raise RequiredArtifactPublicationError(
+                    "publication recovery produced no artifact outcome: "
+                    + "; ".join(publication_errors)
+                )
             if research_outcome is not None:
                 outcome = outcome.model_copy(update={
                     "confidence": research_outcome.confidence,
                     "risk_level": research_outcome.risk_level,
                     "review_required": False,
-                    "review_reasons": list(research_outcome.review_reasons),
+                    "review_reasons": list(dict.fromkeys([
+                        *research_outcome.review_reasons,
+                        *outcome.review_reasons,
+                    ])),
                     "evidence_count": research_outcome.evidence_count,
                     "conflict_count": research_outcome.conflict_count,
                     "gap_count": research_outcome.gap_count,
@@ -223,12 +297,50 @@ class ResearchService:
                     "llm_calls": research_outcome.llm_calls,
                     "search_calls": research_outcome.search_calls,
                 })
+            if failed_artifacts:
+                labels = ", ".join(str(item.artifact_type) for item in failed_artifacts)
+                raise RequiredArtifactPublicationError(
+                    "required artifact publication or hard QA failed after automatic recovery: "
+                    + labels + ("; " + "; ".join(publication_errors) if publication_errors else "")
+                )
             repo.update_run_status(run_id, TaskStatus.FROZEN, reason="evidence frozen")
             repo.update_run_status(run_id, TaskStatus.PUBLISHING, reason="publishing artifacts")
             repo.update_run_status(run_id, TaskStatus.PUBLISHED, finished=True)
             return self._settle(repo, run_id, outcome, TaskStatus.PUBLISHED)
         except Exception as exc:  # noqa: BLE001 - publish failures must land in FAILED
             return self._fail(repo, run_id, exc)
+
+    def _repair_publication(
+        self,
+        run_id: str,
+        failed_artifacts: list[ArtifactRef],
+        attempt: int,
+        publication_errors: list[str],
+    ) -> None:
+        """Ask a capable executor to repair the failed QA pass in-process.
+
+        The executor hook is optional so fixture/test executors remain small.
+        A repair exception is recorded in the final audit error but does not
+        short-circuit the remaining bounded attempts.
+        """
+        repair = getattr(self.executor, "repair_publication", None)
+        if not callable(repair):
+            return
+        try:
+            actions = repair(
+                run_id,
+                self.workdir,
+                failed_artifacts=failed_artifacts,
+                attempt=attempt,
+            )
+            if actions:
+                publication_errors.append(
+                    f"attempt {attempt} repair: {actions}"
+                )
+        except Exception as exc:  # noqa: BLE001 - preserve remaining attempts
+            publication_errors.append(
+                f"attempt {attempt} repair failed: {type(exc).__name__}: {exc}"
+            )
 
     # -- review gate --------------------------------------------------------
 
@@ -304,11 +416,30 @@ class ResearchService:
                 raise RetryExhaustedError(
                     f"run {run_id} exhausted retries: {retries}/{self.max_retries}"
                 )
+            artifact_only = (
+                row.error_type == "RequiredArtifactPublicationError"
+                and (self.workdir / run_id / "evidence.sqlite3").is_file()
+            )
+            if artifact_only:
+                marker = self._publication_retry_marker(run_id)
+                marker.parent.mkdir(parents=True, exist_ok=True)
+                marker.write_text(json.dumps({
+                    "run_id": run_id,
+                    "mode": "artifact_only",
+                    "reason": row.error_message or "required artifact publication failed",
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             repo.update_run_status(run_id, TaskStatus.RETRYING, reason="retry scheduled")
-            repo.update_run_status(run_id, TaskStatus.QUEUED, reason="re-queued for retry")
+            repo.update_run_status(
+                run_id, TaskStatus.QUEUED,
+                reason="re-queued for artifact-only recovery" if artifact_only else "re-queued for retry",
+            )
             return self.get_status(run_id)
         finally:
             session.close()
+
+    def _publication_retry_marker(self, run_id: str) -> Path:
+        return self.workdir / run_id / "publication_retry.json"
 
     # -- conflict adjudication (冲突裁决) -------------------------------------
 
@@ -753,6 +884,7 @@ class ResearchService:
                 run_id=row.run_id,
                 task_id=row.task_id,
                 status=TaskStatus(row.status),
+                created_at=_as_utc(row.created_at),
             )
         result.status = TaskStatus(row.status)
         if row.started_at is not None:

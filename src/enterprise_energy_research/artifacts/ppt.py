@@ -69,7 +69,9 @@ class PptMasterFrozenPublisher:
         prepared_ids = set(image_manifest.prepared_image_ids)
         duplicate_ids = set(image_manifest.skipped_duplicate_image_ids)
         missing_image_ids = sorted(set(image_manifest.required_image_ids) - prepared_ids - duplicate_ids)
-        fixture_mode = bundle.run_manifest.model_gateway.get("mode") in {"fixture", "recorded-fixture"}
+        fixture_mode = bundle.run_manifest.model_gateway.get("mode") in {
+            "fixture", "recorded-fixture", "recorded-fixture-only",
+        }
         brief_path = project_dir / "frozen_brief.json"
         brief = self.build_brief(bundle, binding, image_manifest.prepared_images)
         selected_ppt_image_ids = brief["presentation_evidence_map"]["required_verified_image_ids"]

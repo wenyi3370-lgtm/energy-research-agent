@@ -106,6 +106,7 @@ Immediate blockers include:
 - cross-artifact disagreement for the same claim;
 - hand-written/static Word TOC masquerading as automatic;
 - product dashboard generated without qualifying products;
+- verified product facts or A/B-backed product records exist but the frozen publication bundle contains zero `VERIFIED` products; every retry path must recompute product status after referential-integrity cleanup, regardless of product-image recovery outcome;
 - PPT outside 15-20 slides;
 - unresolved high-severity fifth-round coverage gap, including missing 3-year financial series or required five-product image coverage;
 - Dashboard chapter outside the 1 judgement / 3–6 KPI / 1–3 visual / 3 insight contract;

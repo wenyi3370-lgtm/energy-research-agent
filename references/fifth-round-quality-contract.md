@@ -54,8 +54,13 @@ and unified HTML delivery.
   table of contents. Final render QA requires the visible entries and their
   page numbers, not merely `updateFields=true` in OOXML.
 - The target body mix is 50% facts/data, 35% analysis/insight and 15%
-  constraints/limitations. Quality is judged by research density, not a minimum
-  character or page count.
+  constraints/limitations. Formal publication requires at least 3,500 Chinese
+  characters for the thin-evidence tier and the higher evidence-adjusted gate
+  for a full-evidence report. The count must be reached through enterprise-
+  specific facts, comparable periods/scopes, source and disclosure analysis,
+  market implications, counter-evidence and executable recommendations; a
+  generic chapter recap, research-process narration or repeated framework
+  sentence is a release blocker even when the count is reached.
 - The key-product section pairs 4–8 official images with series/model,
   applications, disclosed parameters and sources.
 - Every paragraph that contains an inline image must override the body style's
@@ -98,3 +103,11 @@ distribution only when explicitly labelled as approximate.
 Any error-level research coverage, publication QA, product-image, map, visual
 count, boilerplate or rendered-layout finding makes the artifact result
 `failed`; the production run cannot report `COMPLETED`.
+
+Continuation research is subject to the same gate. It must load the newest
+cumulative fixed evidence store, re-run entity mapping and verification,
+recompute coverage after collection, and then enter the normal freeze and
+publisher QA path. A private freeze/publish helper is never a bypass. Claims
+from customers, suppliers, competitors or other new-energy companies may stay
+in the evidence ledger but cannot populate the canonical enterprise's KPI,
+financial series, product/factory count or coverage result.

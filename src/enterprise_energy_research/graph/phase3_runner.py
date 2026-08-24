@@ -11,6 +11,7 @@ from enterprise_energy_research.evidence.store import EvidenceStore
 from enterprise_energy_research.research.claim_validator import ClaimValidator
 from enterprise_energy_research.research.classifier import EnterpriseComplexityClassifier
 from enterprise_energy_research.research.entity_mapper import EntityMapper
+from enterprise_energy_research.research.entity_scope import entity_name_matches
 from enterprise_energy_research.research.image_validator import ImageValidator
 from enterprise_energy_research.research.image_archiver import ImageAssetArchiver, ImageArchiveResult
 from enterprise_energy_research.research.identity_evidence import IdentityEvidenceSynthesizer
@@ -94,7 +95,10 @@ class Phase3Runner:
             )
         )
         selected_candidate = next(item for item in resolution.candidates if item.candidate_id == resolution.selected_candidate_id)
-        selected_entity = next((item for item in evidence.entities if item.canonical_name == selected_candidate.canonical_name), None)
+        selected_entity = next(
+            (item for item in evidence.entities if entity_name_matches(item, selected_candidate.canonical_name)),
+            None,
+        )
         if not selected_entity:
             state.blocking_findings.append("Resolved candidate did not map to a normalized entity")
             state.transition("BLOCKED", status=RunStatus.BLOCKED)
@@ -129,7 +133,13 @@ class Phase3Runner:
         state.complexity = complexity.complexity
 
         state.transition("ENERGY_ANALYST")
-        evidence.energy_profiles, evidence.gaps = EnergyAnalyst().analyze(evidence.entities, evidence.factories, evidence.claims)
+        # Preserve normalization-stage gaps (for example, an extracted child
+        # entity whose optional parent record was not declared).  Replacing the
+        # list here used to erase those audit findings before evidence ingest.
+        evidence.energy_profiles, energy_gaps = EnergyAnalyst().analyze(
+            evidence.entities, evidence.factories, evidence.claims
+        )
+        evidence.gaps.extend(energy_gaps)
         if evidence.products and product_detection.coverage_status != "COMPLETE":
             evidence.gaps.append(DataGap(
                 gap_id=new_sortable_id("GAP"),

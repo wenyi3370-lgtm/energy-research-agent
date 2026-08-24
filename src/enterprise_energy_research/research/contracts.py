@@ -212,6 +212,15 @@ GOAL_CONTRACTS: dict[str, GoalExtractionContract] = {
         criticality="major",
         report_destination="body",
     ),
+    "sales_channels": GoalExtractionContract(
+        goal_family="sales_channels",
+        business_question="查明目标企业销售渠道、直销/经销结构、代理网络与区域覆盖。",
+        expected_fields=["sales_channel", "channel_type", "channel_partner", "channel_region", "direct_sales", "distribution"],
+        preferred_source_types=["official_company", "annual_report", "official_announcement"],
+        normalization_rules=["渠道事实必须绑定目标企业；渠道伙伴不得被写成目标企业自身经营数据"],
+        criticality="major",
+        report_destination="body",
+    ),
     "suppliers": GoalExtractionContract(
         goal_family="suppliers",
         business_question="查明供应商、采购与供应链信息。",
@@ -422,6 +431,24 @@ GOAL_CONTRACTS: dict[str, GoalExtractionContract] = {
 }
 
 GOAL_CONTRACTS.update({
+    "custom_requirement": GoalExtractionContract(
+        goal_family="custom_requirement",
+        business_question="严格按用户完整原句调查其专项问题，不将其改写为预设主题。",
+        expected_fields=[
+            "custom_fact", "subject", "metric", "value", "unit", "period",
+            "scope", "relationship", "event", "status",
+        ],
+        preferred_source_types=DEEP_TYPES,
+        normalization_rules=[
+            "保留用户完整需求；先识别事实所属主体，再提取指标、时间、单位和口径",
+            "无法映射到现有字段时使用精确语义字段名，不得塞入 company_identity",
+            "其他企业、机构和个人保持独立实体，不得归并到目标企业",
+        ],
+        criticality="major", report_destination="body",
+        interpretation_goal="回答用户专项问题并形成独立补充章节，所有结论绑定来源与主体",
+        evidence_patterns=["与完整需求直接相关的原文事实", "明确主体与时间口径"],
+        counter_evidence_patterns=["仅关键词相关但未回答问题", "主体不明", "无来源推断"],
+    ),
     "strategic_trajectory": GoalExtractionContract(
         goal_family="strategic_trajectory", business_question="企业过去五年如何变化，哪些事件构成战略转折？",
         expected_fields=["strategy_event", "major_investment", "new_factory", "technology_route", "overseas_expansion", *FINANCIAL_FIELDS],
@@ -440,7 +467,7 @@ GOAL_CONTRACTS.update({
     ),
     "customer_market_proof": GoalExtractionContract(
         goal_family="customer_market_proof", business_question="哪些合同、订单、具名客户或份额证明市场接受度？",
-        expected_fields=["customer_name", "contract", "order", "market_share", "application_case", "customer_segment"],
+        expected_fields=["customer_name", "contract", "order", "market_share", "application_case", "customer_segment", "sales_channel"],
         preferred_source_types=DEEP_TYPES, criticality="major", report_destination="body",
         interpretation_goal="按合同/订单、具名客户、客群描述分级市场证明",
         evidence_patterns=["具名合同或订单", "同口径市场份额", "官方客户案例"],
@@ -453,6 +480,21 @@ GOAL_CONTRACTS.update({
         interpretation_goal="只在可比口径成立时生成竞争位置",
         evidence_patterns=["同期间同市场份额", "权威机构排名", "具名可比企业"],
         counter_evidence_patterns=["跨市场或跨期间排名", "主观领先表述"], time_scope="最新完整年度", comparison_required=True,
+    ),
+    "policy_regulation": GoalExtractionContract(
+        goal_family="policy_regulation", business_question="哪些现行政策、监管规则、补贴、准入和标准会影响目标企业及其市场？",
+        expected_fields=["policy_name", "issuing_authority", "document_number", "effective_date", "applicable_region", "applicable_entity", "policy_requirement", "subsidy", "market_access", "standard"],
+        preferred_source_types=["government", "official_announcement", "industry_association"],
+        normalization_rules=[
+            "政策发布机构是公共权威主体，不得合并为目标企业",
+            "政策事实必须保留文号、发布/生效时间、适用地区与适用对象",
+            "行业政策不得改写为目标企业已经获得补贴或已经合规",
+        ],
+        criticality="major", report_destination="body",
+        interpretation_goal="区分政策原文、适用范围、对目标企业的影响推演与尚待确认的合规状态",
+        evidence_patterns=["政府原文和文号", "明确生效日期", "明确适用对象和地区"],
+        counter_evidence_patterns=["媒体转述无原文", "旧政策重新传播", "将行业适用误写成企业已适用"],
+        time_scope="现行及最近3年",
     ),
     "enterprise_risks": GoalExtractionContract(
         goal_family="enterprise_risks", business_question="哪些企业特定风险会改变经营结果或合作窗口？",

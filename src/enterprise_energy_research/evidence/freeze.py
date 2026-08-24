@@ -47,13 +47,32 @@ class FreezeService:
             included[kind] = ids
 
         root_payload = json.dumps(hashes, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        root_hash = hashlib.sha256(root_payload).hexdigest()
+        # Artifact QA may require multiple publication passes over an
+        # unchanged immutable evidence version.  Freezing is therefore
+        # idempotent: reuse the existing snapshot when (and only when) its
+        # Merkle-style root is identical.  This preserves the no-mutation
+        # contract while allowing Word/HTML/chart regeneration after a failed
+        # publisher pass.
+        with self.store.connect() as connection:
+            existing = connection.execute(
+                "SELECT payload, root_hash FROM freezes WHERE run_id = ? AND evidence_version = ?",
+                (run_id, evidence_version),
+            ).fetchone()
+        if existing is not None:
+            if existing["root_hash"] != root_hash:
+                raise FreezeError(
+                    f"Existing freeze root mismatch for {run_id} version {evidence_version}"
+                )
+            return DataFreeze.model_validate_json(existing["payload"])
+
         freeze = DataFreeze(
             freeze_id=new_sortable_id("FREEZE"),
             run_id=run_id,
             evidence_version=evidence_version,
             included_record_ids=included,
             record_hashes=hashes,
-            root_hash=hashlib.sha256(root_payload).hexdigest(),
+            root_hash=root_hash,
             validation_report_id=report.validation_report_id,
         )
         with self.store.transaction() as connection:

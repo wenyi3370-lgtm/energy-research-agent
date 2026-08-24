@@ -78,6 +78,16 @@ AI_TONE_PHRASES = (
     "委托方配置能力无法影响目标问题或无法组织关键关系方",
     "合作假设的证伪门槛",
     "按当前战略优先级验证合作假设",
+    "判断企业资源基础时，应把",
+    "经营变化应同时观察",
+    "该方向进入实质讨论的前提",
+    "每个阶段只保留一个明确决策结果",
+    "90 天节点不以会议数量衡量",
+    "上述信息用于识别研究主体",
+    "本章回答的经营问题是",
+    "本章小结",
+    "经营章节的数据基础为",
+    "该补齐工作由定向检索完成",
 )
 
 # Allowed decision-language chapters (consulting layer only).
@@ -229,9 +239,14 @@ class ResearchValueValidator:
         boilerplate_ratio = round(boilerplate / len(sentences), 4) if sentences else 1.0
         from enterprise_energy_research.research.publication_relevance import PublicationRelevanceFilter
         relevant_claims, relevance_report = PublicationRelevanceFilter().filter(bundle)
+        # Competitor, customer/supplier and policy-authority evidence is kept
+        # for its dedicated chapter but cannot dilute target-enterprise QA.
+        # The denominator is therefore the verified canonical/group scope,
+        # not every verified claim discovered during broader research.
+        target_verified = relevance_report.target_scope_verified
         enterprise_specific_ratio = round(
-            len(relevant_claims) / relevance_report.total_verified, 4
-        ) if relevance_report.total_verified else 0.0
+            len(relevant_claims) / target_verified, 4
+        ) if target_verified else 0.0
         main_body = int(narrative.counts.get("main_body_cjk_char_count", 0))
         checks: list[QualityCheck] = [
             QualityCheck(code="quantitative_fact_count", status="PASS", message="正文量化事实数", value=quantitative_facts),
@@ -246,10 +261,23 @@ class ResearchValueValidator:
             ),
             QualityCheck(
                 code="enterprise_specific_data_ratio",
-                status=("PASS" if enterprise_specific_ratio > 0.60 else "FAIL" if relevance_report.total_verified >= 20 else "WARN"),
-                message=f"企业特异性数据占已核验事实 {enterprise_specific_ratio:.1%}（门槛 >60%）", value=enterprise_specific_ratio,
+                status=("PASS" if enterprise_specific_ratio > 0.60 else "FAIL" if target_verified >= 20 else "WARN"),
+                message=f"目标企业范围内可发布数据占已核验事实 {enterprise_specific_ratio:.1%}（门槛 >60%）", value=enterprise_specific_ratio,
             ),
         ]
+        supplemental = list(getattr(narrative, "supplemental_requirements", []) or [])
+        pending = [item for item in supplemental if item.get("status") == "pending_retry"]
+        checks.append(QualityCheck(
+            code="supplemental_requirement_coverage",
+            status="FAIL" if pending else "PASS",
+            message=(
+                "专项要求尚未取得可核验原文证据，必须继续内部补采："
+                + "、".join(str(item.get("title") or item.get("topic")) for item in pending)
+                if pending else
+                "专项要求均已取得可核验证据，或已完成10次补采并保留审计缺口"
+            ),
+            value=supplemental,
+        ))
         if main_body > 15_000 and meaningful_visuals < 5:
             checks.append(QualityCheck(
                 code="insufficient_visual_density", status="WARN",

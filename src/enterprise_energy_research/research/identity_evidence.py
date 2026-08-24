@@ -32,6 +32,7 @@ from enterprise_energy_research.domain.models import (
 from pydantic import HttpUrl
 
 from .contracts import IDENTITY_FIELDS
+from .entity_scope import entity_name_matches, normalized_entity_name
 
 OFFICIAL_SOURCE_KINDS = {
     "government", "sasac", "annual_report", "official_manual",
@@ -96,15 +97,6 @@ class IdentityEvidenceContract:
         return self
 
 
-def _norm_name(value: str) -> str:
-    suffixes = ("有限责任公司", "股份有限公司", "有限公司", "集团公司", "集团")
-    folded = "".join(value.lower().split())
-    for suffix in suffixes:
-        if folded.endswith(suffix):
-            folded = folded[: -len(suffix)]
-    return folded
-
-
 class IdentityEvidenceSynthesizer:
     """Derive identity Claims from page entity records (never from the input name alone)."""
 
@@ -119,7 +111,7 @@ class IdentityEvidenceSynthesizer:
         if selected_candidate is None:
             return []
         selected = next(
-            (entity for entity in entities if entity.canonical_name == selected_candidate.canonical_name),
+            (entity for entity in entities if entity_name_matches(entity, selected_candidate.canonical_name)),
             None,
         )
         if selected is None:
@@ -137,7 +129,24 @@ class IdentityEvidenceSynthesizer:
             if source is None:
                 continue
             for extracted in batch.entities:
-                if _norm_name(extracted.canonical_name) != _norm_name(selected.canonical_name):
+                extracted_names = {
+                    normalized_entity_name(extracted.canonical_name),
+                    normalized_entity_name(extracted.registered_name),
+                    *(normalized_entity_name(value) for value in extracted.aliases),
+                } - {""}
+                selected_names = {
+                    normalized_entity_name(selected.canonical_name),
+                    normalized_entity_name(selected.registered_name),
+                    *(normalized_entity_name(value) for value in selected.aliases),
+                } - {""}
+                if not (
+                    extracted_names & selected_names
+                    or any(
+                        min(len(left), len(right)) >= 4
+                        and (left in right or right in left)
+                        for left in extracted_names for right in selected_names
+                    )
+                ):
                     continue
                 self._emit(claims, emitted, selected, extracted, source, batch)
         return claims

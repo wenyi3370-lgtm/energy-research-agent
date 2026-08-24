@@ -379,8 +379,27 @@ class ResearchQuery(StrictModel):
     target_gap_ids: list[str] = Field(default_factory=list)
     target_conflict_ids: list[str] = Field(default_factory=list)
     target_claim_ids: list[str] = Field(default_factory=list)
+    # Three-dimensional requirement routing. Defaults keep older fixtures and
+    # serialized plans compatible; planners fill all four fields explicitly.
+    goal_domain: str = "general_enterprise_research"
+    subject_role: Literal[
+        "target_enterprise", "group_member", "competitor",
+        "ecosystem_party", "public_authority", "market_context",
+    ] = "target_enterprise"
+    evidence_lane: Literal[
+        "target", "enterprise_group", "comparison", "ecosystem", "policy_context",
+    ] = "target"
+    evidence_use: Literal[
+        "target_fact", "target_context", "comparison_context", "relationship_context",
+        "policy_context", "visual_support",
+    ] = "target_fact"
+    # Exact user requirement carried independently from the human-readable
+    # purpose string.  Internal readiness/coverage searches leave this empty,
+    # which prevents their evidence from leaking into a supplemental chapter.
+    requirement_text: str | None = None
     # P0-2: goal context declared at planning time so extraction never loses it.
     canonical_company_name: str | None = None
+    canonical_company_aliases: list[str] = Field(default_factory=list)
     expected_fields: list[str] = Field(default_factory=list)
     interpretation_goal: str | None = None
     evidence_patterns: list[str] = Field(default_factory=list)
@@ -503,6 +522,15 @@ class ExtractedEvidenceBatch(StrictModel):
     extraction_method: Literal["deterministic", "model_structured", "recorded_fixture"]
     retrieval_adapter: Literal["anysearch", "kimi_webbridge"] = "anysearch"
     is_search_snippet: bool = False
+    # Filled by the executor after model extraction; never trusted from page
+    # content. These fields provide claim-level routing lineage.
+    origin_query_id: str | None = None
+    origin_topic: str | None = None
+    goal_domain: str | None = None
+    subject_role: str | None = None
+    evidence_lane: str | None = None
+    evidence_use: str | None = None
+    requirement_text: str | None = None
 
 
 class Solution(StrictModel):
@@ -627,6 +655,9 @@ class RunManifest(StrictModel):
     validation_status: ValidationStatus | None = None
     client_profile: dict[str, Any] | None = None
     client_profile_hash: str | None = None
+    # User-request scope is separate from the commissioning client's
+    # capability profile. It drives supplemental chapters and audit routing.
+    research_scope: dict[str, Any] = Field(default_factory=dict)
 
 
 class FrozenResearchBundle(StrictModel):
