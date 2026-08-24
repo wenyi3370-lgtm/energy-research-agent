@@ -162,6 +162,27 @@ def parse_publication_time(
     return None, "UNKNOWN", False
 
 
+def parse_relative_publication_time(value: str, reference: datetime) -> datetime | None:
+    """Deterministically resolve an on-page relative publication label.
+
+    Model-generated absolute times are not trusted when their own evidence
+    says they were inferred from the crawl time.  Only an explicit relative
+    label such as ``46分钟前`` or ``2小时前`` may be converted here.
+    """
+    text = value or ""
+    minute_match = re.search(r"(\d{1,4})\s*分钟前", text)
+    if minute_match:
+        minutes = int(minute_match.group(1))
+        if 0 <= minutes <= int(RECOVERY_WINDOW.total_seconds() // 60):
+            return reference - timedelta(minutes=minutes)
+    hour_match = re.search(r"(\d{1,3})\s*小时前", text)
+    if hour_match:
+        hours = int(hour_match.group(1))
+        if 0 <= hours <= int(RECOVERY_WINDOW.total_seconds() // 3600):
+            return reference - timedelta(hours=hours)
+    return None
+
+
 def content_sha256(text: str) -> str:
     normalized = re.sub(r"\s+", " ", (text or "").strip())
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
@@ -250,10 +271,24 @@ def _classify(
     # publication.  For a repost, original_published_at describes the older
     # underlying event/source and must not replace the repost page's own time.
     published_raw = raw.published_at or (raw.original_published_at if raw.is_original_source else "")
-    publication_evidence = raw.publication_time_evidence if raw.is_original_source else ""
-    published, publication_precision, publication_corroborated = parse_publication_time(
-        published_raw, publication_evidence, cutoff
-    )
+    publication_evidence = raw.publication_time_evidence
+    relative_published = parse_relative_publication_time(publication_evidence, cutoff)
+    evidence_is_inferred = bool(re.search(r"推断|估算|换算|结合抓取", publication_evidence))
+    if relative_published is not None:
+        published, publication_precision, publication_corroborated = (
+            relative_published, "EXACT", False,
+        )
+    else:
+        if evidence_is_inferred:
+            published_raw = ""
+            publication_evidence = ""
+        elif not raw.is_original_source:
+            # A secondary source remains LOW confidence even when its page
+            # carries an exact time; do not treat one model field as corroboration.
+            publication_evidence = ""
+        published, publication_precision, publication_corroborated = parse_publication_time(
+            published_raw, publication_evidence, cutoff
+        )
 
     updated = parse_exact_publication_time(raw.updated_at)
     update_evidence = parse_exact_publication_time(raw.update_time_evidence)

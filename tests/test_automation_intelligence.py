@@ -220,6 +220,22 @@ class FreshnessGateTests(unittest.TestCase):
         self.assertEqual(result.accepted[0].original_source_url, "https://gov.example/original")
         self.assertEqual(result.accepted[0].confidence_level, "LOW")
 
+    def test_model_inferred_absolute_time_is_replaced_by_relative_page_label(self):
+        item = make_raw(
+            published_at="2026-08-22T08:00:00+08:00",
+            original_published_at="2026-08-22T08:00:00+08:00",
+            publication_time_evidence=(
+                "页面显示‘46分钟前’，结合抓取时间推断为"
+                "2026-08-22T08:00:00+08:00"
+            ),
+        )
+        result = apply_freshness_gate([item], current_time=self.now)
+        self.assertEqual(
+            result.accepted[0].published_at_iso,
+            self.now - timedelta(minutes=46),
+        )
+        self.assertEqual(result.accepted[0].confidence_level, "LOW")
+
     def test_republished_old_article_inside_window_is_retained_for_awareness(self):
         item = make_raw(
             published_at="2026-08-22 07:00",
