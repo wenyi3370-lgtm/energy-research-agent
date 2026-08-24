@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/assets/portal-logo.jpg">
+<title>智慧能源 · 企业研究中枢｜四川动力电池产业创新中心</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg0:#0A0314; --bg1:#160829;
+  --tsinghua:#660874; --violet:#8B3DFF; --magenta:#C77DFF; --lav:#E0AAFF;
+  --cyan:#4DE3FF; --green:#3DFFA8; --red:#FF5D7A;
+  --ink:#F3EDFF; --ink-dim:rgba(226,212,255,.62); --ink-faint:rgba(226,212,255,.38);
+  --line:rgba(168,120,255,.18); --line-strong:rgba(168,120,255,.38);
+  --glass:rgba(26,11,50,.55);
+  --serif:"Noto Serif SC","Songti SC","SimSun",serif;
+  --sans:"Noto Sans SC","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; color:var(--ink); font-family:var(--sans); font-weight:300;
+  background:var(--bg0); min-height:100vh; overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:rgba(139,61,255,.45);color:#fff}
+/* ————— 动态背景：清华紫极光 + 能源网格 ————— */
+.bg{position:fixed;inset:0;z-index:-2;background:
+  radial-gradient(1200px 700px at 85% -10%,rgba(102,8,116,.55),transparent 60%),
+  radial-gradient(1000px 800px at -10% 110%,rgba(60,16,110,.6),transparent 55%),
+  linear-gradient(160deg,#0A0314 0%,#160829 45%,#1E0A38 100%);
+  background-size:100% 100%,100% 100%,200% 200%;
+  animation:bgShift 24s ease-in-out infinite alternate;}
+@keyframes bgShift{from{background-position:0 0,0 0,0% 0%}to{background-position:0 0,0 0,100% 100%}}
+.orb{position:fixed;border-radius:50%;filter:blur(90px);z-index:-1;opacity:.5;pointer-events:none;will-change:transform}
+.orb.o1{width:46vw;height:46vw;left:-12vw;top:-14vh;background:radial-gradient(circle,rgba(139,61,255,.55),transparent 65%);animation:drift1 26s ease-in-out infinite alternate}
+.orb.o2{width:38vw;height:38vw;right:-10vw;top:22vh;background:radial-gradient(circle,rgba(199,125,255,.4),transparent 65%);animation:drift2 32s ease-in-out infinite alternate}
+.orb.o3{width:34vw;height:34vw;left:24vw;bottom:-18vh;background:radial-gradient(circle,rgba(77,227,255,.22),transparent 65%);animation:drift3 38s ease-in-out infinite alternate}
+@keyframes drift1{from{transform:translate(0,0) scale(1)}to{transform:translate(9vw,7vh) scale(1.18)}}
+@keyframes drift2{from{transform:translate(0,0) scale(1.1)}to{transform:translate(-8vw,10vh) scale(.92)}}
+@keyframes drift3{from{transform:translate(0,0) scale(.95)}to{transform:translate(7vw,-9vh) scale(1.15)}}
+.grid{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;
+  background:
+    linear-gradient(rgba(168,120,255,.06) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(168,120,255,.06) 1px,transparent 1px);
+  background-size:56px 56px;
+  -webkit-mask-image:radial-gradient(ellipse 90% 70% at 50% 0%,#000 30%,transparent 75%);
+  mask-image:radial-gradient(ellipse 90% 70% at 50% 0%,#000 30%,transparent 75%);
+  animation:gridPan 30s linear infinite;}
+@keyframes gridPan{from{background-position:0 0,0 0}to{background-position:0 56px,56px 0}}
+/* ————— 布局 ————— */
+.wrap{max-width:880px;margin:0 auto;padding:40px 22px 90px;position:relative}
+/* ————— 顶栏：Logo + 中心名称 ————— */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:44px}
+.brand{display:flex;align-items:center;gap:16px}
+.logo-ring{position:relative;width:64px;height:64px;flex:0 0 auto;display:grid;place-items:center}
+.logo-ring::before{content:"";position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 0deg,var(--violet),var(--cyan),var(--magenta),var(--violet));
+  animation:spin 7s linear infinite;filter:blur(1px)}
+.logo-ring::after{content:"";position:absolute;inset:3px;border-radius:50%;background:#0E0620}
+.logo-ring img{position:relative;z-index:1;width:52px;height:52px;border-radius:50%;background:#fff;padding:2px;
+  box-shadow:0 0 22px rgba(139,61,255,.55)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.brand-text .cn{font-family:var(--serif);font-weight:700;font-size:19px;letter-spacing:.06em;
+  background:linear-gradient(90deg,#fff, var(--lav) 55%, #fff);background-size:200% 100%;
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  animation:shimmer 6s ease-in-out infinite}
+.brand-text .en{font-size:10px;letter-spacing:.24em;color:var(--ink-faint);margin-top:3px;text-transform:uppercase}
+@keyframes shimmer{0%,100%{background-position:0% 0}50%{background-position:100% 0}}
+.status-pill{display:flex;align-items:center;gap:9px;padding:8px 16px;border-radius:999px;
+  border:1px solid var(--line);background:var(--glass);backdrop-filter:blur(12px);
+  font-size:12px;color:var(--ink-dim);letter-spacing:.08em}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ink-faint);position:relative}
+.dot.live{background:var(--green)}
+.dot.live::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid var(--green);animation:pulse 1.8s ease-out infinite}
+.dot.dead{background:var(--red)}
+@keyframes pulse{from{transform:scale(.6);opacity:1}to{transform:scale(1.8);opacity:0}}
+/* ————— Hero ————— */
+.hero{margin-bottom:40px;position:relative}
+.hero .kicker{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.3em;color:var(--cyan);
+  border:1px solid rgba(77,227,255,.3);border-radius:999px;padding:6px 14px;margin-bottom:18px;
+  background:rgba(77,227,255,.06)}
+.hero .kicker svg{animation:boltFlicker 2.6s ease-in-out infinite}
+@keyframes boltFlicker{0%,100%{opacity:1;filter:drop-shadow(0 0 4px rgba(77,227,255,.8))}45%{opacity:.55;filter:none}60%{opacity:1;filter:drop-shadow(0 0 8px rgba(77,227,255,1))}}
+h1{font-family:var(--serif);font-weight:900;font-size:clamp(30px,5.4vw,46px);line-height:1.22;margin:0 0 14px;
+  background:linear-gradient(115deg,#fff 15%,var(--lav) 45%,var(--violet) 75%,#fff 100%);
+  background-size:220% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  animation:shimmer 8s ease-in-out infinite}
+.hero .sub{max-width:640px}
+.energy-line{display:block;margin-top:20px;width:min(420px,80%);height:26px}
+.energy-line path{stroke:url(#flowGrad);stroke-width:2;fill:none;stroke-linecap:round;
+  stroke-dasharray:14 22;animation:flow 2.6s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-36}}
+/* ————— 卡片：玻璃拟态 ————— */
+.card{position:relative;background:var(--glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border:1px solid var(--line);border-radius:20px;padding:26px 26px 24px;margin-bottom:22px;
+  box-shadow:0 18px 50px rgba(5,0,15,.5),inset 0 1px 0 rgba(255,255,255,.05);
+  transition:transform .35s cubic-bezier(.2,.8,.2,1),border-color .35s,box-shadow .35s;
+  animation:rise .8s cubic-bezier(.2,.8,.2,1) both}
+.card:nth-of-type(1){animation-delay:.05s}.card:nth-of-type(2){animation-delay:.12s}
+.card:nth-of-type(3){animation-delay:.19s}.card:nth-of-type(4){animation-delay:.26s}
+.card:nth-of-type(5){animation-delay:.33s}.card:nth-of-type(6){animation-delay:.4s}
+@keyframes rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+.card:hover{transform:translateY(-3px);border-color:var(--line-strong);
+  box-shadow:0 26px 60px rgba(5,0,15,.6),0 0 40px rgba(139,61,255,.12),inset 0 1px 0 rgba(255,255,255,.06)}
+.card::before{content:"";position:absolute;top:0;left:24px;right:24px;height:1px;
+  background:linear-gradient(90deg,transparent,var(--violet),var(--cyan),transparent);opacity:.7}
+.card h2{display:flex;align-items:center;gap:13px;font-family:var(--serif);font-weight:700;
+  font-size:17px;margin:0 0 16px;color:#fff;letter-spacing:.03em}
+.icon-tile{flex:0 0 auto;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  background:linear-gradient(140deg,rgba(139,61,255,.28),rgba(77,227,255,.12));
+  border:1px solid var(--line-strong);box-shadow:0 0 18px rgba(139,61,255,.25)}
+.icon-tile svg{width:22px;height:22px;overflow:visible}
+/* 动态图标 */
+.radar-sweep{transform-origin:12px 12px;animation:spin 2.8s linear infinite}
+.radar-blip{animation:blip 2.8s ease-out infinite}
+@keyframes blip{0%,10%{opacity:0}18%{opacity:1}55%{opacity:0}100%{opacity:0}}
+.eq-bar{transform-origin:bottom;animation:eq 1.5s ease-in-out infinite}
+.eq-bar.b2{animation-delay:.2s}.eq-bar.b3{animation-delay:.4s}.eq-bar.b4{animation-delay:.6s}
+@keyframes eq{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+.core-pulse{animation:corePulse 2.2s ease-in-out infinite}
+@keyframes corePulse{0%,100%{opacity:.65;r:4}50%{opacity:1;r:5.4}}
+.flow-dash{stroke-dasharray:6 8;animation:flow 2s linear infinite}
+.charge-fill{animation:charge 2.4s ease-in-out infinite}
+@keyframes charge{0%{transform:scaleX(.12)}70%{transform:scaleX(1)}100%{transform:scaleX(.12)}}
+.charge-fill{transform-origin:left center}
+.orbit-dot{transform-origin:12px 12px;animation:spin 3.4s linear infinite}
+.gear-spin{transform-origin:12px 12px;animation:spin 9s linear infinite}
+.ring-pulse{transform-origin:center;animation:ringPulse 2.4s ease-out infinite}
+@keyframes ringPulse{from{transform:scale(.5);opacity:.9}to{transform:scale(1.5);opacity:0}}
+/* ————— 表单 ————— */
+label{display:block;font-size:12.5px;color:var(--ink-dim);margin:14px 0 6px;letter-spacing:.04em}
+input,select,textarea{width:100%;box-sizing:border-box;padding:11px 13px;font-size:14px;font-family:var(--sans);
+  color:var(--ink);background:rgba(255,255,255,.045);border:1px solid var(--line);border-radius:11px;
+  outline:none;transition:border-color .25s,box-shadow .25s,background .25s}
+input::placeholder,textarea::placeholder{color:var(--ink-faint)}
+input:focus,select:focus,textarea:focus{border-color:var(--violet);
+  box-shadow:0 0 0 3px rgba(139,61,255,.22),0 0 18px rgba(139,61,255,.15);background:rgba(255,255,255,.07)}
+input[readonly]{color:var(--ink-dim);background:rgba(255,255,255,.025)}
+textarea{min-height:76px;resize:vertical;line-height:1.7}
+select option{background:#1E0A38;color:var(--ink)}
+input[type=checkbox]{width:auto;accent-color:var(--violet)}
+.check-row{display:flex!important;align-items:center;gap:9px;margin-top:12px!important;color:var(--ink-dim)}
+.sub{color:var(--ink-dim);font-size:12.5px;line-height:1.8;margin:2px 0 16px}
+.sub b{color:var(--lav);font-weight:500}
+.sub code,.card code{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--cyan);
+  background:rgba(77,227,255,.08);border:1px solid rgba(77,227,255,.18);border-radius:6px;padding:1px 6px}
+/* ————— 按钮 ————— */
+button{margin-top:18px;position:relative;overflow:hidden;border:0;border-radius:12px;cursor:pointer;
+  padding:12px 26px;font-size:14.5px;font-family:var(--sans);font-weight:500;letter-spacing:.06em;color:#fff;
+  background:linear-gradient(120deg,var(--tsinghua),var(--violet) 60%,var(--magenta));background-size:180% 100%;
+  box-shadow:0 8px 24px rgba(102,8,116,.45),inset 0 1px 0 rgba(255,255,255,.18);
+  transition:background-position .5s,transform .2s,box-shadow .3s}
+button:hover{background-position:100% 0;transform:translateY(-1px);
+  box-shadow:0 12px 32px rgba(139,61,255,.5),inset 0 1px 0 rgba(255,255,255,.2)}
+button:active{transform:translateY(0)}
+button::after{content:"";position:absolute;top:0;bottom:0;width:60%;left:-80%;transform:skewX(-20deg);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent);
+  animation:shine 3.6s ease-in-out infinite}
+@keyframes shine{0%,60%{left:-80%}100%{left:130%}}
+button:disabled{background:rgba(255,255,255,.08);color:var(--ink-faint);cursor:not-allowed;
+  box-shadow:none;transform:none}
+button:disabled::after{display:none}
+button.btn-danger{background:linear-gradient(120deg,#8C1D3F,#D9365E);box-shadow:0 8px 24px rgba(217,54,94,.35)}
+button.btn-success{background:linear-gradient(120deg,#0B6B4A,#1FBF82);box-shadow:0 8px 24px rgba(31,191,130,.3)}
+button.btn-inline{margin-left:10px}
+/* ————— 状态区 ————— */
+#status,#deepStatus,#stopAllStatus,#intelStatus,#runStatus{margin-top:14px;font-size:13px;white-space:pre-wrap;line-height:1.8;color:var(--ink)}
+#status .ok,#deepStatus .ok,#stopAllStatus .ok,#intelStatus .ok,#runStatus .ok,#deepMatches .ok{color:var(--green)}
+#status .warn,#deepStatus .warn,#stopAllStatus .warn,#intelStatus .warn,#runStatus .warn,#deepMatches .warn{color:#FFB45D}
+.parsed-card{margin-top:16px;background:rgba(102,8,116,.16);border:1px solid var(--line-strong);
+  border-radius:14px;padding:16px 16px 4px}
+.match{padding:10px 12px;border:1px solid var(--line);border-radius:11px;margin:8px 0;cursor:pointer;
+  background:rgba(255,255,255,.03);transition:border-color .2s,background .2s,transform .2s}
+.match:hover{border-color:var(--violet);background:rgba(139,61,255,.12);transform:translateX(3px)}
+.match .meta{color:var(--ink-faint);font-size:12px}
+.actions a{display:inline-block;margin:6px 12px 0 0}
+.link{color:var(--lav);font-size:13px;text-decoration:none;border-bottom:1px solid rgba(224,170,255,.35);
+  padding-bottom:1px;transition:color .2s,border-color .2s}
+.link:hover{color:#fff;border-color:#fff}
+.footer{margin-top:44px;text-align:center;font-size:11px;letter-spacing:.18em;color:var(--ink-faint)}
+@media (max-width:560px){.card{padding:20px 18px}.brand-text .cn{font-size:16px}}
+</style></head><body>
+<div class="bg"></div>
+<div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div>
+<div class="grid"></div>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+<linearGradient id="flowGrad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#8B3DFF"/><stop offset=".5" stop-color="#4DE3FF"/><stop offset="1" stop-color="#C77DFF"/>
+</linearGradient></defs></svg>
+
+<div class="wrap">
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo-ring"><img src="/assets/portal-logo.jpg" alt="四川动力电池产业创新中心"></div>
+    <div class="brand-text">
+      <div class="cn">四川动力电池产业创新中心</div>
+      <div class="en">Sichuan Power Battery Industry Innovation Center</div>
+    </div>
+  </div>
+  <div class="status-pill"><span class="dot" id="healthDot"></span><span id="healthText">连接中…</span></div>
+</header>
+
+<section class="hero">
+  <span class="kicker">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2Z" fill="#4DE3FF"/></svg>
+    SMART ENERGY INTELLIGENCE
+  </span>
+  <h1>智慧能源 · 企业研究中枢</h1>
+  <div class="sub">填写调研对象与范围 → 点「开始调查」。企业研究仅由本页按钮启动，不会定时自动运行；明确失败会立即终止并通知飞书，悬挂任务由故障看门狗自动终止。</div>
+  <svg class="energy-line" viewBox="0 0 420 26" preserveAspectRatio="none">
+    <path d="M2 16 C 60 4, 110 24, 170 13 S 290 4, 350 15 S 410 10, 418 13"/>
+  </svg>
+</section>
+
+<div class="card"><h2>
+  <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="#C77DFF" stroke-width="1.6">
+    <circle cx="12" cy="12" r="9" opacity=".5"/><circle cx="12" cy="12" r="5" opacity=".7"/>
+    <line class="radar-sweep" x1="12" y1="12" x2="12" y2="3.5" stroke="#4DE3FF" stroke-width="1.8"/>
+    <circle class="radar-blip" cx="16.5" cy="9" r="1.6" fill="#4DE3FF" stroke="none"/>
+  </svg></span>① 用一句话描述调研需求</h2>
+<label>例如：「调研宁德时代的主营业务和生产基地」或「研究泰国户用储能市场进入机会」</label>
+<textarea id="prompt" placeholder="用自然语言描述你的调研需求…"></textarea>
+<button id="parseBtn">解析需求并准备任务</button>
+<div id="status"></div>
+<div id="parsedCard" class="parsed-card" style="display:none">
+<label>已准备的任务参数（如需修改，请返回上方重新描述或填写）</label>
+<div id="parsedFields"></div>
+<button id="startBtn" disabled>▶ 开始调查</button>
+</div>
+</div>
+
+<div class="card"><h2>
+  <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="#C77DFF" stroke-width="1.6">
+    <rect class="eq-bar b1" x="4" y="9" width="3" height="11" rx="1" fill="#8B3DFF" stroke="none"/>
+    <rect class="eq-bar b2" x="8.5" y="6" width="3" height="14" rx="1" fill="#C77DFF" stroke="none"/>
+    <rect class="eq-bar b3" x="13" y="10" width="3" height="10" rx="1" fill="#4DE3FF" stroke="none"/>
+    <rect class="eq-bar b4" x="17.5" y="7" width="3" height="13" rx="1" fill="#8B3DFF" stroke="none"/>
+  </svg></span>② 精确填写（可选，替代自然语言）</h2>
+<div class="sub" style="margin-bottom:6px">想逐项指定时使用：</div>
+<label>公司名称（选填）</label><input id="company" placeholder="例如：宁德时代">
+<label>国家 / 地区（选填）</label><input id="country" placeholder="例如：Thailand">
+<label>产品（选填）</label><input id="product" placeholder="例如：Residential BESS">
+<label>研究类型</label><select id="rtype">
+<option value="company_profile">公司画像</option><option value="market_entry">市场进入</option>
+<option value="market_monitor">市场监测</option><option value="competitor_analysis">竞品分析</option>
+<option value="policy_regulation">政策法规</option><option value="product_research">产品研究</option>
+<option value="channel_research">渠道研究</option><option value="other">其他</option></select>
+<label>关注主题（逗号分隔）</label><textarea id="topics" placeholder="主营业务, 生产基地, 产品线"></textarea>
+<button id="prepareBtn">用以上参数准备任务</button>
+</div>
+
+<div class="card"><h2>
+  <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="#C77DFF" stroke-width="1.6">
+    <path d="M12 3 20 8 12 13 4 8Z" opacity=".6"/><path class="flow-dash" d="M4 12 12 17 20 12" stroke="#4DE3FF"/>
+    <path d="M4 16 12 21 20 16" opacity=".45"/>
+    <circle class="core-pulse" cx="12" cy="8" r="4" fill="#4DE3FF" stroke="none" opacity=".8"/>
+  </svg></span>③ 继续深度研究（完善报告 / HTML / Excel）</h2>
+<div class="sub" style="margin-bottom:6px">对已完成或进行中的调查提出补充与修改需求：系统会定向检索新证据（必要时恢复官方产品图片），重新校验并重新生成 Word 报告、HTML 看板与 Excel 数据。</div>
+<label>任务定位（输入公司名或关键词自动匹配，如「宁德时代」；也可直接粘贴 RUN ID）</label>
+<input id="deepQuery" placeholder="例如：宁德时代 / 储能 / RUN-01M0…">
+<div id="deepMatches" style="margin-top:6px"></div>
+<label>补充 / 修改需求（直接输入自然语言，分条写更精准）</label>
+<textarea id="deepRequirements" placeholder="例如：&#10;补充 2022 年与 2023 年的营业收入和归母净利润；&#10;增加产品图片；&#10;补充海外基地的产能数据"></textarea>
+<label class="check-row"><input type="checkbox" id="deepDesktop" checked> 完成后同时保存一份到桌面</label>
+<label class="check-row"><input type="checkbox" id="deepFeishu" checked> 完成后推送飞书（文本 + Word/HTML/Excel 文件）</label>
+<button id="deepBtn">🔍 继续深度研究</button>
+<div id="deepStatus"></div>
+</div>
+
+<div class="card"><h2>
+  <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="#C77DFF" stroke-width="1.6">
+    <rect x="3" y="8" width="15" height="9" rx="2.5"/><rect x="18.5" y="10.5" width="2.8" height="4" rx="1" fill="#C77DFF" stroke="none"/>
+    <rect class="charge-fill" x="5" y="10" width="11" height="5" rx="1.2" fill="#3DFFA8" stroke="none"/>
+  </svg></span>调查结果</h2>
+<div class="sub">故障看门狗每小时检查一次：仅终止超过 120 分钟无进展的调查并通知飞书，不创建任务、不自动重试。</div>
+<div id="runStatus"></div>
+<div class="actions" id="links" style="display:none">
+<a href="/docs" class="link">高级操作面板（评审/裁决/反馈）</a>
+<a href="#" id="viewResult" class="link">查看结果</a>
+</div>
+<button id="stopAllBtn" class="btn-danger">⏹ 停止全部调查任务</button>
+<div id="stopAllStatus"></div>
+</div>
+
+<div class="card"><h2>
+  <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="#C77DFF" stroke-width="1.6">
+    <circle cx="12" cy="12" r="8.5" opacity=".55"/>
+    <circle class="ring-pulse" cx="12" cy="12" r="8.5" stroke="#4DE3FF" fill="none"/>
+    <path d="M13.2 5.5 8 13h3.4L10.8 18.5 16 11h-3.4l.6-5.5Z" fill="#4DE3FF" stroke="none"/>
+  </svg></span>每日情报（V2G &amp; 储能日报）</h2>
+<div class="sub" style="margin-bottom:12px">每日仅生成并推送一次。运行期间按钮会锁定；同日再次点击不会重复采集或重复推送。</div>
+<button id="intelBtn">立即生成今日情报并推送</button>
+<button id="pauseBtn" class="btn-danger btn-inline">⏹ 停止推送</button>
+<button id="resumeBtn" class="btn-success btn-inline" style="display:none">▶ 恢复推送</button>
+<div id="intelStatus"></div>
+</div>
+
+<div class="card"><h2>
+  <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="#C77DFF" stroke-width="1.6">
+    <g class="gear-spin"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/>
+    <path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7"/></g>
+  </svg></span>依赖与部署</h2>
+<div class="sub" style="margin-bottom:8px">
+<b>依赖：</b>Docker Desktop（唯一必需）＋ DeepSeek API Key（真实抽取）＋ 可选飞书应用（通知）/ Kimi WebBridge（深度调研）。Python 无需安装。<br><br>
+<b>部署：</b>复制 <code>.env.example</code> 为 <code>.env</code> 并填入密钥 → <code>docker compose up -d --build</code> → 打开本页。企业研究只在本页点击「开始调查」后运行；n8n 仅保留每日情报 10:00（北京时间）和纯故障看门狗。看门狗不会发起研究；日报可在本页暂停或恢复。<br><br>
+<b>文档：</b><a href="/docs" class="link">API 操作面板</a> ｜ README.md（仓库根）｜ docs/automation/（架构/Runbook/配置清单）
+</div>
+</div>
+
+<div class="footer">SICHUAN POWER BATTERY INDUSTRY INNOVATION CENTER · ENERGY RESEARCH HUB</div>
+</div>
+
+<script>
+let currentRun = null;
+let currentParsed = null;
+async function call(method, path, body) {
+  const resp = await fetch(path, {method, headers: {'Content-Type':'application/json'},
+    body: body ? JSON.stringify(body) : undefined});
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error((data.error && data.error.message) || (data.detail && JSON.stringify(data.detail)) || ('HTTP ' + resp.status));
+  return data;
+}
+function renderParsed(parsed) {
+  const labels = {company:'公司', country:'国家', region:'地区', product:'产品', research_type:'研究类型', topics:'主题', priority:'优先级'};
+  currentParsed = parsed;
+  const box = document.getElementById('parsedFields');
+  box.innerHTML = '';
+  for (const [key, label] of Object.entries(labels)) {
+    const value = parsed[key];
+    const text = Array.isArray(value) ? (value || []).join(', ') : (value || '');
+    box.insertAdjacentHTML('beforeend', '<label>' + label + '</label><input data-k="' + key + '" value="' + text.replace(/"/g, '&quot;') + '">');
+  }
+  box.querySelectorAll('input').forEach(input => input.readOnly = true);
+  document.getElementById('parsedCard').style.display = 'block';
+  document.getElementById('startBtn').disabled = false;
+}
+document.getElementById('parseBtn').onclick = async () => {
+  const out = document.getElementById('status');
+  out.className = ''; out.textContent = '正在解析需求（AI 理解你的描述）…';
+  const prompt = document.getElementById('prompt').value.trim();
+  if (prompt.length < 4) { out.innerHTML = '<span class="warn">请先输入调研需求</span>'; return; }
+  try {
+    const data = await call('POST', '/api/v1/research/natural', {prompt, requested_by: 'portal-user'});
+    currentRun = data.run_id;
+    out.innerHTML = '<span class="ok">✅ 已准备任务：' + data.run_id + '</span>';
+    renderParsed(data.parsed || {});
+  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
+};
+document.getElementById('prepareBtn').onclick = async () => {
+  const out = document.getElementById('status');
+  out.className = ''; out.textContent = '正在准备任务…';
+  const body = {task_id: 'TASK-' + Date.now(), requested_by: 'portal-user',
+    company: document.getElementById('company').value || null,
+    country: document.getElementById('country').value || null,
+    product: document.getElementById('product').value || null,
+    research_type: document.getElementById('rtype').value,
+    topics: document.getElementById('topics').value.split(/[,，]/).map(s => s.trim()).filter(Boolean)};
+  try {
+    const data = await call('POST', '/api/v1/research/prepare', body);
+    currentRun = data.run_id;
+    out.innerHTML = '<span class="ok">✅ 任务已准备：' + data.run_id + '</span>';
+    renderParsed({company: body.company, country: body.country, product: body.product,
+      research_type: body.research_type, topics: body.topics, priority: 'normal'});
+  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
+};
+document.getElementById('startBtn').onclick = async () => {
+  const out = document.getElementById('runStatus');
+  const button = document.getElementById('startBtn');
+  if (!currentRun) { out.innerHTML = '<span class="warn">❌ 请先准备任务</span>'; return; }
+  button.disabled = true;
+  out.textContent = '正在启动调查…';
+  try {
+    const data = await call('POST', '/api/v1/research/' + currentRun + '/start', null);
+    out.innerHTML = '<span class="ok">✅ ' + (data.message || ('已开始：' + data.status)) + '</span>';
+    document.getElementById('links').style.display = 'block';
+    document.getElementById('viewResult').href = '/api/v1/research/' + currentRun;
+  } catch (e) {
+    button.disabled = false;
+    out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>';
+  }
+};
+document.getElementById('intelBtn').onclick = async () => {
+  const button = document.getElementById('intelBtn');
+  const out = document.getElementById('intelStatus');
+  button.disabled = true;
+  button.textContent = '今日情报生成中…';
+  out.textContent = '正在采集与推送今日情报（约 3-5 分钟）…';
+  try {
+    const data = await call('POST', '/api/v1/intelligence/daily', null);
+    if (data.paused) {
+      out.innerHTML = '<span class="warn">⏸ 推送已暂停，未采集（先点「恢复推送」）</span>';
+    } else if (data.already_published) {
+      out.innerHTML = '<span class="ok">✅ 今日情报已发布；不会重复采集或推送</span>';
+    } else if (data.running && !data.triggered) {
+      out.innerHTML = '<span class="ok">⏳ 今日情报正在生成；重复点击已被拦截</span>';
+    } else {
+      out.innerHTML = '<span class="ok">✅ 已触发：' + data.date + '；完成前按钮保持锁定</span>';
+    }
+    setIntelButtonState(data);
+  } catch (e) {
+    out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>';
+    button.disabled = false;
+    button.textContent = '立即生成今日情报并推送';
+  }
+};
+// —— 继续深度研究：自然语言定位任务 + 自然语言需求 → 后台补检索 → 轮询 ——
+let deepSelected = null; // {run_id, run_dir?}
+document.getElementById('deepQuery').addEventListener('input', async () => {
+  const q = document.getElementById('deepQuery').value.trim();
+  const box = document.getElementById('deepMatches');
+  deepSelected = null;
+  if (q.length < 2) { box.innerHTML = ''; return; }
+  if (/^RUN-/.test(q)) { deepSelected = {run_id: q}; box.innerHTML = '<span class="ok">✅ 直接使用 RUN ID：' + q + '</span>'; return; }
+  try {
+    const data = await call('GET', '/api/v1/research/lookup?q=' + encodeURIComponent(q), null);
+    const matches = data.matches || [];
+    if (!matches.length) { box.innerHTML = '<span class="warn">未找到匹配任务，请换个关键词（如公司名）</span>'; return; }
+    box.innerHTML = matches.map((m, i) => '<div class="match" data-i="' + i + '">' +
+      '<b>' + (m.label || m.company || m.run_id).replace(/</g, '&lt;') + '</b><br><span class="meta">' + m.run_id + (m.status ? ' · ' + m.status : '') + (m.created_at ? ' · ' + m.created_at.slice(0, 10) : '') + '</span></div>').join('');
+    box.querySelectorAll('.match').forEach(el => el.onclick = () => {
+      const m = matches[Number(el.dataset.i)];
+      deepSelected = {run_id: m.run_id, run_dir: m.run_dir || null};
+      document.getElementById('deepQuery').value = m.label || m.company || m.run_id;
+      box.innerHTML = '<span class="ok">✅ 已选择：' + (m.label || m.run_id).replace(/</g, '&lt;') + '</span>';
+    });
+  } catch (e) { box.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
+});
+document.getElementById('deepBtn').onclick = async () => {
+  const out = document.getElementById('deepStatus');
+  const button = document.getElementById('deepBtn');
+  const requirements = document.getElementById('deepRequirements').value.trim();
+  if (!deepSelected) { out.innerHTML = '<span class="warn">❌ 请先在上方输入公司名定位任务</span>'; return; }
+  if (requirements.length < 2) { out.innerHTML = '<span class="warn">❌ 请填写补充 / 修改需求（自然语言即可）</span>'; return; }
+  button.disabled = true;
+  out.innerHTML = '<span class="ok">🔍 深度研究已启动（定向检索 + 证据校验 + 重新生成报告/HTML/Excel），请稍候…</span>';
+  try {
+    const body = {
+      requirements, requested_by: 'portal-user', include_images: true,
+      save_to_desktop: document.getElementById('deepDesktop').checked,
+      notify_feishu: document.getElementById('deepFeishu').checked,
+    };
+    if (deepSelected.run_dir) body.run_dir = deepSelected.run_dir;
+    await call('POST', '/api/v1/research/' + deepSelected.run_id + '/deep-research', body);
+    const started = Date.now();
+    const timer = setInterval(async () => {
+      if (Date.now() - started > 30 * 60 * 1000) { clearInterval(timer); out.innerHTML = '<span class="warn">⏱ 超过 30 分钟未完成，请稍后刷新本页查看结果</span>'; button.disabled = false; return; }
+      try {
+        const data = await call('GET', '/api/v1/research/' + deepSelected.run_id + '/deep-research', null);
+        if (data.status !== 'running') {
+          clearInterval(timer);
+          button.disabled = false;
+          if (data.status === 'failed') {
+            out.innerHTML = '<span class="warn">❌ 深度研究失败：' + (data.reason || '未知原因') + '</span>';
+          } else {
+            const q = (data.queries || []).map(x => '· ' + x.query).join('<br>');
+            const img = data.image_report && data.image_report.status
+              ? ('图片：' + data.image_report.status + '（视觉核验通过 ' + (data.image_report.visual_verified || 0) + ' 张）')
+              : '图片：未执行';
+            const desktop = data.desktop_path
+              ? '<br>📁 已保存到桌面：' + data.desktop_path + '（' + (data.desktop_files || []).join('、') + '）'
+              : '';
+            const feishu = data.feishu_notified
+              ? '<br>📤 已推送飞书（文本 + Word/HTML/Excel）'
+              : (data.feishu_notified === false ? '<br>⚠️ 飞书推送未成功（检查 EER_FEISHU_* 配置）' : '');
+            out.innerHTML = '<span class="ok">✅ 深度研究完成：' +
+              '已验证事实 ' + data.verified_claims_before + ' → ' + data.verified_claims_after + '；' + img + '；' +
+              '新数据版本：' + (data.freeze_id || '（无新冻结）') + '<br>报告 / HTML / Excel 已重新生成。' + desktop + feishu + '</span>' +
+              '<div class="sub" style="margin-top:8px">检索了以下需求：<br>' + q + '</div>';
+          }
+        }
+      } catch (e) { clearInterval(timer); button.disabled = false; out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
+    }, 5000);
+  } catch (e) {
+    button.disabled = false;
+    out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>';
+  }
+};
+// —— 一键停止：调查任务 ——
+document.getElementById('stopAllBtn').onclick = async () => {
+  const out = document.getElementById('stopAllStatus');
+  if (!confirm('确定停止所有正在执行的调查任务吗？已停止的任务不会自动恢复。')) return;
+  out.textContent = '正在停止…';
+  try {
+    const data = await call('POST', '/api/v1/research/stop-all', null);
+    out.innerHTML = data.count > 0
+      ? '<span class="ok">✅ 已停止 ' + data.count + ' 个调查任务（' + data.stopped.map(s => s.run_id.slice(-6)).join(', ') + '）</span>'
+      : '<span class="ok">当前没有运行中的调查任务</span>';
+  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
+};
+// —— 一键停止：推送（停止 / 恢复两个独立按钮）——
+function setPushButtons(paused) {
+  document.getElementById('pauseBtn').style.display = paused ? 'none' : 'inline-block';
+  document.getElementById('resumeBtn').style.display = paused ? 'inline-block' : 'none';
+}
+function setIntelButtonState(status) {
+  const button = document.getElementById('intelBtn');
+  if (status.paused) {
+    button.disabled = true;
+    button.textContent = '每日情报推送已暂停';
+  } else if (status.published_today || status.already_published) {
+    button.disabled = true;
+    button.textContent = '今日情报已发布';
+  } else if (status.running) {
+    button.disabled = true;
+    button.textContent = '今日情报生成中…';
+  } else {
+    button.disabled = false;
+    button.textContent = '立即生成今日情报并推送';
+  }
+}
+async function refreshDailyState() {
+  const status = await call('GET', '/api/v1/intelligence/status', null);
+  setPushButtons(status.paused);
+  setIntelButtonState(status);
+  return status;
+}
+document.getElementById('pauseBtn').onclick = async () => {
+  const out = document.getElementById('intelStatus');
+  try {
+    await call('POST', '/api/v1/intelligence/pause', null);
+    out.innerHTML = '<span class="warn">⏸ 推送已停止（每日情报定时触发将被拦截）</span>';
+    setPushButtons(true);
+    setIntelButtonState({paused:true});
+  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
+};
+document.getElementById('resumeBtn').onclick = async () => {
+  const out = document.getElementById('intelStatus');
+  try {
+    await call('POST', '/api/v1/intelligence/resume', null);
+    out.innerHTML = '<span class="ok">✅ 推送已恢复（每天 10:00 正常推送）</span>';
+    await refreshDailyState();
+  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
+};
+// 页面加载时同步推送开关状态 + 服务健康指示灯
+(async () => {
+  try {
+    await refreshDailyState();
+  } catch (e) { /* 服务未就绪时忽略 */ }
+  const dot = document.getElementById('healthDot');
+  const label = document.getElementById('healthText');
+  try {
+    const health = await call('GET', '/health', null);
+    dot.className = 'dot live';
+    label.textContent = '服务在线 · v' + (health.version || '');
+  } catch (e) {
+    dot.className = 'dot dead';
+    label.textContent = '服务异常';
+  }
+})();
+</script></body></html>

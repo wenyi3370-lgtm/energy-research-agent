@@ -202,6 +202,11 @@ rounds to claim `RECALL_SATURATED`; otherwise it reports an honest bounded or
 partial status.  Each skipped URL receives a typed disposition and every query
 is represented in the recall audit.
 
+Enterprise Recall and the established R1 evidence plan use separate page
+budgets.  Recall may add leads but may never reduce the original page allowance
+or remove a Goal Family; verified-evidence yield and per-topic coverage remain
+the acceptance metrics, not raw hit count.
+
 ## 5. Human review states
 
 Request review only for decisions that cannot be made safely:

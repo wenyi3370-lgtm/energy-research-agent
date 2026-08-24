@@ -175,3 +175,20 @@ Frontier 未越过 evidence boundary。第二个样本暴露的导航缩写噪�
 
 - Web-Rooter CLI is not installed/on PATH, so WR-based external acceptance is unavailable；已按产品边界使用批准的 AnySearch 完成真实验收。
 - Product workflow does not depend on WR; approved AnySearch is healthy. Kimi/browser availability and live provider quotas are reported separately during final acceptance.
+
+## 21. Post-acceptance P0 corrections
+
+同一截止时间的完整 168-slot 日报对比显示：旧生产方案 102 次抽取、60 条候选、
+13 条通过时效、最终 5 条；新 Recall 方案 97 次抽取、56 条候选、13 条通过时效、
+最终 5 条。该结果证明来源面扩大，但不证明有效产出增加，因此验收口径已明确为
+hydrated/extracted/verified/freshness-accepted/final-selected，而不是命中数。
+
+企业深研曾将 Recall 查询放在原 R1 之前并共享 `max_pages`，满返回模拟会把产能和
+生产线各从 10 页挤压到 2 页。现已改为双预算池：Recall 初始发现使用独立的
+48-slot 预算（默认 60 中保留 12 给 Frontier），原 R1 继续完整使用原定 240 页。
+产品、工厂、产能、生产线、财务等 Goal Family 不再因 Recall 增量而减少。
+
+日报手动/定时入口增加跨线程/进程的日期级原子锁。并发复现实测两个同时调用只
+产生一次发布，失败会释放自有锁；接口对运行中和当日已发布返回
+`triggered=false`。Portal 初始页面永久显示每日一次规则，运行中或已发布时按钮
+保持禁用。修正后专项 105 passed；全量 490 passed, 1 skipped。

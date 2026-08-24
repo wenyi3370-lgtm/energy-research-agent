@@ -137,8 +137,10 @@ products, factories, projects, policies and tenders, but its snippets and
 Daily recall is capped at 168 result slots.  Recovery, update, source-patrol
 and frontier work are reserved before broad PRIMARY variants receive depth;
 lower-priority variants are deferred first.  Enterprise recall is bounded by
-the run budget and precedes the existing R1/R2-gap/R3-conflict/R4-coverage
-verification path.  Budget exhaustion is `RECALL_BUDGET_EXHAUSTED`, never
+its own additive discovery budget and cannot consume the existing evidence
+page budget.  The full original R1 goal plan therefore remains available for
+products, factories, capacity, production lines and financials before the
+R2-gap/R3-conflict/R4-coverage verification path.  Budget exhaustion is `RECALL_BUDGET_EXHAUSTED`, never
 completion.  `collection_status=OK` reports technical execution only;
 `coverage_complete` remains false for bounded Internet search.
 

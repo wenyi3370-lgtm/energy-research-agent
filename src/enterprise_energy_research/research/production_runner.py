@@ -254,15 +254,34 @@ class AdaptiveResearchRunner:
             if not queries:
                 return [], []
             print(f"[{round_name}] search_start queries={len(queries)}", flush=True)
-            mini_plan = ResearchPlan(
-                plan_id=new_sortable_id("PLAN"), run_id=run_id, complexity=complexity,
-                queries=queries,
-                budget={"max_queries": len(queries) + 1, "max_pages": int(budget.get("max_pages", 120))},
-                completion_contract=[query.topic for query in queries],
-                canonical_company_name=raw_company_name,
-            )
             from enterprise_energy_research.research.executor import SearchExecutor
-            envelopes = SearchExecutor(self.adapters).execute(mini_plan)
+
+            def execute_query_batch(batch: list[ResearchQuery], page_budget: int) -> list[SearchResultEnvelope]:
+                if not batch:
+                    return []
+                mini_plan = ResearchPlan(
+                    plan_id=new_sortable_id("PLAN"), run_id=run_id, complexity=complexity,
+                    queries=batch,
+                    budget={"max_queries": len(batch) + 1, "max_pages": max(1, page_budget)},
+                    completion_contract=[query.topic for query in batch],
+                    canonical_company_name=raw_company_name,
+                )
+                return SearchExecutor(self.adapters).execute(mini_plan)
+
+            if round_name == "R1":
+                # Recall is an additive discovery lane, not a replacement for
+                # the established evidence plan.  Give it its own bounded
+                # page budget so it cannot consume pages reserved for product,
+                # factory, capacity, production-line or financial goals.
+                recall_ids = {query.query_id for query in recall_queries}
+                recall_batch = [query for query in queries if query.query_id in recall_ids]
+                evidence_batch = [query for query in queries if query.query_id not in recall_ids]
+                envelopes = execute_query_batch(recall_batch, recall_allocation.used_slots)
+                envelopes.extend(execute_query_batch(
+                    evidence_batch, int(budget.get("max_pages", 120)),
+                ))
+            else:
+                envelopes = execute_query_batch(queries, int(budget.get("max_pages", 120)))
             print(f"[{round_name}] search_done envelopes={len(envelopes)}", flush=True)
             # Search results -> AnySearch full-text extraction (fast HTTP).
             envelopes = self._fulltext_pass(envelopes, queries)

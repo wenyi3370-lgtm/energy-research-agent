@@ -34,6 +34,7 @@ def main() -> int:
         )
         page.goto(args.base_url, wait_until="networkidle")
         page.get_by_text("企业研究仅由本页按钮启动，不会定时自动运行").wait_for()
+        page.get_by_text("每日仅生成并推送一次", exact=False).wait_for()
         if args.smoke_only:
             for selector in (
                 "#prepareBtn",
@@ -102,12 +103,12 @@ def main() -> int:
         page.locator("#pauseBtn").click()
         page.locator("#intelStatus").get_by_text("推送已停止", exact=False).wait_for()
         paused = page.request.get(f"{args.base_url}/api/v1/intelligence/status").json()
-        if paused != {"paused": True}:
+        if paused.get("paused") is not True:
             raise AssertionError(f"pause status mismatch: {paused}")
         page.locator("#resumeBtn").click()
         page.locator("#intelStatus").get_by_text("推送已恢复", exact=False).wait_for()
         resumed = page.request.get(f"{args.base_url}/api/v1/intelligence/status").json()
-        if resumed != {"paused": False}:
+        if resumed.get("paused") is not False:
             raise AssertionError(f"resume status mismatch: {resumed}")
 
         page.on("dialog", lambda dialog: dialog.accept())

@@ -127,6 +127,8 @@ class TestSubmitAndStatus(ApiTestCase):
         self.assertIn("renderParsed({company: body.company", html)
         self.assertIn("/api/v1/intelligence/pause", html)
         self.assertIn("/api/v1/intelligence/resume", html)
+        self.assertIn("每日仅生成并推送一次", html)
+        self.assertIn("重复点击已被拦截", html)
 
     def test_portal_exposes_continue_deep_research(self):
         """门户提供「继续深度研究」入口（自然语言定位 + 需求 + 保存桌面/推送飞书）。"""
@@ -183,24 +185,39 @@ class TestSubmitAndStatus(ApiTestCase):
         self.assertEqual(stopped.json()["stopped"][0]["status"], "FAILED")
 
     def test_daily_push_pause_and_resume_persist(self):
-        self.assertEqual(
-            self.client.get("/api/v1/intelligence/status").json(), {"paused": False}
-        )
+        initial = self.client.get("/api/v1/intelligence/status").json()
+        self.assertEqual(initial["paused"], False)
+        self.assertEqual(initial["running"], False)
+        self.assertEqual(initial["published_today"], False)
         self.assertEqual(
             self.client.post("/api/v1/intelligence/pause").json(), {"paused": True}
         )
-        self.assertEqual(
-            self.client.get("/api/v1/intelligence/status").json(), {"paused": True}
-        )
+        self.assertEqual(self.client.get("/api/v1/intelligence/status").json()["paused"], True)
         blocked = self.client.post("/api/v1/intelligence/daily").json()
         self.assertEqual(blocked["triggered"], False)
         self.assertEqual(blocked["paused"], True)
         self.assertEqual(
             self.client.post("/api/v1/intelligence/resume").json(), {"paused": False}
         )
-        self.assertEqual(
-            self.client.get("/api/v1/intelligence/status").json(), {"paused": False}
+        self.assertEqual(self.client.get("/api/v1/intelligence/status").json()["paused"], False)
+
+    def test_daily_endpoint_rejects_duplicate_while_run_is_in_flight(self):
+        from enterprise_energy_research.automation.intelligence import (
+            IntelligenceService,
+            current_intelligence_time,
         )
+
+        now = current_intelligence_time()
+        intel = IntelligenceService(None, Path(self.tmp.name), adapters={}, gateway=object())
+        claim, token = intel.claim_daily(now.date(), current_time=now)
+        self.assertEqual(claim, "STARTED")
+        try:
+            duplicate = self.client.post("/api/v1/intelligence/daily").json()
+            self.assertEqual(duplicate["triggered"], False)
+            self.assertEqual(duplicate["running"], True)
+            self.assertEqual(duplicate["already_published"], False)
+        finally:
+            intel._release_daily_lock(now.date(), token)
 
 
 class TestReviewApi(ApiTestCase):

@@ -51,6 +51,10 @@ P2/P3。执行成功只说明 `collection_status=OK`，不代表搜完整个互�
 `RECALL_BUDGET_EXHAUSTED`、`PARTIAL_SOURCE_COVERAGE` 或
 `SOURCE_UNAVAILABLE`。
 
+企业研究的 Recall 使用独立附加预算，不占用原 R1 的证据页预算；产品、工厂、
+产能、生产线和财务等原有 Goal Family 均保留完整查询机会。日报采用日期级原子
+运行锁：运行中或当日已发布时，网页按钮与 API 都会拒绝第二次采集和飞书推送。
+
 ---
 
 ## 快速开始（5 分钟）
@@ -142,7 +146,7 @@ EER_FEISHU_DEFAULT_RECEIVER=oc_xxx    # 群 chat_id / 邮箱 / open_id
 | 一句话发起调研 | 引导页 http://localhost:8000 → 输入描述 → 解析确认 → 开始调查 |
 | 精确参数调研 | `POST /api/v1/research/prepare` + `/start` |
 | 查看任务状态 / 自动裁决记录 / 反馈 / ROI | http://localhost:8000/docs |
-| 每日情报（手动触发） | `POST /api/v1/intelligence/daily` |
+| 每日情报（手动触发） | `POST /api/v1/intelligence/daily`（每日一次；运行中/已发布会返回 `triggered=false`） |
 | 飞书群 | 情报日报 / 完成通知 / 成果文件 / 失败提醒 |
 
 详细文档见 `docs/automation/`（架构、API、自动裁决、情报、监控、Runbook、部署、配置清单）。

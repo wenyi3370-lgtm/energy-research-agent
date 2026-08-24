@@ -1,8 +1,10 @@
 """每日战略情报模块 tests：评分权重、去重、简报渲染、服务防重。"""
 
 import tempfile
+import threading
 import unittest
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -601,6 +603,44 @@ class BriefingTests(unittest.TestCase):
 
 
 class ServiceTests(unittest.TestCase):
+    def test_daily_claim_is_atomic_across_concurrent_services(self):
+        from enterprise_energy_research.automation.intelligence.service import (
+            DAILY_CLAIM_RUNNING,
+            DAILY_CLAIM_STARTED,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            services = [
+                IntelligenceService(None, Path(tmp), adapters={}, gateway=object())
+                for _ in range(2)
+            ]
+            barrier = threading.Barrier(2)
+
+            def claim(service):
+                barrier.wait(timeout=5)
+                return service.claim_daily(
+                    date(2026, 8, 24),
+                    current_time=datetime(2026, 8, 24, 10, 0, tzinfo=TZ),
+                )
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                claims = list(pool.map(claim, services))
+            self.assertEqual(
+                sorted(status for status, _token in claims),
+                sorted([DAILY_CLAIM_STARTED, DAILY_CLAIM_RUNNING]),
+            )
+            started = next((token for status, token in claims if status == DAILY_CLAIM_STARTED), None)
+            self.assertIsNotNone(started)
+            services[0]._release_daily_lock(date(2026, 8, 24), started)
+
+    def test_daily_lock_is_released_when_run_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            service = IntelligenceService(None, Path(tmp), adapters={}, gateway=None)
+            now = datetime(2026, 8, 24, 10, 0, tzinfo=TZ)
+            with self.assertRaises(RuntimeError):
+                service.run_daily(current_time=now)
+            self.assertFalse(service.daily_state(current_time=now)["running"])
+
     def test_run_daily_idempotent(self):
         class FakeGateway:
             def structured(self, request):

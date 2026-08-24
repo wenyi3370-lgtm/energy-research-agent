@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import logging
 import json
+import os
+import time
+import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -28,6 +31,11 @@ from ...research.recall import RecallAudit
 
 logger = logging.getLogger("enterprise_energy_research.automation.intelligence")
 
+DAILY_CLAIM_STARTED = "STARTED"
+DAILY_CLAIM_RUNNING = "ALREADY_RUNNING"
+DAILY_CLAIM_PUBLISHED = "ALREADY_PUBLISHED"
+DAILY_RUN_LOCK_STALE_SECONDS = 3 * 60 * 60
+
 JUDGMENT_PROMPT = (
     "你是企业战略情报分析助手。基于今天的 {count} 条情报（标题与事实如下），"
     "用 30-50 字写一段「今日判断」：总结最重要的行业信号（趋势而非新闻堆砌），"
@@ -38,7 +46,7 @@ JUDGMENT_PROMPT = (
 
 
 class IntelligenceService:
-    """One daily briefing per calendar date (idempotent via intelligence_runs)."""
+    """One daily briefing per date via an atomic in-flight lock and result marker."""
 
     def __init__(
         self,
@@ -61,16 +69,37 @@ class IntelligenceService:
         brief_date: date | None = None,
         *,
         current_time: datetime | None = None,
+        _lock_token: str | None = None,
     ) -> DailyBrief | None:
-        """采集+加工+发布当日情报；同日重复调用直接返回已有简报。"""
+        """采集+加工+发布当日情报；原子日锁确保同日最多一个执行者。"""
         current_time = normalize_current_time(current_time)
         brief_date = brief_date or current_time.date()
-        if self.is_paused():
-            logger.info("intelligence is paused; daily run skipped for %s", brief_date)
-            return None
-        if self._already_published(brief_date):
-            logger.info("intelligence for %s already published today; skip", brief_date)
-            return self._load_published(brief_date)
+        lock_token = _lock_token
+        if lock_token is None:
+            if self.is_paused():
+                logger.info("intelligence is paused; daily run skipped for %s", brief_date)
+                return None
+            claim, lock_token = self.claim_daily(brief_date, current_time=current_time)
+            if claim == DAILY_CLAIM_PUBLISHED:
+                logger.info("intelligence for %s already published today; skip", brief_date)
+                return self._load_published(brief_date)
+            if claim == DAILY_CLAIM_RUNNING:
+                logger.info("intelligence for %s is already running; skip duplicate trigger", brief_date)
+                return None
+        try:
+            if self.is_paused():
+                logger.info("intelligence was paused after claim; daily run skipped for %s", brief_date)
+                return None
+            if lock_token is None or not self._owns_daily_lock(brief_date, lock_token):
+                logger.warning("daily intelligence lock ownership lost for %s; abort", brief_date)
+                return None
+            return self._run_daily_claimed(brief_date, current_time)
+        finally:
+            if lock_token is not None:
+                self._release_daily_lock(brief_date, lock_token)
+
+    def _run_daily_claimed(self, brief_date: date, current_time: datetime) -> DailyBrief:
+        """Execute a run only after the caller owns the date-scoped lock."""
         if self.gateway is None:
             raise RuntimeError("intelligence requires an LLM gateway (EER_DEEPSEEK_API_KEY)")
         history = self._load_freshness_history()
@@ -242,6 +271,98 @@ class IntelligenceService:
         if path.is_file():
             path.unlink()
         return True
+
+    # -- exactly-once daily execution --------------------------------------
+
+    def claim_daily(
+        self, brief_date: date, *, current_time: datetime | None = None
+    ) -> tuple[str, str | None]:
+        """Atomically reserve one daily run across threads/processes.
+
+        The result file is the durable PUBLISHED marker.  The lock file is an
+        in-flight marker created with O_EXCL, so two HTTP requests cannot both
+        enter collection before the result exists.
+        """
+        current_time = normalize_current_time(current_time)
+        if self._already_published(brief_date):
+            return DAILY_CLAIM_PUBLISHED, None
+        path = self._daily_lock_path(brief_date)
+        for attempt in range(2):
+            token = uuid.uuid4().hex
+            try:
+                descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                if attempt == 0 and self._discard_stale_daily_lock(path):
+                    continue
+                return DAILY_CLAIM_RUNNING, None
+            payload = {
+                "token": token,
+                "started_at": current_time.isoformat(),
+                "pid": os.getpid(),
+            }
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, ensure_ascii=False)
+            # A previous run may have published between our first file check
+            # and O_EXCL creation.  In that case the result wins and this
+            # reservation is released without executing again.
+            if self._already_published(brief_date):
+                self._release_daily_lock(brief_date, token)
+                return DAILY_CLAIM_PUBLISHED, None
+            return DAILY_CLAIM_STARTED, token
+        return DAILY_CLAIM_RUNNING, None
+
+    def daily_state(
+        self, brief_date: date | None = None, *, current_time: datetime | None = None
+    ) -> dict[str, Any]:
+        current_time = normalize_current_time(current_time)
+        brief_date = brief_date or current_time.date()
+        lock_path = self._daily_lock_path(brief_date)
+        running = lock_path.is_file() and not self._daily_lock_is_stale(lock_path)
+        return {
+            "paused": self.is_paused(),
+            "date": brief_date.isoformat(),
+            "running": running,
+            "published_today": self._already_published(brief_date),
+        }
+
+    def _daily_lock_path(self, brief_date: date) -> Path:
+        path = self.workdir / "intelligence" / "run-locks"
+        path.mkdir(parents=True, exist_ok=True)
+        return path / f"{brief_date:%Y-%m-%d}.lock"
+
+    @staticmethod
+    def _daily_lock_is_stale(path: Path) -> bool:
+        try:
+            return time.time() - path.stat().st_mtime > DAILY_RUN_LOCK_STALE_SECONDS
+        except FileNotFoundError:
+            return False
+
+    def _discard_stale_daily_lock(self, path: Path) -> bool:
+        if not self._daily_lock_is_stale(path):
+            return False
+        try:
+            path.unlink()
+            logger.warning("removed stale daily intelligence lock: %s", path.name)
+            return True
+        except FileNotFoundError:
+            return True
+
+    def _owns_daily_lock(self, brief_date: date, token: str) -> bool:
+        path = self._daily_lock_path(brief_date)
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        return payload.get("token") == token
+
+    def _release_daily_lock(self, brief_date: date, token: str) -> None:
+        path = self._daily_lock_path(brief_date)
+        if not self._owns_daily_lock(brief_date, token):
+            return
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
 
     # -- persistence --------------------------------------------------------
 

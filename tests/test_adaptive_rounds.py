@@ -7,6 +7,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from enterprise_energy_research.adapters.base import AdapterHealth, SearchHit, SearchResultEnvelope
 from enterprise_energy_research.domain.enums import EnterpriseComplexity
@@ -276,6 +277,44 @@ class AdaptiveRoundTests(unittest.TestCase):
 
         report, runner = self._run(handler, {"max_queries": 12, "max_pages": 40})
         self.assertNotIn("R3", {item.round for item in report.rounds})
+
+    def test_recall_budget_cannot_consume_baseline_evidence_budget(self) -> None:
+        """Recall is additive; all legacy R1 goals retain the full page pool."""
+        runner, _ = self._runner(lambda _request: [], {"max_queries": 180, "max_pages": 240})
+        plans = []
+
+        def capture_execute(_executor, plan):
+            plans.append(plan)
+            return []
+
+        with tempfile.TemporaryDirectory() as temp, patch(
+            "enterprise_energy_research.research.executor.SearchExecutor.execute",
+            new=capture_execute,
+        ):
+            runner.run(
+                "ACME", EnterpriseComplexity.ENTERPRISE_NORMAL,
+                {"max_queries": 180, "max_pages": 240}, Path(temp),
+            )
+
+        recall_plans = [
+            plan for plan in plans
+            if plan.queries and all(query.query_id.startswith("RQ-E-") for query in plan.queries)
+        ]
+        evidence_plans = [
+            plan for plan in plans
+            if plan.queries and all(not query.query_id.startswith("RQ-E-") for query in plan.queries)
+            and any(query.collection_round == "R1" for query in plan.queries)
+        ]
+        self.assertEqual(len(recall_plans), 1)
+        self.assertEqual(recall_plans[0].budget["max_pages"], 48)
+        self.assertTrue(evidence_plans)
+        baseline = evidence_plans[0]
+        self.assertEqual(baseline.budget["max_pages"], 240)
+        topics = {query.topic for query in baseline.queries}
+        self.assertTrue({
+            "financials", "factories", "capacity", "production_lines",
+            "products", "product_series", "product_models", "product_parameters",
+        }.issubset(topics))
 
 
 class FulltextPassTests(unittest.TestCase):

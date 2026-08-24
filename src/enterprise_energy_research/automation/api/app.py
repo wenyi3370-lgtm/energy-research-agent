@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import text
 
 from enterprise_energy_research.evidence.store import EvidenceStore
@@ -118,280 +118,10 @@ def _version() -> str:
         return __version__
 
 
-_PORTAL_HTML = """<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="icon" href="data:,">
-<title>企业研究助手</title><style>
-body{font-family:"Microsoft YaHei",sans-serif;background:#f7f8fa;margin:0;color:#111}
-.wrap{max-width:720px;margin:0 auto;padding:32px 20px 60px}
-h1{color:#1B365D;font-size:24px;margin:0 0 6px}
-.sub{color:#6B7280;font-size:13px;margin-bottom:26px}
-.card{background:#fff;border:1px solid #d9e2ec;border-radius:12px;padding:22px;margin-bottom:18px}
-.card h2{font-size:15px;color:#1B365D;margin:0 0 14px}
-label{display:block;font-size:13px;color:#374151;margin:10px 0 4px}
-input,select,textarea{width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid #d9e2ec;border-radius:8px;font-size:14px;font-family:inherit}
-textarea{min-height:70px}
-button{margin-top:16px;background:#1B365D;color:#fff;border:0;border-radius:8px;padding:11px 22px;font-size:15px;cursor:pointer}
-button:disabled{background:#9ca3af;cursor:not-allowed}
-#status{margin-top:14px;font-size:13px;white-space:pre-wrap;line-height:1.7;color:#111}
-#status .ok{color:#047857}#status .warn{color:#b45309}
-.actions a{display:inline-block;margin:4px 8px 0 0;color:#1B365D;font-size:13px}
-.link{color:#1B365D;font-size:13px}
-</style></head><body><div class="wrap">
-<h1>企业研究助手</h1>
-<div class="sub">填写调研对象与范围 → 点「开始调查」。企业研究仅由本页按钮启动，不会定时自动运行；明确失败会立即终止并通知飞书，悬挂任务由故障看门狗自动终止。</div>
-<div class="card"><h2>① 用一句话描述调研需求</h2>
-<label>例如：「调研宁德时代的主营业务和生产基地」或「研究泰国户用储能市场进入机会」</label>
-<textarea id="prompt" placeholder="用自然语言描述你的调研需求…"></textarea>
-<button id="parseBtn">解析需求并准备任务</button>
-<div id="status"></div>
-<div id="parsedCard" style="display:none;margin-top:14px;background:#f7f8fa;border:1px solid #d9e2ec;border-radius:8px;padding:12px">
-<label>已准备的任务参数（如需修改，请返回上方重新描述或填写）</label>
-<div id="parsedFields"></div>
-<button id="startBtn" disabled>▶ 开始调查</button>
-</div>
-</div>
-<div class="card"><h2>② 精确填写（可选，替代自然语言）</h2>
-<div class="sub" style="margin-bottom:6px">想逐项指定时使用：</div>
-<label>公司名称（选填）</label><input id="company" placeholder="例如：宁德时代">
-<label>国家 / 地区（选填）</label><input id="country" placeholder="例如：Thailand">
-<label>产品（选填）</label><input id="product" placeholder="例如：Residential BESS">
-<label>研究类型</label><select id="rtype">
-<option value="company_profile">公司画像</option><option value="market_entry">市场进入</option>
-<option value="market_monitor">市场监测</option><option value="competitor_analysis">竞品分析</option>
-<option value="policy_regulation">政策法规</option><option value="product_research">产品研究</option>
-<option value="channel_research">渠道研究</option><option value="other">其他</option></select>
-<label>关注主题（逗号分隔）</label><textarea id="topics" placeholder="主营业务, 生产基地, 产品线"></textarea>
-<button id="prepareBtn">用以上参数准备任务</button>
-</div>
-<div class="card"><h2>③ 继续深度研究（完善报告 / HTML / Excel）</h2>
-<div class="sub" style="margin-bottom:6px">对已完成或进行中的调查提出补充与修改需求：系统会定向检索新证据（必要时恢复官方产品图片），重新校验并重新生成 Word 报告、HTML 看板与 Excel 数据。</div>
-<label>任务定位（输入公司名或关键词自动匹配，如「宁德时代」；也可直接粘贴 RUN ID）</label>
-<input id="deepQuery" placeholder="例如：宁德时代 / 储能 / RUN-01M0…">
-<div id="deepMatches" style="margin-top:6px"></div>
-<label>补充 / 修改需求（直接输入自然语言，分条写更精准）</label>
-<textarea id="deepRequirements" placeholder="例如：&#10;补充 2022 年与 2023 年的营业收入和归母净利润；&#10;增加产品图片；&#10;补充海外基地的产能数据"></textarea>
-<label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="deepDesktop" checked style="width:auto"> 完成后同时保存一份到桌面</label>
-<label style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" id="deepFeishu" checked style="width:auto"> 完成后推送飞书（文本 + Word/HTML/Excel 文件）</label>
-<button id="deepBtn">🔍 继续深度研究</button>
-<div id="deepStatus"></div>
-</div>
-<div class="card"><h2>调查结果</h2>
-<div class="sub">故障看门狗每小时检查一次：仅终止超过 120 分钟无进展的调查并通知飞书，不创建任务、不自动重试。</div>
-<div id="runStatus"></div>
-<div class="actions" id="links" style="display:none">
-<a href="/docs" class="link">高级操作面板（评审/裁决/反馈）</a>
-<a href="#" id="viewResult" class="link">查看结果</a>
-</div>
-<button id="stopAllBtn" style="background:#b91c1c;margin-top:18px">⏹ 停止全部调查任务</button>
-<div id="stopAllStatus"></div>
-</div>
-<div class="card"><h2>每日情报（V2G & 储能日报）</h2>
-<button id="intelBtn">立即生成今日情报并推送</button>
-<button id="pauseBtn" style="background:#b91c1c;margin-left:8px">⏹ 停止推送</button>
-<button id="resumeBtn" style="background:#047857;margin-left:8px;display:none">▶ 恢复推送</button>
-<div id="intelStatus"></div>
-</div>
-<div class="card"><h2>依赖与部署</h2>
-<div class="sub" style="margin-bottom:8px">
-<b>依赖：</b>Docker Desktop（唯一必需）＋ DeepSeek API Key（真实抽取）＋ 可选飞书应用（通知）/ Kimi WebBridge（深度调研）。Python 无需安装。<br><br>
-<b>部署：</b>复制 <code>.env.example</code> 为 <code>.env</code> 并填入密钥 → <code>docker compose up -d --build</code> → 打开本页。企业研究只在本页点击「开始调查」后运行；n8n 仅保留每日情报 10:00（北京时间）和纯故障看门狗。看门狗不会发起研究；日报可在本页暂停或恢复。<br><br>
-<b>文档：</b><a href="/docs" class="link">API 操作面板</a> ｜ README.md（仓库根）｜ docs/automation/（架构/Runbook/配置清单）
-</div>
-</div>
-</div>
-<script>
-let currentRun = null;
-let currentParsed = null;
-async function call(method, path, body) {
-  const resp = await fetch(path, {method, headers: {'Content-Type':'application/json'},
-    body: body ? JSON.stringify(body) : undefined});
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error((data.error && data.error.message) || (data.detail && JSON.stringify(data.detail)) || ('HTTP ' + resp.status));
-  return data;
-}
-function renderParsed(parsed) {
-  const labels = {company:'公司', country:'国家', region:'地区', product:'产品', research_type:'研究类型', topics:'主题', priority:'优先级'};
-  currentParsed = parsed;
-  const box = document.getElementById('parsedFields');
-  box.innerHTML = '';
-  for (const [key, label] of Object.entries(labels)) {
-    const value = parsed[key];
-    const text = Array.isArray(value) ? (value || []).join(', ') : (value || '');
-    box.insertAdjacentHTML('beforeend', '<label>' + label + '</label><input data-k="' + key + '" value="' + text.replace(/"/g, '&quot;') + '">');
-  }
-  box.querySelectorAll('input').forEach(input => input.readOnly = true);
-  document.getElementById('parsedCard').style.display = 'block';
-  document.getElementById('startBtn').disabled = false;
-}
-document.getElementById('parseBtn').onclick = async () => {
-  const out = document.getElementById('status');
-  out.className = ''; out.textContent = '正在解析需求（AI 理解你的描述）…';
-  const prompt = document.getElementById('prompt').value.trim();
-  if (prompt.length < 4) { out.innerHTML = '<span class="warn">请先输入调研需求</span>'; return; }
-  try {
-    const data = await call('POST', '/api/v1/research/natural', {prompt, requested_by: 'portal-user'});
-    currentRun = data.run_id;
-    out.innerHTML = '<span class="ok">✅ 已准备任务：' + data.run_id + '</span>';
-    renderParsed(data.parsed || {});
-  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
-};
-document.getElementById('prepareBtn').onclick = async () => {
-  const out = document.getElementById('status');
-  out.className = ''; out.textContent = '正在准备任务…';
-  const body = {task_id: 'TASK-' + Date.now(), requested_by: 'portal-user',
-    company: document.getElementById('company').value || null,
-    country: document.getElementById('country').value || null,
-    product: document.getElementById('product').value || null,
-    research_type: document.getElementById('rtype').value,
-    topics: document.getElementById('topics').value.split(/[,，]/).map(s => s.trim()).filter(Boolean)};
-  try {
-    const data = await call('POST', '/api/v1/research/prepare', body);
-    currentRun = data.run_id;
-    out.innerHTML = '<span class="ok">✅ 任务已准备：' + data.run_id + '</span>';
-    renderParsed({company: body.company, country: body.country, product: body.product,
-      research_type: body.research_type, topics: body.topics, priority: 'normal'});
-  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
-};
-document.getElementById('startBtn').onclick = async () => {
-  const out = document.getElementById('runStatus');
-  const button = document.getElementById('startBtn');
-  if (!currentRun) { out.innerHTML = '<span class="warn">❌ 请先准备任务</span>'; return; }
-  button.disabled = true;
-  out.textContent = '正在启动调查…';
-  try {
-    const data = await call('POST', '/api/v1/research/' + currentRun + '/start', null);
-    out.innerHTML = '<span class="ok">✅ ' + (data.message || ('已开始：' + data.status)) + '</span>';
-    document.getElementById('links').style.display = 'block';
-    document.getElementById('viewResult').href = '/api/v1/research/' + currentRun;
-  } catch (e) {
-    button.disabled = false;
-    out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>';
-  }
-};
-document.getElementById('intelBtn').onclick = async () => {
-  const out = document.getElementById('intelStatus');
-  out.textContent = '正在采集与推送今日情报（约 3-5 分钟）…';
-  try {
-    const data = await call('POST', '/api/v1/intelligence/daily', null);
-    out.innerHTML = data.paused
-      ? '<span class="warn">⏸ 推送已暂停，未采集（先点「恢复推送」）</span>'
-      : '<span class="ok">✅ 已触发：' + data.date + '（同日重复触发不会重复采集）</span>';
-  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
-};
-// —— 继续深度研究：自然语言定位任务 + 自然语言需求 → 后台补检索 → 轮询 ——
-let deepSelected = null; // {run_id, run_dir?}
-document.getElementById('deepQuery').addEventListener('input', async () => {
-  const q = document.getElementById('deepQuery').value.trim();
-  const box = document.getElementById('deepMatches');
-  deepSelected = null;
-  if (q.length < 2) { box.innerHTML = ''; return; }
-  if (/^RUN-/.test(q)) { deepSelected = {run_id: q}; box.innerHTML = '<span class="ok">✅ 直接使用 RUN ID：' + q + '</span>'; return; }
-  try {
-    const data = await call('GET', '/api/v1/research/lookup?q=' + encodeURIComponent(q), null);
-    const matches = data.matches || [];
-    if (!matches.length) { box.innerHTML = '<span class="warn">未找到匹配任务，请换个关键词（如公司名）</span>'; return; }
-    box.innerHTML = matches.map((m, i) => '<div class="match" data-i="' + i + '" style="padding:8px 10px;border:1px solid #d9e2ec;border-radius:8px;margin:6px 0;cursor:pointer">' +
-      '<b>' + (m.label || m.company || m.run_id).replace(/</g, '&lt;') + '</b><br><span style="color:#6B7280;font-size:12px">' + m.run_id + (m.status ? ' · ' + m.status : '') + (m.created_at ? ' · ' + m.created_at.slice(0, 10) : '') + '</span></div>').join('');
-    box.querySelectorAll('.match').forEach(el => el.onclick = () => {
-      const m = matches[Number(el.dataset.i)];
-      deepSelected = {run_id: m.run_id, run_dir: m.run_dir || null};
-      document.getElementById('deepQuery').value = m.label || m.company || m.run_id;
-      box.innerHTML = '<span class="ok">✅ 已选择：' + (m.label || m.run_id).replace(/</g, '&lt;') + '</span>';
-    });
-  } catch (e) { box.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
-});
-document.getElementById('deepBtn').onclick = async () => {
-  const out = document.getElementById('deepStatus');
-  const button = document.getElementById('deepBtn');
-  const requirements = document.getElementById('deepRequirements').value.trim();
-  if (!deepSelected) { out.innerHTML = '<span class="warn">❌ 请先在上方输入公司名定位任务</span>'; return; }
-  if (requirements.length < 2) { out.innerHTML = '<span class="warn">❌ 请填写补充 / 修改需求（自然语言即可）</span>'; return; }
-  button.disabled = true;
-  out.innerHTML = '<span class="ok">🔍 深度研究已启动（定向检索 + 证据校验 + 重新生成报告/HTML/Excel），请稍候…</span>';
-  try {
-    const body = {
-      requirements, requested_by: 'portal-user', include_images: true,
-      save_to_desktop: document.getElementById('deepDesktop').checked,
-      notify_feishu: document.getElementById('deepFeishu').checked,
-    };
-    if (deepSelected.run_dir) body.run_dir = deepSelected.run_dir;
-    await call('POST', '/api/v1/research/' + deepSelected.run_id + '/deep-research', body);
-    const started = Date.now();
-    const timer = setInterval(async () => {
-      if (Date.now() - started > 30 * 60 * 1000) { clearInterval(timer); out.innerHTML = '<span class="warn">⏱ 超过 30 分钟未完成，请稍后刷新本页查看结果</span>'; button.disabled = false; return; }
-      try {
-        const data = await call('GET', '/api/v1/research/' + deepSelected.run_id + '/deep-research', null);
-        if (data.status !== 'running') {
-          clearInterval(timer);
-          button.disabled = false;
-          if (data.status === 'failed') {
-            out.innerHTML = '<span class="warn">❌ 深度研究失败：' + (data.reason || '未知原因') + '</span>';
-          } else {
-            const q = (data.queries || []).map(x => '· ' + x.query).join('<br>');
-            const img = data.image_report && data.image_report.status
-              ? ('图片：' + data.image_report.status + '（视觉核验通过 ' + (data.image_report.visual_verified || 0) + ' 张）')
-              : '图片：未执行';
-            const desktop = data.desktop_path
-              ? '<br>📁 已保存到桌面：' + data.desktop_path + '（' + (data.desktop_files || []).join('、') + '）'
-              : '';
-            const feishu = data.feishu_notified
-              ? '<br>📤 已推送飞书（文本 + Word/HTML/Excel）'
-              : (data.feishu_notified === false ? '<br>⚠️ 飞书推送未成功（检查 EER_FEISHU_* 配置）' : '');
-            out.innerHTML = '<span class="ok">✅ 深度研究完成：' +
-              '已验证事实 ' + data.verified_claims_before + ' → ' + data.verified_claims_after + '；' + img + '；' +
-              '新数据版本：' + (data.freeze_id || '（无新冻结）') + '<br>报告 / HTML / Excel 已重新生成。' + desktop + feishu + '</span>' +
-              '<div class="sub" style="margin-top:8px">检索了以下需求：<br>' + q + '</div>';
-          }
-        }
-      } catch (e) { clearInterval(timer); button.disabled = false; out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
-    }, 5000);
-  } catch (e) {
-    button.disabled = false;
-    out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>';
-  }
-};
-// —— 一键停止：调查任务 ——
-document.getElementById('stopAllBtn').onclick = async () => {
-  const out = document.getElementById('stopAllStatus');
-  if (!confirm('确定停止所有正在执行的调查任务吗？已停止的任务不会自动恢复。')) return;
-  out.textContent = '正在停止…';
-  try {
-    const data = await call('POST', '/api/v1/research/stop-all', null);
-    out.innerHTML = data.count > 0
-      ? '<span class="ok">✅ 已停止 ' + data.count + ' 个调查任务（' + data.stopped.map(s => s.run_id.slice(-6)).join(', ') + '）</span>'
-      : '<span class="ok">当前没有运行中的调查任务</span>';
-  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
-};
-// —— 一键停止：推送（停止 / 恢复两个独立按钮）——
-function setPushButtons(paused) {
-  document.getElementById('pauseBtn').style.display = paused ? 'none' : 'inline-block';
-  document.getElementById('resumeBtn').style.display = paused ? 'inline-block' : 'none';
-}
-document.getElementById('pauseBtn').onclick = async () => {
-  const out = document.getElementById('intelStatus');
-  try {
-    await call('POST', '/api/v1/intelligence/pause', null);
-    out.innerHTML = '<span class="warn">⏸ 推送已停止（每日情报定时触发将被拦截）</span>';
-    setPushButtons(true);
-  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
-};
-document.getElementById('resumeBtn').onclick = async () => {
-  const out = document.getElementById('intelStatus');
-  try {
-    await call('POST', '/api/v1/intelligence/resume', null);
-    out.innerHTML = '<span class="ok">✅ 推送已恢复（每天 10:00 正常推送）</span>';
-    setPushButtons(false);
-  } catch (e) { out.innerHTML = '<span class="warn">❌ ' + e.message + '</span>'; }
-};
-// 页面加载时同步推送开关状态
-(async () => {
-  try {
-    const status = await call('GET', '/api/v1/intelligence/status', null);
-    setPushButtons(status.paused);
-  } catch (e) { /* 服务未就绪时忽略 */ }
-})();
-</script></body></html>"""
+# 门户页模板与静态资源随源码打包进镜像（Dockerfile COPY src ./src），
+# editable 安装下 __file__ 即 /app/src 内的真实路径。
+_PORTAL_DIR = Path(__file__).with_name("portal")
+_PORTAL_HTML = (_PORTAL_DIR / "portal.html").read_text(encoding="utf-8")
 
 
 def _default_executor() -> ResearchExecutor:
@@ -964,11 +694,37 @@ def create_app(
         if intel.is_paused():
             return {"triggered": False, "paused": True, "message": "每日情报推送已暂停"}
         from ..intelligence import current_intelligence_time
+        from ..intelligence.service import (
+            DAILY_CLAIM_PUBLISHED,
+            DAILY_CLAIM_RUNNING,
+        )
 
         current_time = current_intelligence_time()
-        background.add_task(intel.run_daily, current_time=current_time)
+        claim, lock_token = intel.claim_daily(current_time.date(), current_time=current_time)
+        if claim == DAILY_CLAIM_PUBLISHED:
+            return {
+                "triggered": False,
+                "paused": False,
+                "already_published": True,
+                "running": False,
+                "date": current_time.date().isoformat(),
+                "message": "今日情报已经发布；同日不会重复采集或推送",
+            }
+        if claim == DAILY_CLAIM_RUNNING:
+            return {
+                "triggered": False,
+                "paused": False,
+                "already_published": False,
+                "running": True,
+                "date": current_time.date().isoformat(),
+                "message": "今日情报正在生成；重复点击不会创建第二个推送任务",
+            }
+        background.add_task(intel.run_daily, current_time=current_time, _lock_token=lock_token)
         return {
             "triggered": True,
+            "paused": False,
+            "already_published": False,
+            "running": True,
             "date": current_time.date().isoformat(),
             "current_time": current_time.isoformat(),
             "report_cutoff_time": current_time.isoformat(),
@@ -1017,8 +773,11 @@ def create_app(
 
     @app.get("/api/v1/intelligence/status")
     def intelligence_status() -> dict:
-        """情报推送开关状态。"""
-        return {"paused": _intelligence_service().is_paused()}
+        """情报推送开关、当日执行和发布状态。"""
+        from ..intelligence import current_intelligence_time
+
+        current_time = current_intelligence_time()
+        return _intelligence_service().daily_state(current_time=current_time)
 
     @app.post("/api/v1/maintenance/recover-stale")
     def recover_stale() -> dict:
@@ -1057,6 +816,11 @@ def create_app(
     def portal() -> Response:
         """小白引导页：填写参数 → 点「开始调查」→ 跟踪状态。"""
         return Response(content=_PORTAL_HTML, media_type="text/html; charset=utf-8")
+
+    @app.get("/assets/portal-logo.jpg", include_in_schema=False)
+    def portal_logo() -> FileResponse:
+        """门户页 logo（四川动力电池产业创新中心徽章，随源码打包进镜像）。"""
+        return FileResponse(_PORTAL_DIR / "portal_logo.jpg")
 
     @app.get("/health")
     def health() -> JSONResponse:

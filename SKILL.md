@@ -151,6 +151,8 @@ These fixes are part of the Skill source and regression suite, not local-run pat
 - Follow `Seed → Query Expansion → Source Lane → Entity/Event Mining → Dynamic Frontier → Convergence → Verification`.
 - Load topic aliases/intents from `config/intelligence_search_topics.yaml` and authority patrol from `config/intelligence_source_roster.yaml`; keep both finite and budget-bound.
 - Daily result slots must remain at or below 168. Reserve RECOVERY, UPDATE, FRONTIER and SOURCE_PATROL before broad PRIMARY depth; defer P2/P3 first.
+- Enterprise recall uses an additive page budget isolated from the established R1 evidence budget. It must never crowd out product, factory, capacity, production-line, financial or other existing Goal Families.
+- Daily publication is exactly-once per report date: atomically claim the date before background collection, reject concurrent/already-published triggers, release the owned lock on failure, and keep the portal button disabled while running or after publication.
 - Daily P0/P1 may expand one hop; P2/P3 do not. Enterprise P0/P1 may expand only to its configured depth. Run Anomaly Hunter only for a critical gap.
 - A snippet or `FrontierEntry` is discovery state, never a Claim. Only hydrated content that passes the existing normalizer, source policy and verifier may enter formal evidence.
 - Record every query, URL disposition, source-lane attempt, funnel stage and honest convergence status. `collection_status=OK` never means `coverage_complete`.
