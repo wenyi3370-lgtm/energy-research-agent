@@ -160,6 +160,13 @@ class IntelligenceCollector:
                 f"IQ-U-{index:03d}", target.topic or target.category, "UPDATE",
                 _window_query(f"{target_text} 最新进展 更新 新增事实", update_start, current_time),
             ))
+        # SearchExecutor accounts for every returned discovery hit against a
+        # single plan-level page budget.  A fixed value of 100 was lower than
+        # the normal 12-query PRIMARY+RECOVERY demand (120), and adding UPDATE
+        # checks can raise the bounded maximum to 168.  Size the budget from
+        # the exact query plan so later layers are never deterministically
+        # blocked while the run remains strictly bounded.
+        planned_page_budget = sum(_result_limit(layer) for _, _, layer, _ in query_specs)
         plan = ResearchPlan(
             plan_id=new_sortable_id("IPLAN"),
             run_id="intelligence",
@@ -180,7 +187,7 @@ class IntelligenceCollector:
                     # as a target-page fallback during hydration; sending a
                     # broad query directly to Kimi returns a Bing result page.
                     adapter_preference="anysearch",
-                    max_results=6 if layer == "PRIMARY" else 4,
+                    max_results=_result_limit(layer),
                     requires_browser=False,
                     collection_round={"PRIMARY": "R1", "RECOVERY": "R2", "UPDATE": "R3"}[layer],
                     round_goal={"PRIMARY": "coverage", "RECOVERY": "depth", "UPDATE": "triangulation"}[layer],
@@ -188,7 +195,10 @@ class IntelligenceCollector:
                 )
                 for query_id, topic, layer, query in query_specs
             ],
-            budget={"max_queries": max(40, len(query_specs)), "max_pages": 100},
+            budget={
+                "max_queries": max(40, len(query_specs)),
+                "max_pages": planned_page_budget,
+            },
             completion_contract=[],
         )
         envelopes = SearchExecutor(self.adapters).execute(plan)
@@ -386,6 +396,10 @@ def _layer_from_query_id(query_id: str) -> str:
     if query_id.startswith("IQ-R-"):
         return "RECOVERY"
     return "UPDATE"
+
+
+def _result_limit(layer: str) -> int:
+    return 6 if layer == "PRIMARY" else 4
 
 
 def _parse_crawl_at(value: str, fallback: datetime) -> datetime:

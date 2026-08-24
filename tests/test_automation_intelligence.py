@@ -333,6 +333,36 @@ class FreshnessGateTests(unittest.TestCase):
 
 
 class CollectorPipelineTests(unittest.TestCase):
+    def test_daily_page_budget_covers_every_planned_search_layer(self):
+        from unittest.mock import patch
+
+        from enterprise_energy_research.automation.intelligence import IntelligenceCollector
+
+        captured = {}
+
+        class CapturingExecutor:
+            def __init__(self, adapters):
+                self.adapters = adapters
+
+            def execute(self, plan):
+                captured["plan"] = plan
+                return []
+
+        collector = IntelligenceCollector({}, object())
+        with patch(
+            "enterprise_energy_research.automation.intelligence.collector.SearchExecutor",
+            CapturingExecutor,
+        ):
+            collector.collect(
+                current_time=datetime(2026, 8, 24, 10, 0, tzinfo=TZ),
+                update_targets=[make_raw(title=f"历史事件{i}") for i in range(12)],
+            )
+
+        plan = captured["plan"]
+        self.assertEqual(len(plan.queries), 36)
+        self.assertEqual(sum(query.max_results for query in plan.queries), 168)
+        self.assertEqual(plan.budget["max_pages"], 168)
+
     def test_root_listing_pages_are_not_sent_to_the_llm(self):
         from enterprise_energy_research.adapters.base import (
             AdapterHealth, SearchHit, SearchResultEnvelope,
