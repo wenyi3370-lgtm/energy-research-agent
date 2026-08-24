@@ -1,0 +1,12 @@
+schema_version: "1.0"
+max_listing_pages_per_source: 2
+max_articles_per_source: 3
+sources:
+  - {source_id: nea, category: regulator, domain: nea.gov.cn, entry: "国家能源局 储能 车网互动", lane: government_regulatory, priority: P0}
+  - {source_id: ndrc, category: government, domain: ndrc.gov.cn, entry: "发改委 电力市场 车网互动", lane: government_regulatory, priority: P0}
+  - {source_id: miit, category: regulator, domain: miit.gov.cn, entry: "工信部 新能源汽车 双向充电", lane: government_regulatory, priority: P0}
+  - {source_id: sgcc, category: grid, domain: sgcc.com.cn, entry: "国家电网 车网互动 虚拟电厂", lane: corporate_official, priority: P0}
+  - {source_id: cec, category: association, domain: cec.org.cn, entry: "中电联 储能 电力市场", lane: industry_association, priority: P1}
+  - {source_id: cnesa, category: association, domain: cnesa.org, entry: "中关村储能产业技术联盟 项目", lane: industry_association, priority: P1}
+  - {source_id: ggzy, category: tender, domain: ggzy.gov.cn, entry: "储能 V2G 招标 中标", lane: tender_procurement, priority: P0}
+  - {source_id: cninfo, category: disclosure, domain: cninfo.com.cn, entry: "储能 项目 订单 公告", lane: financial_disclosure, priority: P1}

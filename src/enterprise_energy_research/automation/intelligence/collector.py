@@ -13,9 +13,20 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ...adapters.base import SearchAdapter
-from ...domain.ids import new_sortable_id
 from ...gateway.base import ModelGateway, StructuredRequest
 from ...research.executor import SearchExecutor
+from ...research.recall import (
+    EntityEventMiner,
+    RecallAudit,
+    RecallBudgetPolicy,
+    RecallConvergenceTracker,
+    RecallEngine,
+    RecallProfile,
+    RecallStatus,
+    SearchFrontier,
+    SearchPass,
+    UrlDispositionReason,
+)
 from ...domain.models import StrictModel
 from pydantic import ConfigDict, Field, model_validator
 
@@ -121,22 +132,22 @@ class IntelligenceCollector:
         adapters: dict[str, SearchAdapter],
         gateway: ModelGateway | None,
         queries: list[tuple[str, str]] | None = None,
+        recall_policy: RecallBudgetPolicy | None = None,
     ) -> None:
         self.adapters = adapters
         self.gateway = gateway
         self.queries = queries or DAILY_QUERIES
+        self.recall_policy = recall_policy
         self.extraction_failures: list[str] = []
         self.extraction_attempt_count = 0
         self.extraction_success_count = 0
+        self.recall_result = None
 
     def collect(
         self,
         current_time: datetime | None = None,
         update_targets: list[RawIntelligenceItem] | None = None,
     ) -> list[Any]:
-        from ...domain.models import ResearchPlan, ResearchQuery
-        from ...domain.enums import SourceLevel
-
         current_time = normalize_current_time(current_time)
         self.extraction_failures = []
         self.extraction_attempt_count = 0
@@ -144,108 +155,113 @@ class IntelligenceCollector:
         primary_start = current_time - timedelta(hours=24)
         recovery_start = current_time - timedelta(hours=72)
         update_start = current_time - timedelta(days=7)
-        query_specs: list[tuple[str, str, str, str]] = []
-        for index, (query, topic) in enumerate(self.queries):
-            query_specs.append((
-                f"IQ-P-{index:03d}", topic, "PRIMARY",
-                _window_query(query, primary_start, current_time),
-            ))
-            query_specs.append((
-                f"IQ-R-{index:03d}", topic, "RECOVERY",
-                _window_query(query, recovery_start, current_time),
-            ))
-        for index, target in enumerate((update_targets or [])[:12]):
-            target_text = " ".join(part for part in (target.entity, target.title, target.topic) if part)
-            query_specs.append((
-                f"IQ-U-{index:03d}", target.topic or target.category, "UPDATE",
-                _window_query(f"{target_text} 最新进展 更新 新增事实", update_start, current_time),
-            ))
-        # SearchExecutor accounts for every returned discovery hit against a
-        # single plan-level page budget.  A fixed value of 100 was lower than
-        # the normal 12-query PRIMARY+RECOVERY demand (120), and adding UPDATE
-        # checks can raise the bounded maximum to 168.  Size the budget from
-        # the exact query plan so later layers are never deterministically
-        # blocked while the run remains strictly bounded.
-        planned_page_budget = sum(_result_limit(layer) for _, _, layer, _ in query_specs)
-        plan = ResearchPlan(
-            plan_id=new_sortable_id("IPLAN"),
-            run_id="intelligence",
-            complexity="UNKNOWN",
-            queries=[
-                ResearchQuery(
-                    query_id=query_id,
-                    entity_id="intel",
-                    topic=topic,
-                    query=query,
-                    purpose=(
-                        f"daily intelligence {layer}; REPORT_CUTOFF_TIME={current_time.isoformat()}; "
-                        f"primary_start={primary_start.isoformat()}; recovery_start={recovery_start.isoformat()}; "
-                        f"update_start={update_start.isoformat()}"
-                    ),
-                    preferred_source_levels=[SourceLevel.SOURCE_A, SourceLevel.SOURCE_B],
-                    # AnySearch discovers real result URLs.  Kimi is used only
-                    # as a target-page fallback during hydration; sending a
-                    # broad query directly to Kimi returns a Bing result page.
-                    adapter_preference="anysearch",
-                    max_results=_result_limit(layer),
-                    requires_browser=False,
-                    collection_round={"PRIMARY": "R1", "RECOVERY": "R2", "UPDATE": "R3"}[layer],
-                    round_goal={"PRIMARY": "coverage", "RECOVERY": "depth", "UPDATE": "triangulation"}[layer],
-                    high_priority=True,
-                )
-                for query_id, topic, layer, query in query_specs
-            ],
-            budget={
-                "max_queries": max(40, len(query_specs)),
-                "max_pages": planned_page_budget,
-            },
-            completion_contract=[],
+        engine = RecallEngine(RecallProfile.DAILY_INTELLIGENCE, policy=self.recall_policy)
+        allocation = engine.plan_daily(
+            self.queries, current_time=current_time, update_targets=update_targets or [],
         )
-        envelopes = SearchExecutor(self.adapters).execute(plan)
+        audit = RecallAudit(
+            RecallProfile.DAILY_INTELLIGENCE, allocation.planned,
+            total_budget=engine.policy.total_result_slots,
+        )
+        audit.deferred = allocation.deferred
+        frontier = SearchFrontier(RecallProfile.DAILY_INTELLIGENCE)
+        miner = EntityEventMiner()
+        convergence = RecallConvergenceTracker(RecallProfile.DAILY_INTELLIGENCE)
         items: list[Any] = []
         seen_urls: set[str] = set()
-        for envelope in envelopes:
-            if envelope.status in ("blocked", "error"):
-                self.extraction_failures.append(f"{envelope.query_id}: {envelope.diagnostics[:1]}")
-                continue
-            for hit_index, hit in enumerate(envelope.hits):
-                if not hit.final_url or not hit.text or self.gateway is None:
+        all_envelopes: list[Any] = []
+
+        def execute_specs(specs, *, mine_frontier: bool, expansion_depth: int = 0) -> int:
+            if not specs:
+                return 0
+            plan = engine.to_research_plan(specs, run_id="intelligence")
+            envelopes = SearchExecutor(self.adapters).execute(plan)
+            all_envelopes.extend(envelopes)
+            spec_map = {spec.query_id: spec for spec in specs}
+            new_high = 0
+            for envelope in envelopes:
+                audit.record_envelope(envelope)
+                if envelope.status in ("blocked", "error"):
+                    self.extraction_failures.append(f"{envelope.query_id}: {envelope.diagnostics[:1]}")
                     continue
-                canonical_url = _canonical_url(hit.final_url)
-                if (
-                    not canonical_url
-                    or canonical_url in seen_urls
-                    or _is_search_result_page(canonical_url)
-                    or _is_listing_root_page(canonical_url)
-                ):
-                    continue
-                seen_urls.add(canonical_url)
-                hydrated = self._hydrate_hit(envelope.query_id, hit_index, hit)
-                if hydrated is None:
-                    continue
-                final_url, final_title, final_text, _retrieved_at = hydrated
-                self.extraction_attempt_count += 1
-                extracted = self._extract(
-                    final_url, final_title, final_text,
-                    current_time=current_time,
-                    primary_start=primary_start,
-                    recovery_start=recovery_start,
-                    update_start=update_start,
-                    search_layer=_layer_from_query_id(envelope.query_id),
-                    topic=envelope.topic or "",
-                    # Search adapters may expose a cached/discovery timestamp
-                    # in retrieved_at.  crawl_at is the time this daily run
-                    # actually processed the page, so it must be the frozen
-                    # REPORT_CUTOFF_TIME rather than adapter metadata.
-                    crawl_at=current_time,
-                    content_hash=content_sha256(final_text),
-                )
-                if extracted is not None:
+                spec = spec_map.get(envelope.query_id)
+                for hit_index, hit in enumerate(envelope.hits):
+                    raw_url = hit.final_url or hit.requested_url or ""
+                    if not hit.final_url or not hit.text or self.gateway is None:
+                        audit.disposition(envelope.query_id, raw_url, UrlDispositionReason.NO_EXTRACTABLE_TEXT)
+                        continue
+                    canonical_url = _canonical_url(hit.final_url)
+                    if not canonical_url:
+                        audit.disposition(envelope.query_id, raw_url, UrlDispositionReason.NO_EXTRACTABLE_TEXT)
+                        continue
+                    if canonical_url in seen_urls:
+                        audit.disposition(envelope.query_id, raw_url, UrlDispositionReason.DUPLICATE_URL, canonical_url=canonical_url)
+                        continue
+                    if _is_search_result_page(canonical_url):
+                        audit.disposition(envelope.query_id, raw_url, UrlDispositionReason.SEARCH_RESULT_PAGE, canonical_url=canonical_url)
+                        continue
+                    if _is_listing_root_page(canonical_url):
+                        audit.disposition(envelope.query_id, raw_url, UrlDispositionReason.LISTING_ROOT, canonical_url=canonical_url)
+                        continue
+                    seen_urls.add(canonical_url)
+                    is_snippet = bool(getattr(hit, "metadata", {}).get("snippet"))
+                    hydrated = self._hydrate_hit(envelope.query_id, hit_index, hit)
+                    if is_snippet:
+                        audit.hydration(envelope.query_id, success=hydrated is not None)
+                    if hydrated is None:
+                        audit.disposition(envelope.query_id, raw_url, UrlDispositionReason.HYDRATION_FAILED, canonical_url=canonical_url)
+                        continue
+                    final_url, final_title, final_text, _retrieved_at = hydrated
+                    if mine_frontier:
+                        discovered = miner.mine(
+                            final_text, run_id="intelligence", origin_query_id=envelope.query_id,
+                            origin_url=final_url, profile=RecallProfile.DAILY_INTELLIGENCE,
+                            discovery_round=1 + expansion_depth, expansion_depth=expansion_depth,
+                        )
+                        added = frontier.add(discovered)
+                        audit.frontier(envelope.query_id, added)
+                        new_high += sum(1 for entry in added if entry.priority.value in {"P0", "P1"})
+                    self.extraction_attempt_count += 1
+                    extracted = self._extract(
+                        final_url, final_title, final_text,
+                        current_time=current_time, primary_start=primary_start,
+                        recovery_start=recovery_start, update_start=update_start,
+                        search_layer=_layer_from_search_pass(spec.search_pass if spec else SearchPass.PRIMARY),
+                        topic=envelope.topic or "", crawl_at=current_time,
+                        content_hash=content_sha256(final_text),
+                    )
+                    audit.extraction(envelope.query_id, success=extracted is not None)
+                    if extracted is None:
+                        audit.disposition(envelope.query_id, raw_url, UrlDispositionReason.OUT_OF_SCOPE, canonical_url=canonical_url)
+                        continue
+                    audit.disposition(envelope.query_id, raw_url, UrlDispositionReason.ACCEPTED, canonical_url=canonical_url)
                     items.append(extracted)
                     self.extraction_success_count += 1
+            return new_high
+
+        primary_specs = [item for item in allocation.planned if item.search_pass == SearchPass.PRIMARY]
+        later_specs = [item for item in allocation.planned if item.search_pass != SearchPass.PRIMARY]
+        first_new_high = execute_specs(primary_specs, mine_frontier=True)
+        convergence.record_round(first_new_high)
+        frontier_candidates = frontier.followup_specs(max_queries=8)
+        frontier_allocation = engine.budget_planner.allocate_frontier(
+            frontier_candidates, remaining_slots=engine.policy.total_result_slots - allocation.used_slots,
+        )
+        audit.deferred.extend(frontier_allocation.deferred)
+        audit.add_specs(frontier_allocation.planned)
+        second_new_high = execute_specs(frontier_allocation.planned, mine_frontier=True, expansion_depth=1)
+        convergence.record_round(second_new_high)
+        execute_specs(later_specs, mine_frontier=False)
+        status = convergence.status() or RecallStatus.BOUNDED_COMPLETE
+        if any("budget exhausted" in reason.lower() for reason in self.extraction_failures):
+            convergence.budget_exhausted = True
+            status = RecallStatus.RECALL_BUDGET_EXHAUSTED
+        elif all(envelope.status in ("blocked", "error") for envelope in all_envelopes) if all_envelopes else True:
+            status = RecallStatus.SOURCE_UNAVAILABLE
+        self.recall_result = audit.finalize(status, stop_reason=status.value)
         logger.info(
             "intelligence collect: %d envelopes, %d hydrated attempts, %d items, %d failures",
-            len(envelopes), self.extraction_attempt_count, len(items), len(self.extraction_failures),
+            len(all_envelopes), self.extraction_attempt_count, len(items), len(self.extraction_failures),
         )
         return items
 
@@ -397,12 +413,12 @@ class IntelligenceCollector:
         return RawIntelligenceItem.model_validate(extracted.model_dump())
 
 
-def _layer_from_query_id(query_id: str) -> str:
-    if query_id.startswith("IQ-P-"):
-        return "PRIMARY"
-    if query_id.startswith("IQ-R-"):
+def _layer_from_search_pass(search_pass: SearchPass) -> str:
+    if search_pass in {SearchPass.RECOVERY}:
         return "RECOVERY"
-    return "UPDATE"
+    if search_pass in {SearchPass.UPDATE}:
+        return "UPDATE"
+    return "PRIMARY"
 
 
 def _result_limit(layer: str) -> int:

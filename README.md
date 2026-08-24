@@ -18,7 +18,8 @@
 - 📄 **同源交付**：Excel 数据总表 + 咨询级 Word + 融合管理驾驶舱与产品数据库的单文件 HTML（直发飞书群）
 - 📊 **diagram-design 同源图表**：VisualSpec 业务语义 → Visual Router 反滥用路由 → diagram-design 设计系统确定性渲染；离线 HTML（内联 SVG）+ 可编辑 SVG + 同源 HTML 渲染的高清 PNG；HTML 与 Word 共用同一套图，无双重绘图逻辑
 - 📊 **研究质量量化**：逐 Goal 饱和度、官方来源比例、三角验证率、目录/参数/图片覆盖率与关键缺口显式输出
-- 📰 **每日情报日报**：每天 10:00 执行 24 小时主搜、72 小时恢复检索和近 7 天重要事件更新检查；经历史日报去重后仅推送 NEW/UPDATED，转载、重发与无实质更新内容直接剔除
+- 📰 **每日情报日报**：每天 10:00 执行 24 小时主搜、72 小时恢复检索和近 7 天重要事件更新检查；允许近期转载、二次传播和历史事件的新近披露，未知发布时间以内部 LOW 保留，按发布时间由近及远优先、同事件仅留一条
+- 🧭 **可审计动态召回**：主题只作 Seed，经 Alias/Search Intent/中英文/八类 Source Lane 扩展；页面实体驱动 P0/P1 有界 Frontier，并输出 URL 去向、Recall Funnel 与 `search_coverage_matrix.json`
 - 🖱️ **网页手动触发**：企业研究只由本地引导页确认后启动；不启用定时研究
 - 🧟 **僵尸任务自愈**：进程中断的悬挂任务自动发现、通知、一键重试
 - 🐳 **全 Docker 化**：一键部署，开机自启，无人值守
@@ -35,6 +36,20 @@
 | 可选：Kimi WebBridge | v1.11.x | 浏览器深度调研（宿主机运行 daemon + 浏览器扩展） |
 
 Python / Node 均**无需**安装（全部在容器内）。
+
+## Search Recall 与 Coverage
+
+`research/recall/` 是企业研究与日报共用的发现层。企业研究采用
+`DEEP_RESEARCH`，宽召回后仍必须进入原有严格证据核验；日报采用
+`DAILY_INTELLIGENCE`，允许媒体线索和未知时间条目进入候选，但保留业务
+范围门槛、72 小时明确时间上限、同事件去重和最多五条。
+
+日报总 Search Result Slot 默认严格不超过 168。预算先保护 RECOVERY、
+UPDATE、Frontier 和重点来源巡检，再分配给 PRIMARY 扩展；不足时先延后
+P2/P3。执行成功只说明 `collection_status=OK`，不代表搜完整个互联网。
+真实状态使用 `RECALL_SATURATED`、`BOUNDED_COMPLETE`、
+`RECALL_BUDGET_EXHAUSTED`、`PARTIAL_SOURCE_COVERAGE` 或
+`SOURCE_UNAVAILABLE`。
 
 ---
 

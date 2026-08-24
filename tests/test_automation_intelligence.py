@@ -386,14 +386,14 @@ class CollectorPipelineTests(unittest.TestCase):
 
         from enterprise_energy_research.automation.intelligence import IntelligenceCollector
 
-        captured = {}
+        captured = {"plans": []}
 
         class CapturingExecutor:
             def __init__(self, adapters):
                 self.adapters = adapters
 
             def execute(self, plan):
-                captured["plan"] = plan
+                captured["plans"].append(plan)
                 return []
 
         collector = IntelligenceCollector({}, object())
@@ -406,10 +406,17 @@ class CollectorPipelineTests(unittest.TestCase):
                 update_targets=[make_raw(title=f"历史事件{i}") for i in range(12)],
             )
 
-        plan = captured["plan"]
-        self.assertEqual(len(plan.queries), 36)
-        self.assertEqual(sum(query.max_results for query in plan.queries), 168)
-        self.assertEqual(plan.budget["max_pages"], 168)
+        plans = captured["plans"]
+        total_slots = sum(query.max_results for plan in plans for query in plan.queries)
+        self.assertGreater(sum(len(plan.queries) for plan in plans), 36)
+        self.assertLessEqual(total_slots, 168)
+        self.assertNotEqual(total_slots, 100)
+        self.assertTrue(all(plan.budget["max_pages"] == sum(q.max_results for q in plan.queries) for plan in plans))
+        passes = " ".join(query.purpose for plan in plans for query in plan.queries)
+        self.assertIn("PRIMARY", passes)
+        self.assertIn("RECOVERY", passes)
+        self.assertIn("UPDATE", passes)
+        self.assertIn("SOURCE_PATROL", passes)
 
     def test_root_listing_pages_are_not_sent_to_the_llm(self):
         from enterprise_energy_research.adapters.base import (
@@ -643,8 +650,8 @@ class ServiceTests(unittest.TestCase):
                 self.assertEqual(brief1.brief_date, date(2026, 8, 19))
                 self.assertEqual(len(brief1.items), 1)
                 self.assertEqual(brief1.freshness_rejected_count, 0)
-                self.assertTrue(any(request.query_id.startswith("IQ-P-") for request in FakeAdapter.sent))
-                self.assertTrue(any(request.query_id.startswith("IQ-R-") for request in FakeAdapter.sent))
+                self.assertTrue(any(request.query_id.startswith("RQ-P-") for request in FakeAdapter.sent))
+                self.assertTrue(any(request.query_id.startswith("RQ-R-") for request in FakeAdapter.sent))
                 self.assertTrue((Path(tmp) / "intelligence" / "freshness-ledger.json").is_file())
                 audit_path = Path(tmp) / "intelligence" / "freshness-audit" / "2026-08-19.json"
                 self.assertTrue(audit_path.is_file())
@@ -663,7 +670,7 @@ class ServiceTests(unittest.TestCase):
                 brief3 = service.run_daily(date(2026, 8, 20), current_time=next_time)
                 self.assertEqual(len(brief3.items), 1)
                 self.assertEqual(brief3.items[0].freshness_status, "NEW")
-                self.assertTrue(any(request.query_id.startswith("IQ-U-") for request in FakeAdapter.sent))
+                self.assertTrue(any(request.query_id.startswith("RQ-U-") for request in FakeAdapter.sent))
             finally:
                 db.engine.dispose()
 

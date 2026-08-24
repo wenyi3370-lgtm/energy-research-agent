@@ -116,6 +116,32 @@ Define stable ports:
 
 Adapters return normalized result envelopes with status, diagnostics, timestamps and provenance. Upper layers cannot import adapter-specific SDK objects.
 
+## 6.1 Shared Search Recall Layer
+
+Enterprise research and daily intelligence share `research/recall/`, with two
+explicit profiles: `DEEP_RESEARCH` and `DAILY_INTELLIGENCE`.  The shared path is:
+
+```text
+Seed Search → Query Expansion → Source Lane → Entity/Event Mining
+→ Dynamic Frontier → Convergence → Verification
+```
+
+The layer owns finite alias/intent/language variants, eight logical source
+lanes, authority-roster patrol, P0–P3 frontier priority, depth bounds, central
+result-slot allocation, URL dispositions, the recall funnel and
+`search_coverage_matrix.json`.  It may discover companies, subsidiaries,
+products, factories, projects, policies and tenders, but its snippets and
+`FrontierEntry` objects are never Claims and never enter a
+`FrozenResearchBundle`.
+
+Daily recall is capped at 168 result slots.  Recovery, update, source-patrol
+and frontier work are reserved before broad PRIMARY variants receive depth;
+lower-priority variants are deferred first.  Enterprise recall is bounded by
+the run budget and precedes the existing R1/R2-gap/R3-conflict/R4-coverage
+verification path.  Budget exhaustion is `RECALL_BUDGET_EXHAUSTED`, never
+completion.  `collection_status=OK` reports technical execution only;
+`coverage_complete` remains false for bounded Internet search.
+
 `AnySearchAdapter` must enumerate the bundled Python, Node.js, PowerShell and Bash runtimes and fail over between them on transport or runtime failure. It may declare the service unavailable only after all present runtimes fail. Proxy information in diagnostics is limited to scheme, host and port; credentials and full environment values are never logged.
 
 ### Embedded Skill supply chain

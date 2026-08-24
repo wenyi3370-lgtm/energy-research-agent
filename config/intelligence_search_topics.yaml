@@ -1,0 +1,53 @@
+schema_version: "1.0"
+topics:
+  v2g:
+    priority: P0
+    aliases: [V2G, 车网互动, 双向充电, 反向放电, 有序充放电, vehicle-to-grid]
+    intents:
+      - {suffix: "试点 政策", lane: government_regulatory, language: zh-CN}
+      - {suffix: "反向放电 示范 项目", lane: media_discovery, language: zh-CN}
+      - {suffix: "bid tender bidirectional charger", lane: tender_procurement, language: en}
+    source_lanes: [government_regulatory, tender_procurement, corporate_official, media_discovery]
+    max_variants: 4
+  storage:
+    priority: P0
+    aliases: [储能, 新型储能, 独立储能, 工商业储能, 电化学储能, BESS, battery energy storage]
+    intents:
+      - {suffix: "项目 开工 并网", lane: government_regulatory, language: zh-CN}
+      - {suffix: "招标 中标 PCS EMS 价格", lane: tender_procurement, language: zh-CN}
+      - {suffix: "BESS project China commissioning", lane: media_discovery, language: en}
+    source_lanes: [government_regulatory, tender_procurement, corporate_official, technical_document, media_discovery]
+    max_variants: 4
+  virtual_power_plant:
+    priority: P0
+    aliases: [虚拟电厂, VPP, 聚合商, 需求响应, 负荷聚合]
+    intents:
+      - {suffix: "试点 运营 政策", lane: government_regulatory, language: zh-CN}
+      - {suffix: "项目 聚合商", lane: media_discovery, language: zh-CN}
+      - {suffix: "virtual power plant China project", lane: media_discovery, language: en}
+    source_lanes: [government_regulatory, corporate_official, media_discovery]
+    max_variants: 3
+  power_market:
+    priority: P0
+    aliases: [电力现货, 辅助服务, 峰谷电价, 容量补偿, 需求响应]
+    intents:
+      - {suffix: "政策 通知 规则", lane: government_regulatory, language: zh-CN}
+      - {suffix: "市场 价格 结算", lane: media_discovery, language: zh-CN}
+    source_lanes: [government_regulatory, industry_association, media_discovery]
+    max_variants: 3
+  charging:
+    priority: P1
+    aliases: [充电桩, 充换电站, 重卡换电, 双向充电设备]
+    intents:
+      - {suffix: "项目 建设 中标", lane: tender_procurement, language: zh-CN}
+      - {suffix: "产品 发布 参数", lane: corporate_official, language: zh-CN}
+    source_lanes: [tender_procurement, corporate_official, media_discovery]
+    max_variants: 3
+  industry_capital:
+    priority: P1
+    aliases: [融资, 并购, 产能扩张, 供应链]
+    intents:
+      - {suffix: "储能 企业 公告", lane: financial_disclosure, language: zh-CN}
+      - {suffix: "energy storage funding acquisition", lane: media_discovery, language: en}
+    source_lanes: [financial_disclosure, corporate_official, media_discovery]
+    max_variants: 2

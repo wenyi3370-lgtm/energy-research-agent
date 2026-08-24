@@ -24,6 +24,7 @@ from .freshness import (
 )
 from .models import DailyBrief, IntelligenceItem, RawIntelligenceItem
 from .scorer import deduplicate, score_item, select_top
+from ...research.recall import RecallAudit
 
 logger = logging.getLogger("enterprise_energy_research.automation.intelligence")
 
@@ -105,6 +106,20 @@ class IntelligenceService:
         )
         unique = deduplicate(scored)
         selected = select_top(unique)
+        recall_result = collector.recall_result
+        if recall_result is not None:
+            funnel = recall_result.funnel
+            funnel.candidate_items = len(raw_items)
+            funnel.freshness_accepted = len(recent_items)
+            funnel.freshness_rejected = len(freshness_rejections)
+            funnel.same_event_deduped = max(0, len(scored) - len(unique))
+            funnel.in_scope_items = len(unique)
+            funnel.final_selected = len(selected)
+            funnel.unknown_publication_time_count = sum(
+                1 for item in recent_items if item.published_at_iso is None
+            )
+            funnel.secondary_source_count = sum(1 for item in recent_items if not item.is_original_source)
+            funnel.original_source_count = sum(1 for item in recent_items if item.is_original_source)
         brief = DailyBrief(
             brief_date=brief_date,
             items=selected,
@@ -120,6 +135,9 @@ class IntelligenceService:
             freshness_rejected_count=len(freshness_rejections),
             freshness_rejection_reasons=freshness_rejections,
             collection_status=collection_status,
+            coverage_complete=False,
+            recall_status=recall_result.status.value if recall_result is not None else "PARTIAL_SOURCE_COVERAGE",
+            recall_metrics=recall_result.funnel.model_dump(mode="json") if recall_result is not None else {},
             extraction_attempt_count=collector.extraction_attempt_count,
             extraction_failure_count=len(collection_failures),
             collection_failure_reasons=collection_failures[:50],
@@ -130,6 +148,12 @@ class IntelligenceService:
         self._persist(brief)
         self._persist_freshness_audit(brief, gate.evaluated)
         self._persist_freshness_ledger(gate.evaluated)
+        if recall_result is not None:
+            RecallAudit.write(
+                recall_result,
+                self.workdir / "intelligence" / "search-recall-audit",
+                f"{brief_date:%Y-%m-%d}",
+            )
         self._publish(brief)
         return brief
 

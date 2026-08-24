@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Literal
+from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from pydantic import Field, model_validator
@@ -108,10 +108,21 @@ class DailyBrief(StrictModel):
     freshness_rejected_count: int = Field(default=0, ge=0)
     freshness_rejection_reasons: list[str] = Field(default_factory=list)
     collection_status: Literal["OK", "DEGRADED", "FAILED"] = "OK"
+    # Technical collection success is intentionally independent from bounded
+    # Internet coverage.  ``OK`` must never be rendered as "all found".
+    coverage_complete: bool = False
+    recall_status: str = "PARTIAL_SOURCE_COVERAGE"
+    recall_metrics: dict[str, Any] = Field(default_factory=dict)
     extraction_attempt_count: int = Field(default=0, ge=0)
     extraction_failure_count: int = Field(default=0, ge=0)
     collection_failure_reasons: list[str] = Field(default_factory=list)
     breaking_count: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def collection_status_is_not_coverage(self) -> "DailyBrief":
+        if self.coverage_complete:
+            raise ValueError("bounded daily recall cannot claim complete Internet coverage")
+        return self
 
     @model_validator(mode="after")
     def enforce_publication_window(self) -> "DailyBrief":

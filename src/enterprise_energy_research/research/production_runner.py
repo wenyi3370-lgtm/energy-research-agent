@@ -63,6 +63,10 @@ from enterprise_energy_research.research.product_detail_frontier import (
     ProductDetailFrontier,
 )
 from enterprise_energy_research.research.resolver import CompanyResolver
+from enterprise_energy_research.research.recall import (
+    AnomalyHunter, EntityEventMiner, RecallAudit, RecallConvergenceTracker, RecallEngine,
+    RecallProfile, RecallStatus, SearchFrontier, UrlDispositionReason,
+)
 from enterprise_energy_research.research.source_grader import SourceGrader
 from enterprise_energy_research.research.synthesis import ResearchSynthesizer, write_synthesis
 
@@ -110,6 +114,7 @@ class AdaptiveRunReport(BaseModel):
     utilization: dict = Field(default_factory=dict)
     kimi_usage: dict = Field(default_factory=dict)
     catalog: dict = Field(default_factory=dict)
+    recall: dict = Field(default_factory=dict)
     trace_path: str | None = None
     synthesis_path: str | None = None
     unused_claims_path: str | None = None
@@ -203,6 +208,28 @@ class AdaptiveResearchRunner:
         plan = planner.build(run_id, "PENDING-ENTITY", raw_company_name, complexity, planning_budget)
         trace = GoalPipelineTrace.blank(run_id, [family for family, _ in GOAL_FAMILIES])
         trace.record_plan(plan.queries)
+        # Shared recall discovery precedes the strict evidence rounds.  It
+        # adds source-lane variants but remains a lead layer: neither a search
+        # snippet nor a FrontierEntry can enter the frozen evidence bundle.
+        recall_engine = RecallEngine(RecallProfile.DEEP_RESEARCH)
+        recall_slot_budget = min(60, max(12, int(budget.get("max_pages", 120)) // 4))
+        recall_allocation = recall_engine.plan_enterprise(
+            raw_company_name, [family for family, _ in GOAL_FAMILIES],
+            max_slots=recall_slot_budget,
+        )
+        recall_audit = RecallAudit(
+            RecallProfile.DEEP_RESEARCH, recall_allocation.planned,
+            total_budget=recall_slot_budget,
+        )
+        recall_audit.deferred = recall_allocation.deferred
+        recall_frontier = SearchFrontier(RecallProfile.DEEP_RESEARCH)
+        recall_miner = EntityEventMiner()
+        recall_convergence = RecallConvergenceTracker(RecallProfile.DEEP_RESEARCH)
+        recall_queries = recall_engine.to_research_plan(
+            recall_allocation.planned, run_id=run_id, canonical_name=raw_company_name,
+        ).queries
+        trace.record_plan(recall_queries)
+        recall_seen_urls: set[str] = set()
 
         diagnostics: list[str] = []
         rounds: list[RoundOutcome] = []
@@ -240,6 +267,106 @@ class AdaptiveResearchRunner:
             # Search results -> AnySearch full-text extraction (fast HTTP).
             envelopes = self._fulltext_pass(envelopes, queries)
             print(f"[{round_name}] fulltext_done hits={sum(len(item.hits) for item in envelopes)}", flush=True)
+            if round_name == "R1":
+                new_high = 0
+                hydrated_urls = {
+                    str(hit.final_url).split("#", 1)[0].rstrip("/")
+                    for envelope in envelopes for hit in envelope.hits
+                    if hit.final_url and hit.text and not hit.metadata.get("snippet")
+                }
+                for envelope in envelopes:
+                    recall_audit.record_envelope(envelope)
+                    for hit in envelope.hits:
+                        url = str(hit.final_url or hit.requested_url or "")
+                        if not hit.final_url or not hit.text:
+                            recall_audit.disposition(envelope.query_id, url, UrlDispositionReason.NO_EXTRACTABLE_TEXT)
+                            continue
+                        if hit.metadata.get("snippet"):
+                            # The full-text sibling is audited independently;
+                            # a snippet is retained only as a discovery lead.
+                            canonical_snippet = str(hit.final_url).split("#", 1)[0].rstrip("/")
+                            hydrated = canonical_snippet in hydrated_urls
+                            recall_audit.hydration(envelope.query_id, success=hydrated)
+                            if not hydrated:
+                                recall_audit.disposition(
+                                    envelope.query_id, url, UrlDispositionReason.HYDRATION_FAILED,
+                                    canonical_url=canonical_snippet,
+                                )
+                            continue
+                        canonical_url = str(hit.final_url).split("#", 1)[0].rstrip("/")
+                        if canonical_url in recall_seen_urls:
+                            recall_audit.disposition(envelope.query_id, url, UrlDispositionReason.DUPLICATE_URL, canonical_url=canonical_url)
+                            continue
+                        recall_seen_urls.add(canonical_url)
+                        recall_audit.disposition(envelope.query_id, url, UrlDispositionReason.ACCEPTED, canonical_url=canonical_url)
+                        discovered = recall_miner.mine(
+                            hit.text, run_id=run_id, origin_query_id=envelope.query_id,
+                            origin_url=canonical_url, profile=RecallProfile.DEEP_RESEARCH,
+                            discovery_round=1, expansion_depth=0,
+                        )
+                        added = recall_frontier.add(discovered)
+                        recall_audit.frontier(envelope.query_id, added)
+                        new_high += sum(1 for entry in added if entry.priority.value in {"P0", "P1"})
+                recall_convergence.record_round(new_high)
+                followup_candidates = recall_frontier.followup_specs(max_queries=6)
+                followup_allocation = recall_engine.budget_planner.allocate_frontier(
+                    followup_candidates,
+                    remaining_slots=recall_allocation.reserved_frontier_slots,
+                )
+                recall_audit.deferred.extend(followup_allocation.deferred)
+                recall_audit.add_specs(followup_allocation.planned)
+                if followup_allocation.planned:
+                    followup_queries = recall_engine.to_research_plan(
+                        followup_allocation.planned, run_id=run_id,
+                        canonical_name=raw_company_name,
+                    ).queries
+                    trace.record_plan(followup_queries)
+                    followups = SearchExecutor(self.adapters).execute(
+                        recall_engine.to_research_plan(
+                            followup_allocation.planned, run_id=run_id,
+                            canonical_name=raw_company_name,
+                        )
+                    )
+                    followups = self._fulltext_pass(followups, followup_queries)
+                    followup_new_high = 0
+                    followup_hydrated_urls = {
+                        str(hit.final_url).split("#", 1)[0].rstrip("/")
+                        for envelope in followups for hit in envelope.hits
+                        if hit.final_url and hit.text and not hit.metadata.get("snippet")
+                    }
+                    for envelope in followups:
+                        recall_audit.record_envelope(envelope)
+                        for hit in envelope.hits:
+                            raw_url = str(hit.final_url or hit.requested_url or "")
+                            if not hit.final_url or not hit.text:
+                                recall_audit.disposition(envelope.query_id, raw_url, UrlDispositionReason.NO_EXTRACTABLE_TEXT)
+                                continue
+                            if hit.metadata.get("snippet"):
+                                canonical_snippet = str(hit.final_url).split("#", 1)[0].rstrip("/")
+                                hydrated = canonical_snippet in followup_hydrated_urls
+                                recall_audit.hydration(envelope.query_id, success=hydrated)
+                                if not hydrated:
+                                    recall_audit.disposition(
+                                        envelope.query_id, raw_url, UrlDispositionReason.HYDRATION_FAILED,
+                                        canonical_url=canonical_snippet,
+                                    )
+                                continue
+                            canonical_url = str(hit.final_url).split("#", 1)[0].rstrip("/")
+                            if canonical_url in recall_seen_urls:
+                                recall_audit.disposition(envelope.query_id, canonical_url, UrlDispositionReason.DUPLICATE_URL, canonical_url=canonical_url)
+                                continue
+                            recall_seen_urls.add(canonical_url)
+                            recall_audit.disposition(envelope.query_id, canonical_url, UrlDispositionReason.ACCEPTED, canonical_url=canonical_url)
+                            discovered = recall_miner.mine(
+                                hit.text, run_id=run_id, origin_query_id=envelope.query_id,
+                                origin_url=canonical_url, profile=RecallProfile.DEEP_RESEARCH,
+                                discovery_round=2, expansion_depth=1,
+                            )
+                            added = recall_frontier.add(discovered)
+                            recall_audit.frontier(envelope.query_id, added)
+                            followup_new_high += sum(1 for entry in added if entry.priority.value in {"P0", "P1"})
+                    recall_convergence.record_round(followup_new_high)
+                    envelopes.extend(followups)
             # Product-catalog topics: Kimi opens the REAL official product
             # center/detail pages (SPA content plain HTTP cannot see) — P0-17.
             envelopes = self._browser_depth_pass(envelopes, queries, telemetry)
@@ -271,7 +398,7 @@ class AdaptiveResearchRunner:
             return envelopes, batches
 
         # ---- R1 discovery -------------------------------------------------
-        r1_queries = [query for query in plan.queries if query.collection_round == "R1"]
+        r1_queries = recall_queries + [query for query in plan.queries if query.collection_round == "R1"]
         snapshot_before = snapshot_now("R1-before")
         envelopes, batches = execute_round("R1", r1_queries, "baseline")
         canonical_entity, gaps, conflicts, out_diags = self._process_round(
@@ -305,6 +432,22 @@ class AdaptiveResearchRunner:
             and gap.field_name not in ANALYTICAL_FIELDS
         ]
         r2_queries = planner.gap_queries(plan, raw_company_name, r2_drivers)[: self.max_gap_queries] if r2_drivers else []
+        critical_recall_gap = any(gap.importance == "critical" for gap in r2_drivers)
+        anomaly_specs = AnomalyHunter().queries(
+            recall_frontier.entries, critical_gap=critical_recall_gap, max_queries=2,
+        )
+        if anomaly_specs:
+            anomaly_queries = recall_engine.to_research_plan(
+                anomaly_specs, run_id=run_id, canonical_name=raw_company_name,
+            ).queries
+            gap_ids = [gap.gap_id for gap in r2_drivers if gap.importance == "critical"]
+            anomaly_queries = [
+                query.model_copy(update={
+                    "collection_round": "R2", "round_goal": "depth",
+                    "trigger": "gap", "target_gap_ids": gap_ids,
+                }) for query in anomaly_queries
+            ]
+            r2_queries = [*r2_queries, *anomaly_queries][: self.max_gap_queries]
         if not r2_queries and pending_gaps:
             diagnostics.append(f"{len(pending_gaps)} gap(s) are not web-searchable; R2 depth round skipped")
         if r2_queries:
@@ -565,8 +708,30 @@ class AdaptiveResearchRunner:
             "synthesis_findings": sum(entry.synthesis_findings for entry in trace.goals.values()),
             "published_findings": sum(entry.published_findings for entry in trace.goals.values()),
         }
+        recall_status = recall_convergence.status() or RecallStatus.BOUNDED_COMPLETE
+        # Record a third bounded completion round for the enterprise profile.
+        # It does not fabricate a search: it classifies the post-follow-up
+        # frontier.  Saturation still requires two consecutive zero-new rounds.
+        if len(recall_convergence.round_new_high) < 3:
+            recall_convergence.record_round(0)
+            recall_status = recall_convergence.status() or RecallStatus.BOUNDED_COMPLETE
+        recall_result = recall_audit.finalize(recall_status, stop_reason=recall_status.value)
+        funnel.update({
+            "recall_query_variants": recall_result.funnel.total_query_count,
+            "recall_unique_domains": recall_result.coverage.unique_domain_count,
+            "recall_frontier_entries": len(recall_result.frontier_entries),
+            "recall_source_lanes": sum(
+                1 for topic in recall_result.coverage.topics
+                for lane in (
+                    "corporate_official", "government_regulatory", "tender_procurement",
+                    "industry_association", "media_discovery", "customer_partner",
+                    "technical_document", "financial_disclosure",
+                ) if getattr(topic, lane).attempted
+            ),
+        })
         quality_dir = output_dir / "02_research_quality"
         quality_dir.mkdir(parents=True, exist_ok=True)
+        RecallAudit.write(recall_result, quality_dir, "search_recall_audit")
         (quality_dir / "kimi_telemetry.json").write_text(
             json.dumps(telemetry.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
         )
@@ -596,6 +761,7 @@ class AdaptiveResearchRunner:
             utilization=utilization.model_dump(mode="json"),
             kimi_usage=telemetry.model_dump(mode="json"),
             catalog=catalog_counts,
+            recall=recall_result.model_dump(mode="json"),
             trace_path=str(quality_dir / "goal_pipeline_trace.json"),
             synthesis_path=synthesis_path,
             unused_claims_path=unused_path,

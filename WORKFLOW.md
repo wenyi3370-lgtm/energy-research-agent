@@ -180,6 +180,28 @@ For products, sufficient coverage means the official catalog scope was enumerate
 
 Recommended configurable dimensions: maximum queries, pages, child entities, recursion depth, per-domain pages, image candidates, model calls, elapsed time and retry count.
 
+### Search Recall pre-loop
+
+Before formal evidence verification, run the shared Recall Core:
+
+```text
+Enterprise: Seed goals → source-lane variants → hydrated-page entity mining
+→ P0/P1 bounded frontier → anomaly check for critical gaps
+→ R1 → R2 gap → R3 conflict → R4 coverage
+
+Daily: Topic seeds → bounded intent/alias/language expansion → PRIMARY
+→ P0/P1 one-hop frontier → source roster → RECOVERY → UPDATE
+→ hydration/extraction → freshness → same-event dedupe
+→ recency, confidence, authority, score → Top 5
+```
+
+Daily P2/P3 entries do not expand.  Daily converges after at least two recall
+rounds when the frontier round yields no new P0/P1 entry.  Enterprise requires
+at least three classified recall rounds and two consecutive no-new-P0/P1
+rounds to claim `RECALL_SATURATED`; otherwise it reports an honest bounded or
+partial status.  Each skipped URL receives a typed disposition and every query
+is represented in the recall audit.
+
 ## 5. Human review states
 
 Request review only for decisions that cannot be made safely:

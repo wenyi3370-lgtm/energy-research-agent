@@ -196,11 +196,10 @@ class AdaptiveRoundTests(unittest.TestCase):
         report, runner = self._run(handler, {"max_queries": 20, "max_pages": 30})
         r2 = next((item for item in report.rounds if item.round == "R2"), None)
         self.assertIsNotNone(r2)
-        # every R2 query targets a real searchable gap (product families)
+        # every R2 query targets a real searchable gap.  The shared Recall
+        # layer may expose additional source-lane goals alongside products.
         self.assertTrue(all(item["target_gap_ids"] for item in r2.round_queries))
-        self.assertTrue(all(
-            item["topic"].startswith("product") for item in r2.round_queries
-        ))
+        self.assertTrue(any(item["topic"].startswith("product") for item in r2.round_queries))
         energy_gap_ids = {
             gap.gap_id for gap in runner.cumulative.gaps
             if gap.reason == "requires_site_due_diligence"

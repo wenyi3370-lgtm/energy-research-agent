@@ -144,3 +144,14 @@ These fixes are part of the Skill source and regression suite, not local-run pat
 - `vendor/skills/kimi-webbridge/`: preserve its session/tab discipline, health-first rule, operations guide, snapshot-first interaction, and real-browser daemon boundary. The browser extension and daemon remain runtime services and are not impersonated by bundled files.
 - `vendor/skills/anysearch/`: preserve its four CLI runtimes, shared contract, domain-directory-first routing, extraction support, license, notices, and fail-closed behavior. Try every available bundled runtime before declaring an outage; transport/proxy failure in one runtime must trigger the next runtime and a redacted diagnostic. Do not bundle populated `.env` files or machine-specific `runtime.conf`; never replace it with an unapproved search backend.
 - Verify `vendor/manifest.json` before release. A missing or hash-mismatched embedded file is a release blocker.
+
+## Search Recall and Coverage contract
+
+- Use the shared `research/recall/` package for both enterprise research and daily intelligence; select behavior through `RecallProfile`, not scattered daily conditionals.
+- Follow `Seed → Query Expansion → Source Lane → Entity/Event Mining → Dynamic Frontier → Convergence → Verification`.
+- Load topic aliases/intents from `config/intelligence_search_topics.yaml` and authority patrol from `config/intelligence_source_roster.yaml`; keep both finite and budget-bound.
+- Daily result slots must remain at or below 168. Reserve RECOVERY, UPDATE, FRONTIER and SOURCE_PATROL before broad PRIMARY depth; defer P2/P3 first.
+- Daily P0/P1 may expand one hop; P2/P3 do not. Enterprise P0/P1 may expand only to its configured depth. Run Anomaly Hunter only for a critical gap.
+- A snippet or `FrontierEntry` is discovery state, never a Claim. Only hydrated content that passes the existing normalizer, source policy and verifier may enter formal evidence.
+- Record every query, URL disposition, source-lane attempt, funnel stage and honest convergence status. `collection_status=OK` never means `coverage_complete`.
+- Preserve daily freshness: recent reposts and historical-event redisclosures may be NEW; unknown publication time is retained LOW and ordered after known time; explicit pages older than 72 hours are OLD; confidence stays internal; score is not a publication floor.
