@@ -7,7 +7,7 @@
 
 | 仓库 | HEAD commit SHA | 分支 | 提交时间 | 版本标识 |
 |---|---|---|---|---|
-| `enterprise-energy-research`（主仓库） | `52d3d14c6003cafa4867a29ebaa325b0f5b47bd0` | `main` | 2026-08-25 00:39 +0800 | 0.9.0（pyproject），代码内另有 0.9.1 字样（production_runner.py:206） |
+| `energy-research-agent`（主仓库，基线提交时旧名为 `enterprise-energy-research`） | `52d3d14c6003cafa4867a29ebaa325b0f5b47bd0` | `main` | 2026-08-25 00:39 +0800 | 0.9.0（pyproject），代码内另有 0.9.1 字样（production_runner.py:206） |
 | `overseas-energy-market-research-skill`（专业能力仓库） | `ccc2a18b484efad919031a6b935021e67a0cb8f2` | `main` | 2026-08-12 23:01 +0800 | v1.2.9（CHANGELOG 最新） |
 
 基线测试：主仓库 `530 passed, 1 skipped`（2026-08-25，`python -m pytest tests/ -q`）。
@@ -15,7 +15,7 @@
 
 ## 2. 两仓当前能力
 
-### 2.1 主仓库 enterprise-energy-research（Control Plane + Evidence Plane + Artifact Plane）
+### 2.1 主仓库 energy-research-agent（Control Plane + Evidence Plane + Artifact Plane）
 
 - **身份与规划**：CompanyResolver（置信度投票消歧）、EnterpriseComplexityClassifier（规则打分）、
   ResearchPlanner（60 个 Goal Family × R1/R2/R3 查询矩阵 + requirement 语义路由 + coverage 重试策略轮换）。
@@ -115,7 +115,7 @@
 ## 8. 最终集成方式
 
 ```text
-enterprise-energy-research/                    # 主仓库 = Agent Host + Control/Evidence/Artifact Plane
+energy-research-agent/                         # 主仓库 = Agent Host + Control/Evidence/Artifact Plane
 └─ vendor/skills/overseas-energy-market-research/   # 版本锁定能力包（commit SHA + LICENSE + NOTICES + manifest）
 src/enterprise_energy_research/
 └─ agent/                                      # 新增 Agent Control Layer

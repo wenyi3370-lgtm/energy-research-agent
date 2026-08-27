@@ -46,7 +46,7 @@ def build(output: Path) -> dict:
     output = output.resolve()
     files = [path for path in project_files() if path.resolve() != output]
     output.parent.mkdir(parents=True, exist_ok=True)
-    prefix = "enterprise-energy-research/"
+    prefix = "energy-research-agent/"
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         for path in files:
             name = prefix + path.relative_to(ROOT).as_posix()

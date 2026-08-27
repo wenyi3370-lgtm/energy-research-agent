@@ -1071,7 +1071,7 @@ def _locate_diagram_design() -> Path | None:
     candidates: list[Path] = []
     if env:
         candidates.append(Path(env).expanduser().resolve())
-    root = Path(__file__).resolve().parents[3]  # skill root (e.g. .agents/skills/enterprise-energy-research)
+    root = Path(__file__).resolve().parents[3]  # skill root (e.g. .agents/skills/energy-research-agent)
     candidates.extend([
         root.parent / "diagram-design",
         root / "vendor" / "skills" / "diagram-design",

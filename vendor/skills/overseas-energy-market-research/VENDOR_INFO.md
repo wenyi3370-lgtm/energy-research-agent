@@ -3,7 +3,7 @@
 - **Origin**: https://github.com/wenyi3370-lgtm/overseas-energy-market-research-skill
 - **Pinned commit**: `ccc2a18b484efad919031a6b935021e67a0cb8f2` (tag/release marker: v1.2.9, 2026-08-12)
 - **License**: Apache License 2.0 (see `LICENSE`); third-party components documented in `THIRD_PARTY_NOTICES.md`
-- **Vendored by**: Energy Research Agent integration (enterprise-energy-research), 2026-08-25
+- **Vendored by**: Energy Research Agent integration (`energy-research-agent`), 2026-08-25
 - **Integrity**: every file in this snapshot is SHA-256 hashed in `vendor/manifest.json`;
   run `python scripts/vendor_skills.py verify` from the repository root to verify.
 

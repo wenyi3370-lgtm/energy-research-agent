@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "enterprise-energy-research"
+name = "energy-research-agent"
 version = "0.9.0"
 description = "Evidence-first enterprise industry and energy cooperation research workflow"
 requires-python = ">=3.10"
@@ -47,7 +47,7 @@ full = [
 ]
 
 [project.scripts]
-enterprise-energy-research = "enterprise_energy_research.cli:main"
+energy-research-agent = "enterprise_energy_research.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

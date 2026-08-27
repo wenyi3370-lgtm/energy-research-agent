@@ -29,7 +29,7 @@ from enterprise_energy_research import __version__
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="enterprise-energy-research")
+    parser = argparse.ArgumentParser(prog="energy-research-agent")
     subparsers = parser.add_subparsers(dest="command", required=True)
     demo = subparsers.add_parser("synthetic-run", help="Run the Phase 2 evidence/freeze/export loop without network access")
     demo.add_argument("company_name")

@@ -5,7 +5,7 @@
 - **Skill**: [diagram-design](https://github.com/cathrynlavery/diagram-design) by Cathryn Lavery
 - **Version**: vendored snapshot, installed 2026-08-21
 - **License**: MIT — see `third_party/diagram-design/LICENSE` (full text preserved verbatim).
-- **Usage**: The `enterprise-energy-research` skill adapts the diagram-design
+- **Usage**: The `energy-research-agent` skill adapts the diagram-design
   editorial design system (visual tokens, 4px grid, connector rules,
   accessibility contract, export conventions) as its consulting
   visualization engine.  Diagrams are generated deterministically in Python

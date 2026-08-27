@@ -227,7 +227,7 @@ The image ledger distinguishes remote evidence from archived artifact assets. A 
 ## 9. Planned repository tree
 
 ```text
-enterprise-energy-research/
+energy-research-agent/
 ├─ SKILL.md
 ├─ agents/openai.yaml
 ├─ ARCHITECTURE.md

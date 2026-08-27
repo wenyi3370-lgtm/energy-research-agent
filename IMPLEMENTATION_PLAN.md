@@ -1,4 +1,4 @@
-# Enterprise Energy Research v0.9.0 implementation status
+# Energy Research Agent v0.9.0 implementation status
 
 `pyproject.toml` is the single version source. Work is organized by quality gates rather than historical phase numbers.
 

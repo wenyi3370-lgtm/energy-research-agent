@@ -1,2 +1,0 @@
-[console_scripts]
-enterprise-energy-research = enterprise_energy_research.cli:main

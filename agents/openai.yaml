@@ -1,5 +1,5 @@
 interface:
-  display_name: "Enterprise Energy Research"
+  display_name: "Energy Research Agent"
   short_description: "Evidence-first enterprise and energy research delivery"
   brand_color: "#6F2B86"
-  default_prompt: "Use $enterprise-energy-research to run an evidence-first enterprise industry and energy cooperation research workflow."
+  default_prompt: "Use $energy-research-agent to run an evidence-first enterprise industry and energy cooperation research workflow."

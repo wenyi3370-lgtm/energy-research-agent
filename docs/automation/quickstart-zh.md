@@ -79,7 +79,7 @@
 
 1. 打开 **http://localhost:5678**（第一次会让你设管理员账号密码，自己设一个）。
 2. 保持 **每日情报（V2G & 储能日报）** 和 **研究故障看门狗（只终止悬挂任务）** 为 Active：前者每天 10:00 推送，后者每小时只终止超过 120 分钟无进展的任务并发飞书通知。
-3. `Enterprise Energy Research Automation` 与 `monitor-schedule-trigger-v1` 保持未发布，
+3. `Energy Research Agent Automation` 与 `monitor-schedule-trigger-v1` 保持未发布，
    企业研究统一从本地网页启动。
 4. 日报可在本地网页通过「停止推送 / 恢复推送」控制；暂停后定时调用会被 API 拦截。
 5. 故障看门狗不会创建或自动重试研究任务，不受日报暂停开关影响。

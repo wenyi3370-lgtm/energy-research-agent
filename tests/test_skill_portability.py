@@ -26,7 +26,7 @@ class SkillPortabilityTests(unittest.TestCase):
 
     def test_archive_is_self_contained_without_local_state(self):
         with tempfile.TemporaryDirectory() as temp:
-            target = Path(temp) / "enterprise-energy-research.zip"
+            target = Path(temp) / "energy-research-agent.zip"
             root = Path(__file__).resolve().parents[1]
             portable_core = [root / "SKILL.md", root / "pyproject.toml", root / "uv.lock"]
             with patch("scripts.package_skill.project_files", return_value=portable_core):
@@ -34,7 +34,7 @@ class SkillPortabilityTests(unittest.TestCase):
             self.assertEqual(result["status"], "pass")
             with zipfile.ZipFile(target) as archive:
                 names = set(archive.namelist())
-            prefix = "enterprise-energy-research/"
+            prefix = "energy-research-agent/"
             self.assertIn(prefix + "SKILL.md", names)
             self.assertIn(prefix + "pyproject.toml", names)
             self.assertIn(prefix + "uv.lock", names)

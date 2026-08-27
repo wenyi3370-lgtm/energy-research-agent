@@ -1,4 +1,4 @@
-# Architecture Audit — Enterprise Energy Research Skill（自动化改造前审计）
+# Architecture Audit — Energy Research Agent Skill（自动化改造前审计）
 
 - 审计日期：2026-08-19
 - 审计对象：`C:/Users/Wenyi Zhang/.agents/skills/enterprise-energy-research/`（v0.9.0 升级前基线）

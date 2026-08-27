@@ -1,4 +1,4 @@
-# enterprise-energy-research 会话修复迁移完整性审计
+# energy-research-agent 会话修复迁移完整性审计
 
 > **Status**: PASSED
 > **Date**: 2026-08-23

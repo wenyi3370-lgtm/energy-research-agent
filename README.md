@@ -1,4 +1,4 @@
-# Enterprise Energy Research v0.9.0 — 企业研究与决策智能平台
+# Energy Research Agent v0.9.0 — 企业研究与决策智能平台
 
 将新能源 / 电池 / 储能 / V2G / 海外市场研究，从"人工 + AI 客户端"升级为
 **企业员工可自助使用的自动化研究平台**：一句话发起调研 → 真实联网研究 →
@@ -72,8 +72,8 @@ P2/P3。执行成功只说明 `collection_status=OK`，不代表搜完整个互�
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/wenyi3370-lgtm/enterprise-energy-research.git
-cd enterprise-energy-research
+git clone https://github.com/wenyi3370-lgtm/energy-research-agent.git
+cd energy-research-agent
 
 # 2. 配置密钥（复制模板并填入）
 cp .env.example .env

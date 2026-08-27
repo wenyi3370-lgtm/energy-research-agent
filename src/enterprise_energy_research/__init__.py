@@ -18,7 +18,7 @@ def package_version() -> str:
             elif in_project and line.startswith("version") and "=" in line:
                 return line.split("=", 1)[1].strip().strip('"\'')
     try:
-        return metadata.version("enterprise-energy-research")
+        return metadata.version("energy-research-agent")
     except metadata.PackageNotFoundError:
         return "0+unknown"
 

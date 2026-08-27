@@ -113,7 +113,7 @@ def _register_error_handlers(app: FastAPI) -> None:
 
 def _version() -> str:
     try:
-        return metadata.version("enterprise-energy-research")
+        return metadata.version("energy-research-agent")
     except metadata.PackageNotFoundError:
         from ... import __version__
         return __version__
@@ -311,7 +311,7 @@ def create_app(
     )
 
     app = FastAPI(
-        title="Enterprise Energy Research Automation API",
+        title="Energy Research Agent API",
         version=_version(),
         docs_url="/docs",
         openapi_url="/openapi.json",
@@ -445,9 +445,13 @@ def create_app(
                 candidate = Path(payload.run_dir)
                 # Host paths (C:/.../<repo>/build/...) translate to the
                 # container mount (/skill/build/...) when present.
-                if not candidate.exists() and "enterprise-energy-research" in str(candidate):
+                legacy_or_current_name = next(
+                    (name for name in ("energy-research-agent", "enterprise-energy-research") if name in str(candidate)),
+                    None,
+                )
+                if not candidate.exists() and legacy_or_current_name:
                     translated = str(candidate)
-                    translated = "/skill/" + translated.split("enterprise-energy-research", 1)[1].lstrip("\\/")
+                    translated = "/skill/" + translated.split(legacy_or_current_name, 1)[1].lstrip("\\/")
                     if Path(translated).is_dir():
                         candidate = Path(translated)
                 if candidate.is_dir():

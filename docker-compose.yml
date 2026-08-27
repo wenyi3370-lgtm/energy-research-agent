@@ -1,4 +1,4 @@
-# Enterprise Energy Research v0.9.0 — full stack
+# Energy Research Agent v0.9.0 — full stack
 #   research-api  : FastAPI application service
 #   postgres      : automation control-plane database
 #   n8n           : daily intelligence + failure watchdog; research starts only in local portal
@@ -98,8 +98,7 @@ services:
       - research-api
 
 volumes:
-  # 原栈（enterprise-energy-research 项目）的历史数据卷，以固定名显式挂载，
-  # 迁移项目名后数据保持连续。
+  # 历史数据卷继续使用旧固定名，避免品牌改名导致现有数据库与 n8n 数据丢失。
   pgdata:
     external: true
     name: enterprise-energy-research_pgdata

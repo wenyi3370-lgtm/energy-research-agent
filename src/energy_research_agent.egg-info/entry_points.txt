@@ -1,0 +1,2 @@
+[console_scripts]
+energy-research-agent = enterprise_energy_research.cli:main

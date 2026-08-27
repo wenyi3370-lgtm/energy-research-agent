@@ -1,4 +1,4 @@
-# Enterprise Energy Research v0.9.0 API image: offline build, venv-free, non-root.
+# Energy Research Agent v0.9.0 API image: offline build, venv-free, non-root.
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
