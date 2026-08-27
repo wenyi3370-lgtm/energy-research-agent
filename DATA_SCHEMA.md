@@ -9,6 +9,21 @@
 - Preserve all conflicting claims and raw contexts.
 - Use ISO 8601 timestamps in UTC and record source publication dates separately.
 
+## 1.1 Unified evidence extensions (Agent)
+
+`Claim` carries optional unified fields added by the Energy Research Agent
+(backward compatible; enterprise-only evidence leaves them unset):
+
+- `mission_id` / `goal_id` — explicit goal binding (§20: never inferred).
+- `subject_id` / `subject_role` — SUBJECT / COMPETITOR / ECOSYSTEM / MARKET_CONTEXT / OTHER.
+- `originating_skill` — ENTERPRISE_RESEARCH / OVERSEAS_MARKET_RESEARCH.
+- `claim_type`, `value_class` — OBSERVED / DERIVED / MODEL_ESTIMATE / SIMULATED / ASSUMPTION / TO_BE_CONFIRMED.
+- `geography`, `period` (existing period fields), `source_url`, `source_type`, `source_grade`, `raw_capture_ref`.
+
+Overseas ledger `value_class` mapping is configured in `config/agent.yaml`; unknown
+values import as TO_BE_CONFIRMED, never dropped. Modeling rows (MODEL_ESTIMATE /
+SIMULATED / ASSUMPTION) stay in the skill's audited chain and are not duplicated.
+
 ## 2. ID formats
 
 | Object | Format | Example |

@@ -28,7 +28,7 @@ from enterprise_energy_research.artifacts.publication_boilerplate import (
     HTML_ZERO_PHRASES,
     PublicationBoilerplateFilter,
 )
-from enterprise_energy_research.artifacts.qa_report import QAFinding, QAVisualEntry, new_qa_report, write_qa_report
+from enterprise_energy_research.artifacts.qa_report import QAFinding, QAVisualEntry, downgrade_conditional_findings, new_qa_report, write_qa_report
 from enterprise_energy_research.artifacts.visuals import write_visual_manifest
 from enterprise_energy_research.domain.enums import ArtifactType, EnterpriseComplexity, VerificationStatus
 from enterprise_energy_research.domain.models import ArtifactBinding, FrozenResearchBundle
@@ -218,6 +218,17 @@ class FrozenHtmlPublisher:
                     "source": publication.source_page_url, "chapter": chapter.chapter_id,
                     "asset": self._data_uri(asset_root, publication.publication_path),
                 })
+        # Publish every verified image even when the narrative assigns only a
+        # subset to chapters; remaining images complete the evidence gallery.
+        gallery_ids = {item["id"] for item in gallery}
+        for publication in image_manifest.prepared_images:
+            if publication.image_id in gallery_ids:
+                continue
+            gallery.append({
+                "id": publication.image_id, "role": publication.image_type, "caption": publication.caption,
+                "source": publication.source_page_url, "chapter": "evidence_gallery",
+                "asset": self._data_uri(asset_root, publication.publication_path),
+            })
 
         chapters_payload = []
         for chapter in narrative.chapters:
@@ -260,6 +271,22 @@ class FrozenHtmlPublisher:
                 "visuals": chapter_visuals,
                 "images": [item for item in gallery if item["chapter"] == chapter.chapter_id],
             })
+        # Unassigned verified images still deserve publication: render them
+        # in a dedicated evidence-gallery chapter so every valid image is embedded.
+        unassigned = [item for item in gallery if item["chapter"] == "evidence_gallery"]
+        if unassigned:
+            chapters_payload.append({
+                "title": "图片证据全集",
+                "assertion": "全部通过像素级视觉核验的图片证据",
+                "takeaway": f"共 {len(unassigned)} 张核验图片未被正文章节引用，统一在此展示，确保有效图片全量嵌入。",
+                "kpis": chapters_payload[-1].get("kpis", []) if chapters_payload else [],
+                "insights": chapters_payload[-1].get("insights", []) if chapters_payload else [],
+                "visuals": [],
+                "limitations": [],
+                "actions": [],
+                "tables": [],
+                "images": unassigned,
+            })
 
         payload = {
             "entity": {
@@ -281,6 +308,12 @@ class FrozenHtmlPublisher:
             "products": products,
             "featuredProducts": featured_products,
             "sources": narrative.appendices.source_ledger,
+            "conditionalNotice": (
+                "本报告基于已核验的公开证据编制，但存在未能通过公开渠道补齐的覆盖缺口；"
+                "相关结论受此证据边界限制，正式对外发布前需完成补充尽调。"
+                if (bundle.run_manifest.research_scope or {}).get("publication_mode") == "conditional"
+                else ""
+            ),
             "meta": {
                 "freeze": bundle.freeze.freeze_id,
                 "rootHash": bundle.freeze.root_hash,
@@ -294,6 +327,7 @@ class FrozenHtmlPublisher:
         if any(phrase_counts.values()):
             qa.record_finding(QAFinding(code="html_boilerplate_zero_gate", severity="error", message=str(phrase_counts)))
         self._record_dashboard_contract_qa(qa, bundle, chapters_payload, featured_products)
+        downgrade_conditional_findings(qa, bundle)
         write_qa_report(qa, asset_root / "publication_qa_report.json")
         return self._document(entity.canonical_name, payload), [item.claim_id for item in bundle.claims if item.verification_status == VerificationStatus.VERIFIED], used_image_ids, qa.status
 
@@ -377,6 +411,13 @@ class FrozenHtmlPublisher:
     @staticmethod
     def _document(title: str, payload: dict[str, Any]) -> str:
         safe_title = html.escape(title)
+        notice = str(payload.get("conditionalNotice") or "")
+        banner = (
+            '<div style="margin:14px 18px 0;padding:10px 14px;border:1px solid #B7791F;'
+            'background:#FFFBEF;color:#744210;border-radius:6px;font-size:14px">'
+            f"<b>【条件发布】</b>{html.escape(notice)}</div>"
+            if notice else ""
+        )
         nav = "".join(
             f'<a href="#{index + 1}"><b>{index + 1:02d}</b><span>{html.escape(chapter["title"])}</span></a>'
             for index, chapter in enumerate(payload["chapters"])
@@ -387,7 +428,7 @@ class FrozenHtmlPublisher:
         )
         return f'''<!doctype html><html lang="zh-CN" data-visual-system="diagram-design" data-dashboard-contract="1-judgement|3-6-kpi|1-3-visual|3-insight|collapsed-details"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#1B365D"><link rel="icon" href="data:,"><title>{safe_title}｜企业研究 Dashboard</title><style>{CSS}</style></head>
 <body><aside class="sidebar" aria-label="Dashboard 索引"><div class="brand"><strong>{safe_title}</strong><span>企业研究 Dashboard</span></div><nav aria-label="章节导航">{nav}</nav></aside>
-<main><section class="hero research-hero"><div class="hero-head"><span class="eyebrow">ENTERPRISE RESEARCH DASHBOARD</span><h1>{safe_title}</h1><p>企业研究 · 产业与能源合作 · 数据截止 {payload['meta']['researchDate']}</p></div><div class="kpi-grid" id="kpiGrid" aria-label="关键经营指标"></div><div class="hero-judgement"><div class="judgement"><span>总体判断</span><b>{html.escape(payload.get('overallJudgement',''))}</b><p>{html.escape(str(payload.get('judgementRationale',''))[:280])}</p></div><div class="decision-stack"><article><span>优先切入方向</span><b>{html.escape(payload.get('topOpportunity',''))}</b></article><article><span>90 天决策里程碑</span><p>{html.escape(payload.get('ninetyDayAction',''))}</p></article></div></div></section>
+<main>{banner}<section class="hero research-hero"><div class="hero-head"><span class="eyebrow">ENTERPRISE RESEARCH DASHBOARD</span><h1>{safe_title}</h1><p>企业研究 · 产业与能源合作 · 数据截止 {payload['meta']['researchDate']}</p></div><div class="kpi-grid" id="kpiGrid" aria-label="关键经营指标"></div><div class="hero-judgement"><div class="judgement"><span>总体判断</span><b>{html.escape(payload.get('overallJudgement',''))}</b><p>{html.escape(str(payload.get('judgementRationale',''))[:280])}</p></div><div class="decision-stack"><article><span>优先切入方向</span><b>{html.escape(payload.get('topOpportunity',''))}</b></article><article><span>90 天决策里程碑</span><p>{html.escape(payload.get('ninetyDayAction',''))}</p></article></div></div></section>
 <section class="workspace"><div class="chapters" id="chapters"></div></section>
 <section class="workspace sources"><details><summary>来源索引</summary><div id="sourceList" class="ledger"></div></details></section>
 </main>

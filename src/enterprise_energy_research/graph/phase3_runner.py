@@ -109,7 +109,7 @@ class Phase3Runner:
         evidence.claims, evidence.conflicts = ClaimValidator().validate(evidence.claims, evidence.sources)
         evidence.entities, evidence.edges = EntityMapper().apply_evidence(evidence.entities, evidence.edges, evidence.claims)
         image_validator = ImageValidator()
-        evidence.images = image_validator.validate(evidence.images, evidence.entities, evidence.sources)
+        evidence.images = image_validator.validate(evidence.images, evidence.entities, evidence.sources, evidence.claims)
         archive_result = ImageArchiveResult(images=evidence.images)
         if any(batch.extraction_method != "recorded_fixture" for batch in batches):
             archive_result = self.image_archiver.archive(evidence.images, output_dir)

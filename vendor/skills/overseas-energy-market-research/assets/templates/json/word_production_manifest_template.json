@@ -1,0 +1,62 @@
+{
+  "template_path": "assets/templates/word/energy_market_research_report_template.docx",
+  "template_sha256": "[[COPY FROM word_template_fusion_manifest.json]]",
+  "template_lineage_verified": false,
+  "final_docx_path": "deliverables/[[FINAL_REPORT]].docx",
+  "final_docx_sha256": "[[SHA256]]",
+  "word_pipeline_id": "embedded-word-production-v1",
+  "word_components": [
+    "build_template_report.py",
+    "polish_word_ib_style.py",
+    "verify_word_ib_style.py",
+    "validate_word_delivery.py",
+    "libreoffice_render.py+pymupdf",
+    "create_page_contact_sheet.py",
+    "scan_office_placeholders.py",
+    "figure_production.py",
+    "validate_figure_delivery.py",
+    "insert_approved_figures.py"
+  ],
+  "content_skill_used": "[[market-insight-skill OR modeling chain]]",
+  "chart_theme_id": "kami-broker-v1",
+  "figure_routing": {
+    "market-insight": "embedded-market-figure-v1",
+    "modeling": "embedded-modeling-figure-v1",
+    "backend": "python",
+    "one_owner_per_figure": true,
+    "ppt_policy": "reuse-approved-or-embedded-native-slide-visual"
+  },
+  "heading_1_centered": false,
+  "heading_1_left_indent_pt": 0,
+  "heading_1_right_indent_pt": 0,
+  "heading_1_first_line_indent_pt": 0,
+  "table_text_centered": false,
+  "table_font_size_pt": 9,
+  "table_first_line_indent_pt": 0,
+  "table_line_spacing": "single",
+  "table_three_line_verified": false,
+  "table_header_fill": "#D9E2EC",
+  "table_outer_rule_color": "#000000",
+  "table_header_rule_color": "#1B365D",
+  "table_top_bottom_line_pt": 1.5,
+  "table_header_line_pt": 1.0,
+  "table_width_cm": 15.6,
+  "table_header_repeat": true,
+  "data_source_label": "数据来源",
+  "figures_inline_and_centered": false,
+  "figure_theme_manifests": [],
+  "rendering": {
+    "status": "not_run",
+    "page_count": 0,
+    "pages_inspected": 0,
+    "render_dir": "",
+    "issues": []
+  },
+  "pdf": {
+    "delivered": false,
+    "path": "",
+    "direct_export_from_final_docx": false,
+    "cross_format_consistency_passed": false
+  },
+  "notes": ""
+}

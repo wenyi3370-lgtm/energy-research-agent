@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 import logging
+from typing import Any
 from urllib.parse import urlparse
 
 from enterprise_energy_research.domain.enums import VerificationStatus
@@ -204,6 +206,7 @@ class EvidenceNormalizer:
                     source_id=source_id,
                     raw_text=raw_text,
                     context_text=context_text,
+                    goal_family=extracted.goal_family,
                     locator={
                         **extracted.locator,
                         "_routing": {
@@ -293,8 +296,46 @@ class EvidenceNormalizer:
                     child_id = entity_ids[extracted.entity_key]
                     parent_id = entity_ids[extracted.parent_entity_key]
                     self._edge(output, edge_keys, parent_id, "Subsidiary", child_id, [])
+        self._bind_factory_claim_lineage(output)
         self._canonicalize(output)
         return self._consolidate_duplicate_entities(output)
+
+    # Factories are extracted as structured records while the same pages also
+    # emit claim rows stating their address/city/province facts.  Value-matching
+    # those claims back onto the factory record restores the evidence lineage
+    # that downstream chapters need (no claim is invented here).
+    FACTORY_LINEAGE_FIELDS = {
+        "address", "factory_city", "factory_province", "factory_name",
+        "headquarters", "operating_status",
+    }
+
+    @classmethod
+    def _bind_factory_claim_lineage(cls, output: NormalizedEvidence) -> None:
+        claims_by_entity: dict[str, list[Any]] = defaultdict(list)
+        for claim in output.claims:
+            if claim.field_name in cls.FACTORY_LINEAGE_FIELDS and claim.value not in (None, "", []):
+                claims_by_entity[claim.entity_id].append(claim)
+        updated: list[Factory] = []
+        for factory in output.factories:
+            matched: list[str] = []
+            for claim in claims_by_entity.get(factory.operator_entity_id, ()):
+                value = str(claim.value).strip()
+                if not value:
+                    continue
+                if factory.address and factory.address.strip() and (
+                    value == factory.address.strip() or value in factory.address
+                ):
+                    matched.append(claim.claim_id)
+                elif factory.name and value == factory.name.strip():
+                    matched.append(claim.claim_id)
+            if matched:
+                factory = factory.model_copy(update={
+                    "supporting_claim_ids": list(dict.fromkeys(
+                        [*factory.supporting_claim_ids, *matched]
+                    )),
+                })
+            updated.append(factory)
+        output.factories = updated
 
     @staticmethod
     def _consolidate_duplicate_entities(output: NormalizedEvidence) -> NormalizedEvidence:

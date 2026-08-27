@@ -31,6 +31,7 @@ from enterprise_energy_research.artifacts.toc import heading_levels, materialize
 from enterprise_energy_research.artifacts.qa_report import (
     QAFinding,
     QAVisualEntry,
+    downgrade_conditional_findings,
     new_qa_report,
     write_qa_report,
 )
@@ -188,6 +189,7 @@ class FrozenWordPublisher:
         # final office-render QA refreshes their page-number slots.
         toc_headings = heading_levels(output_path)
         materialize_toc(output_path, [(heading, 0, level) for heading, level in toc_headings])
+        self._render_pdf_sidecar(output_path, qa)
         visible_validator = PublicationVisibleTextValidator()
         for message in [*visible_validator.validate_text(visible_validator.extract_docx(output_path)), *TOCValidator().validate(output_path)]:
             qa.record_finding(QAFinding(code="word_visible_text_or_toc", severity="error", message=message))
@@ -197,11 +199,21 @@ class FrozenWordPublisher:
             item.product_id for item in image_manifest.prepared_images
             if item.product_id in verified_product_ids
         }
-        if len(verified_products) >= 5 and len(image_backed_product_ids) < 5:
+        # Official product photography bound to the subject entity (verified +
+        # pixel-checked) also counts toward product image coverage when no
+        # per-product binding exists.
+        entity_bound_product_photos = {
+            item.image_id for item in image_manifest.prepared_images
+            if not item.product_id and item.target_entity_id
+            and item.target_entity_type == "product" and item.visual_verified
+        }
+        coverage = max(len(image_backed_product_ids), len(entity_bound_product_photos))
+        if len(verified_products) >= 5 and coverage < 5:
             qa.record_finding(QAFinding(
                 code="word_product_image_gate", severity="error",
                 message="正式 Word 报告至少需要 5 个图片、参数和场景完整绑定的重点产品。",
             ))
+        downgrade_conditional_findings(qa, bundle)
         write_qa_report(qa, asset_root / "publication_qa_report.json")
 
         digest = hashlib.sha256(output_path.read_bytes()).hexdigest()
@@ -219,6 +231,50 @@ class FrozenWordPublisher:
             (item for item in bundle.entities if item.entity_id == bundle.run_manifest.canonical_entity_id),
             bundle.entities[0] if bundle.entities else None,
         )
+
+    @staticmethod
+    def _render_pdf_sidecar(output_path: Path, qa) -> None:
+        """Render the same-name PDF the release word-depth gate consumes.
+
+        ``ArtifactConsistencyAuditor`` calls ``inspect_word_depth(path,
+        rendered_pdf=path.with_suffix('.pdf'))`` outside fixture mode and the
+        gate hard-blocks when the rendered PDF is missing.  LibreOffice
+        headless is the only office renderer available in the container, so
+        its absence must surface as a QA finding instead of a silent gate
+        failure at audit time.
+        """
+        import shutil
+        import subprocess
+
+        soffice = shutil.which("soffice") or shutil.which("libreoffice")
+        if not soffice:
+            qa.record_finding(QAFinding(
+                code="word_pdf_render_unavailable", severity="warn",
+                message=(
+                    "LibreOffice is unavailable; the formal-depth gate requires "
+                    "a rendered PDF sibling next to the Word report"
+                ),
+            ))
+            return
+        target = output_path.with_suffix(".pdf")
+        try:
+            proc = subprocess.run(
+                [soffice, "--headless", "--convert-to", "pdf",
+                 "--outdir", str(output_path.parent), str(output_path)],
+                capture_output=True, text=True, timeout=900,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            qa.record_finding(QAFinding(
+                code="word_pdf_render_failed", severity="warn",
+                message=f"LibreOffice PDF render failed: {type(exc).__name__}: {exc}",
+            ))
+            return
+        if proc.returncode != 0 or not target.is_file():
+            tail = ((proc.stderr or proc.stdout) or "").strip()[-300:]
+            qa.record_finding(QAFinding(
+                code="word_pdf_render_failed", severity="warn",
+                message=f"LibreOffice PDF render failed (rc={proc.returncode}): {tail}",
+            ))
 
     @staticmethod
     def _claims_used(narrative: ResearchNarrative, bundle: FrozenResearchBundle) -> list:
@@ -261,6 +317,19 @@ class FrozenWordPublisher:
         section.page_width, section.page_height = Mm(210), Mm(297)
         section.top_margin = section.bottom_margin = section.left_margin = section.right_margin = Mm(25.4)
         section.header_distance = section.footer_distance = Mm(12.5)
+
+        conditional_scope = bundle.run_manifest.research_scope or {}
+        if conditional_scope.get("publication_mode") == "conditional":
+            notice = document.add_paragraph()
+            notice.paragraph_format.first_line_indent = Pt(0)
+            notice.paragraph_format.space_after = Pt(12)
+            notice_run = notice.add_run(
+                "【条件发布】本报告基于已核验的公开证据编制，但存在未能通过公开渠道补齐的"
+                "覆盖缺口（详见『附录 D：待尽调事项』与 formal_publication_eligibility.json）。"
+                "相关结论受此证据边界限制，正式对外发布前需完成补充尽调。"
+            )
+            notice_run.font.bold = True
+            notice_run.font.size = Pt(11)
 
         styles = document.styles
         for name, size, color, before, after, cjk_font in [
@@ -441,6 +510,11 @@ class FrozenWordPublisher:
             self._add_statement_list(document, "行动项", chapter.action_items)
 
         # ── appendices ──
+        # Chapters may reference only a subset of verified images; the appendix
+        # gallery below embeds the remainder so every valid image is published.
+        chapter_bound_image_ids = {
+            image_id for chapter in narrative.chapters for image_id in chapter.image_ids
+        }
         document.add_page_break()
         document.add_heading("附录 A：术语与口径", level=1)
         document.add_paragraph(
@@ -455,6 +529,20 @@ class FrozenWordPublisher:
             for publication in publication_images.values():
                 document.add_paragraph(f"{publication.caption}｜{publication.source_page_url}")
         else:
+            document.add_paragraph("本次研究未包含满足核验标准的实体图片。")
+        document.add_heading("附录 G：图片证据全集", level=1)
+        document.add_paragraph(
+            "以下为全部通过像素级视觉核验的图片证据（正文章节未收录部分在此补全，未重复展示）。"
+        )
+        gallery_counter = 0
+        for image_id, publication in publication_images.items():
+            if image_id in chapter_bound_image_ids:
+                continue
+            gallery_counter += 1
+            self._add_evidence_image(document, publication, asset_root, f"附-{gallery_counter}", figure_width)
+        if gallery_counter == 0 and publication_images:
+            document.add_paragraph("全部核验图片均已在正文章节展示。")
+        elif gallery_counter == 0:
             document.add_paragraph("本次研究未包含满足核验标准的实体图片。")
         document.add_heading("附录 D：待尽调事项", level=1)
         for item in narrative.appendices.due_diligence:

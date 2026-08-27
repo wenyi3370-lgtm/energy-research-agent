@@ -51,6 +51,18 @@ COMPONENTS = {
             "references/output-spec.md", "references/semantic-patterns.md",
         ],
     },
+    "overseas-energy-market-research": {
+        "source": "https://github.com/wenyi3370-lgtm/overseas-energy-market-research-skill @ ccc2a18b484efad919031a6b935021e67a0cb8f2 (Apache-2.0)",
+        "required": [
+            "SKILL.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "VENDOR_INFO.md",
+            "scripts/run_workflow.py", "scripts/init_research_project.py",
+            "scripts/validate_stage_gate.py", "scripts/web_collection/router.py",
+            "scripts/web_collection/journal.py", "scripts/collection_quantity_policy.py",
+            "assets/config/collection_quantity_policy.yaml",
+            "workflows/overseas_energy_research.workflow.yaml",
+            "agents/openai.yaml",
+        ],
+    },
 }
 
 FORBIDDEN_PARTS = {

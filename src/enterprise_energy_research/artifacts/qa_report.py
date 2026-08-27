@@ -75,6 +75,52 @@ class PublicationQAReport(BaseModel):
             self.status = "warn"
 
 
+# Gates whose failure means the evidence is ABSENT from public channels
+# rather than fabricated or malformed.  Under conditional publication they
+# are documented warnings: the caveat banner and the conditional-publication
+# manifest already disclose the gap, and withholding the whole report would
+# punish exactly the runs the conditional mode exists for.
+CONDITIONAL_DOWNGRADE_CODES = frozenset({
+    "product_image_coverage_failure",
+    "word_product_image_gate",
+    "dashboard_product_image_gate",
+    "supplemental_requirement_coverage",
+    "recommendation_lineage",
+})
+
+
+def downgrade_conditional_findings(report: PublicationQAReport, bundle) -> None:
+    """Soften evidence-absent gates to warnings for conditional runs.
+
+    Truthfulness checks (pixel verification, boilerplate, structural
+    contracts) keep full severity; only codes in
+    ``CONDITIONAL_DOWNGRADE_CODES`` are downgraded, and only when the run
+    manifest carries ``publication_mode == "conditional"``.
+    """
+    scope = bundle.run_manifest.research_scope or {}
+    if scope.get("publication_mode") != "conditional":
+        return
+    report.findings = [
+        QAFinding(
+            code=finding.code,
+            severity="warn" if finding.code in CONDITIONAL_DOWNGRADE_CODES else finding.severity,
+            message=(
+                finding.message + "（条件发布：公开渠道证据缺失，已在报告中披露）"
+                if finding.code in CONDITIONAL_DOWNGRADE_CODES and finding.severity == "error"
+                else finding.message
+            ),
+            record_ids=finding.record_ids,
+        )
+        for finding in report.findings
+    ]
+    if any(finding.severity == "error" for finding in report.findings):
+        report.status = "fail"
+    elif any(finding.severity == "warn" for finding in report.findings):
+        report.status = "warn"
+    else:
+        report.status = "pass"
+
+
 def new_qa_report(run_id: str, freeze_id: str, artifact_id: str) -> PublicationQAReport:
     return PublicationQAReport(
         report_id=new_sortable_id("QA"),

@@ -1,0 +1,93 @@
+{
+  "template_version": "2.6-h1-centered-no-bottom-rule-no-front-matter",
+  "generated_on": "2026-08-05",
+  "base_template": {
+    "path": "assets/templates/reference_originals/券商研报模板01.docx",
+    "sha256": "946789066093aa9c9c8b0279fa8eda3218ece66b3c91ed0a17e6f7e854d119e4"
+  },
+  "fused_template": {
+    "path": "assets/templates/word/energy_market_research_report_template.docx",
+    "sha256": "0cc3a82c775345658be71e7601f6ae3b392b461a80c6222d7c624776e17413ed",
+    "size_bytes": 83833
+  },
+  "source_documents": [
+    {
+      "name": "规则限定描述.docx",
+      "source_path": "assets/templates/reference_originals/word_fusion_sources/规则限定描述.docx",
+      "retained_path": "assets/templates/reference_originals/word_fusion_sources/规则限定描述.docx",
+      "sha256": "8eda97e49babd4dd964c6ab8e9d913f4f3c009d780dae968e46a31195698151c",
+      "size_bytes": 18456
+    },
+    {
+      "name": "欧洲阳台光储产品竞品分析-20260602.docx",
+      "source_path": "assets/templates/reference_originals/word_fusion_sources/欧洲阳台光储产品竞品分析-20260602.docx",
+      "retained_path": "assets/templates/reference_originals/word_fusion_sources/欧洲阳台光储产品竞品分析-20260602.docx",
+      "sha256": "8af6b8e074ecbfba3cf84fa1e371a80583cead8d44b0c4f084c3c9d71d5746e9",
+      "size_bytes": 33734
+    },
+    {
+      "name": "澳洲V2G&V2H市场深度调研计划-V1.2-20260520.docx",
+      "source_path": "assets/templates/reference_originals/word_fusion_sources/澳洲V2G&V2H市场深度调研计划-V1.2-20260520.docx",
+      "retained_path": "assets/templates/reference_originals/word_fusion_sources/澳洲V2G&V2H市场深度调研计划-V1.2-20260520.docx",
+      "sha256": "ef7ff6f1f4d64b8a3a4f254f827891870c9d537118b2c968a954d7004e0b8c6c",
+      "size_bytes": 25897
+    },
+    {
+      "name": "非洲移动储能和户用储能深度市场调研计划-V1.0-20260610.docx",
+      "source_path": "assets/templates/reference_originals/word_fusion_sources/非洲移动储能和户用储能深度市场调研计划-V1.0-20260610.docx",
+      "retained_path": "assets/templates/reference_originals/word_fusion_sources/非洲移动储能和户用储能深度市场调研计划-V1.0-20260610.docx",
+      "sha256": "4563ade5ae04d29523b4423adf4367acf362f964caeb70028160bfdaca2f1cfc",
+      "size_bytes": 25771
+    },
+    {
+      "name": "车网互动规模化应用试点项目调研大纲-20260720.docx",
+      "source_path": "assets/templates/reference_originals/word_fusion_sources/车网互动规模化应用试点项目调研大纲-20260720.docx",
+      "retained_path": "assets/templates/reference_originals/word_fusion_sources/车网互动规模化应用试点项目调研大纲-20260720.docx",
+      "sha256": "233a2d8c733bc0f6840b0e65f8bdf0143dab6077b082ec26841607139159033c",
+      "size_bytes": 19135
+    }
+  ],
+  "chapter_count": 14,
+  "word_pipeline_id": "embedded-word-production-v1",
+  "word_components": [
+    "build_template_report.py",
+    "polish_word_ib_style.py",
+    "verify_word_ib_style.py",
+    "validate_word_delivery.py",
+    "libreoffice_render.py+pymupdf",
+    "create_page_contact_sheet.py",
+    "scan_office_placeholders.py",
+    "figure_production.py",
+    "validate_figure_delivery.py",
+    "insert_approved_figures.py"
+  ],
+  "chart_theme_id": "kami-broker-v1",
+  "centering_contract": {
+    "heading_1": "center",
+    "heading_1_left_indent_pt": 0,
+    "heading_1_right_indent_pt": 0,
+    "heading_1_first_line_indent_pt": 0,
+    "all_table_text": "center",
+    "figure_image": "inline-center",
+    "figure_caption": "center",
+    "max_figure_width_cm": 15.6
+  },
+  "table_text_contract": {
+    "font_size_pt": 9,
+    "first_line_indent_pt": 0,
+    "line_spacing": "single",
+    "horizontal_alignment": "center",
+    "vertical_alignment": "center"
+  },
+  "table_visual_contract": {
+    "header_fill": "#D9E2EC",
+    "outer_rule_color": "#000000",
+    "header_rule_color": "#1B365D",
+    "top_bottom_line_pt": 1.5,
+    "header_line_pt": 1.0,
+    "vertical_rules": false,
+    "body_internal_horizontal_rules": false
+  },
+  "data_source_label": "数据来源",
+  "formal_pdf_rule": "Direct export from final DOCX only; Pandoc/HTML PDF is not allowed."
+}

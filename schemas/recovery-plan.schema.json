@@ -1,0 +1,114 @@
+{
+  "$defs": {
+    "FailureClass": {
+      "enum": [
+        "MODEL_FAILURE",
+        "SKILL_FAILURE",
+        "ADAPTER_FAILURE",
+        "SOURCE_UNAVAILABLE",
+        "AUTH_REQUIRED",
+        "EVIDENCE_INSUFFICIENT",
+        "BUDGET_EXHAUSTED",
+        "RECOVERY_EXHAUSTED",
+        "VALIDATION_FAILED",
+        "ARTIFACT_FAILED"
+      ],
+      "title": "FailureClass",
+      "type": "string"
+    },
+    "SkillName": {
+      "enum": [
+        "ENTERPRISE_RESEARCH",
+        "OVERSEAS_MARKET_RESEARCH"
+      ],
+      "title": "SkillName",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A recovery round is a *different* strategy, never a repeated query (§22).",
+  "properties": {
+    "recovery_plan_id": {
+      "title": "Recovery Plan Id",
+      "type": "string"
+    },
+    "goal_ids": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Goal Ids",
+      "type": "array"
+    },
+    "failed_round": {
+      "minimum": 0,
+      "title": "Failed Round",
+      "type": "integer"
+    },
+    "failure_reason": {
+      "minLength": 1,
+      "title": "Failure Reason",
+      "type": "string"
+    },
+    "failure_class": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FailureClass"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "new_strategy": {
+      "minLength": 1,
+      "title": "New Strategy",
+      "type": "string"
+    },
+    "new_source_categories": {
+      "items": {
+        "type": "string"
+      },
+      "title": "New Source Categories",
+      "type": "array"
+    },
+    "new_queries": {
+      "items": {
+        "type": "string"
+      },
+      "title": "New Queries",
+      "type": "array"
+    },
+    "expected_evidence_delta": {
+      "default": "",
+      "title": "Expected Evidence Delta",
+      "type": "string"
+    },
+    "planned_skill": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SkillName"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "recovery_plan_id",
+    "goal_ids",
+    "failed_round",
+    "failure_reason",
+    "new_strategy"
+  ],
+  "title": "RecoveryPlan",
+  "type": "object"
+}

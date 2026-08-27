@@ -34,7 +34,10 @@ logger = logging.getLogger("enterprise_energy_research.automation.intelligence")
 DAILY_CLAIM_STARTED = "STARTED"
 DAILY_CLAIM_RUNNING = "ALREADY_RUNNING"
 DAILY_CLAIM_PUBLISHED = "ALREADY_PUBLISHED"
-DAILY_RUN_LOCK_STALE_SECONDS = 3 * 60 * 60
+# Tighter than the historical 3h: a healthy collection finishes in
+# 15-30 minutes, and n8n triggers only once per day, so a crashed
+# run's lock must expire quickly enough for a catch-up to reclaim.
+DAILY_RUN_LOCK_STALE_SECONDS = 40 * 60
 
 JUDGMENT_PROMPT = (
     "你是企业战略情报分析助手。基于今天的 {count} 条情报（标题与事实如下），"
@@ -233,6 +236,8 @@ class IntelligenceService:
         return watch[:3]
 
     def _publish(self, brief: DailyBrief) -> None:
+        # 交付物文件先落盘：即使飞书未配置也能在本地拿到 Word 成品。
+        docx_path = self._render_docx(brief)
         if self.notifier is None or not self.notifier.available():
             logger.info("no feishu notifier configured; brief saved locally")
             return
@@ -242,6 +247,15 @@ class IntelligenceService:
         delivery = self.notifier.send(FeishuMessage(receiver=self.receiver, text=text))
         if not delivery.delivered:
             logger.warning("brief publish to feishu failed: %s", delivery.diagnostics)
+        # 成果文件随消息送达（消息正文 + 文件消息），与主调查交付方式一致。
+        if docx_path.is_file():
+            file_delivery = self.notifier.send_file(
+                self.receiver, str(docx_path), file_name=docx_path.name
+            )
+            if not file_delivery.delivered:
+                logger.warning(
+                    "brief file publish to feishu failed: %s", file_delivery.diagnostics
+                )
         for item in brief.items:
             if item.is_breaking:
                 breaking = self.notifier.send(FeishuMessage(
@@ -249,6 +263,31 @@ class IntelligenceService:
                 ))
                 if not breaking.delivered:
                     logger.warning("breaking alert publish failed: %s", breaking.diagnostics)
+
+    def _brief_docx_path(self, brief_date: date) -> Path:
+        path = self.workdir / "intelligence"
+        path.mkdir(parents=True, exist_ok=True)
+        return path / f"daily-brief-{brief_date:%Y-%m-%d}.docx"
+
+    def _render_docx(self, brief: DailyBrief) -> Path:
+        """把 render_text 正文落成 Word 成品（与飞书消息正文同源，保证一致）。"""
+        path = self._brief_docx_path(brief.brief_date)
+        try:
+            from docx import Document
+
+            document = Document()
+            for line in brief.render_text().splitlines():
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                if stripped.startswith("# "):
+                    document.add_heading(stripped[2:], level=1)
+                else:
+                    document.add_paragraph(stripped)
+            document.save(str(path))
+        except Exception as exc:  # noqa: BLE001 - docx 是附加交付物，失败不阻断发布
+            logger.warning("brief docx render failed: %s", str(exc)[:160])
+        return path
 
     # -- pause / resume（一键停止推送开关） ------------------------------------
 
@@ -324,6 +363,22 @@ class IntelligenceService:
             "running": running,
             "published_today": self._already_published(brief_date),
         }
+
+    def should_catch_up_today(self, *, current_time: datetime | None = None) -> bool:
+        """启动补跑探针：当日未发布且没有有效运行锁时返回 True。
+
+        容器重启会直接杀死进程内的采集后台任务，而 n8n 每天只在 10:00
+        触发一次；重启后必须有人补上当天缺失的日报。陈旧锁（崩溃残留）
+        不算有效锁，后续 claim 会把它抢占掉。
+        """
+        current_time = normalize_current_time(current_time)
+        if self.is_paused():
+            return False
+        brief_date = current_time.date()
+        if self._already_published(brief_date):
+            return False
+        lock_path = self._daily_lock_path(brief_date)
+        return not (lock_path.is_file() and not self._daily_lock_is_stale(lock_path))
 
     def _daily_lock_path(self, brief_date: date) -> Path:
         path = self.workdir / "intelligence" / "run-locks"

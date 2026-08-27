@@ -1,0 +1,137 @@
+{
+  "deck": {
+    "title": "[[region]][[energy_product]]市场深度研究",
+    "subtitle": "市场规模、政策监管、竞争格局、经济性与进入策略",
+    "eyebrow": "ENERGY MARKET & PRODUCT INTELLIGENCE",
+    "meta": "基于R1/R2/R3三轮饱和采集与最终证据审计",
+    "update_date": "[[YYYY-MM-DD]]",
+    "confidentiality": "内部使用"
+  },
+  "slides": [
+    {
+      "slide_id": "S01",
+      "layout": "cover",
+      "title": "[[region]][[energy_product]]市场深度研究"
+    },
+    {
+      "slide_id": "S02",
+      "layout": "executive_summary",
+      "section": "EXECUTIVE SUMMARY",
+      "title": "[[用一句含数字或明确判断的动作标题回答决策问题]]",
+      "answer_first": true,
+      "items": [{"title": "市场", "text": "[[结论]]"}, {"title": "经济性", "text": "[[结论]]"}, {"title": "进入", "text": "[[结论]]"}],
+      "kpis": [{"value": "[[KPI]]", "label": "[[口径]]"}],
+      "takeaway": "[[管理层需要立即知道的决策含义]]",
+      "source": "[[证据ID/文件]]",
+      "bias_note": "[[口径、样本与缺口]]"
+    },
+    {
+      "slide_id": "S03",
+      "layout": "figure",
+      "section": "MARKET",
+      "title": "[[市场规模及增速的结论句]]",
+      "answer_first": true,
+      "figure_path": "deliverables/charts/fig1_market_trend.png",
+      "items": [{"title": "驱动", "text": "[[洞察]]"}],
+      "takeaway": "[[行动含义]]",
+      "source": "[[证据ID/图表manifest]]",
+      "bias_note": "[[预测假设]]"
+    },
+    {
+      "slide_id": "S04",
+      "layout": "timeline",
+      "section": "POLICY",
+      "title": "[[政策开放时点决定商业化窗口的结论句]]",
+      "answer_first": true,
+      "items": [{"period": "[[时间]]", "title": "[[节点]]", "text": "[[影响]]"}],
+      "takeaway": "[[政策触发器]]",
+      "source": "[[法规/监管来源ID]]",
+      "bias_note": "[[执行状态与地区差异]]"
+    },
+    {
+      "slide_id": "S05",
+      "layout": "segments",
+      "section": "CUSTOMER",
+      "title": "[[三个客群中谁最值得优先进入的结论句]]",
+      "answer_first": true,
+      "items": [{"title": "[[客群]]", "text": "[[需求/场景]]", "barrier": "[[门槛]]", "metric": "[[关键指标]]"}],
+      "source": "[[访谈/评论/统计证据ID]]",
+      "bias_note": "[[样本偏差]]"
+    },
+    {
+      "slide_id": "S06",
+      "layout": "matrix",
+      "section": "COMPETITION",
+      "title": "[[竞争位置与空白带的结论句]]",
+      "answer_first": true,
+      "quadrants": ["高价值/低门槛", "高价值/高门槛", "低价值/低门槛", "低价值/高门槛"],
+      "points": [{"label": "[[品牌/型号]]", "x": 0.5, "y": 0.5}],
+      "items": [{"title": "[[判断]]", "text": "[[证据]]"}],
+      "takeaway": "[[定位含义]]",
+      "source": "[[09_Integrated_Matrix.csv及证据ID]]",
+      "bias_note": "[[价格/渠道口径]]"
+    },
+    {
+      "slide_id": "S07",
+      "layout": "comparison",
+      "section": "PRODUCT",
+      "title": "[[目标产品定义与差异化的结论句]]",
+      "answer_first": true,
+      "items": [{"title": "[[方案/竞品]]", "headline": "[[关键数字]]", "text": "[[能力与取舍]]", "metric": "[[证据口径]]"}],
+      "source": "[[04_Product_Parameters.csv及证据ID]]",
+      "bias_note": "[[型号一致性/缺失参数]]"
+    },
+    {
+      "slide_id": "S08",
+      "layout": "figure",
+      "section": "ECONOMICS",
+      "title": "[[经济性是否成立及门槛的结论句]]",
+      "answer_first": true,
+      "figure_path": "deliverables/charts/fig7_model_sensitivity.png",
+      "items": [{"title": "基准", "text": "[[结果]]"}, {"title": "门槛", "text": "[[结果]]"}],
+      "takeaway": "[[投资/试点建议]]",
+      "source": "[[模型ID/结果ID/图表manifest]]",
+      "bias_note": "[[模型假设与不确定性]]"
+    },
+    {
+      "slide_id": "S09",
+      "layout": "swot",
+      "section": "STRATEGY",
+      "title": "[[SWOT合成后的战略主张]]",
+      "answer_first": true,
+      "items": [{"title": "优势", "text": "[[事实]]"}, {"title": "劣势", "text": "[[事实]]"}, {"title": "机会", "text": "[[事实]]"}, {"title": "威胁", "text": "[[事实]]"}],
+      "source": "[[10_SWOT_Opportunity.csv及证据ID]]",
+      "bias_note": "[[反证与限制]]"
+    },
+    {
+      "slide_id": "S10",
+      "layout": "roadmap",
+      "section": "ENTRY ROADMAP",
+      "title": "[[分阶段进入可控制风险并保留选择权的结论句]]",
+      "answer_first": true,
+      "items": [{"period": "[[阶段]]", "title": "[[目标]]", "text": "[[动作]]", "gate": "[[升级/退出门槛]]"}],
+      "takeaway": "[[资源配置原则]]",
+      "source": "[[综合证据ID]]",
+      "bias_note": "[[依赖条件]]"
+    },
+    {
+      "slide_id": "S11",
+      "layout": "decision",
+      "section": "DECISIONS",
+      "title": "[[管理层当前只需批准的三至五项决策]]",
+      "answer_first": true,
+      "items": [{"title": "[[事项]]", "text": "[[动作]]", "owner": "[[责任人/时间]]", "gate": "[[通过门槛]]"}],
+      "takeaway": "[[总体决策纪律]]",
+      "source": "[[报告章节/证据ID]]",
+      "bias_note": "[[待核实事项]]"
+    },
+    {
+      "slide_id": "S12",
+      "layout": "closing",
+      "section": "NEXT STEP",
+      "title": "[[以小规模验证换取下一阶段选择权]]",
+      "items": [{"title": "[[下一步]]", "text": "[[具体行动]]"}],
+      "source": "内部决策材料｜以最终证据审计为准"
+    }
+  ]
+}

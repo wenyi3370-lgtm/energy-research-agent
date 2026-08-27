@@ -1,0 +1,21 @@
+{
+  "pages": [
+    {
+      "section": "EXECUTIVE SUMMARY",
+      "answer_first_title": "[[one decision-relevant conclusion]]",
+      "question": "[[the management question answered on this page]]",
+      "so_what": "[[decision implication, action or gate]]",
+      "layout_family": "executive_summary",
+      "figure_type": "narrative",
+      "source": "[[approved report/workbook/source IDs]]"
+    },
+    {
+      "section": "MARKET",
+      "answer_first_title": "[[conclusion proved by the selected chart]]",
+      "question": "[[market question]]",
+      "so_what": "[[market-entry implication]]",
+      "evidence_manifest": "fig1_market_trend.theme.json",
+      "layout_family": "trend_full_width"
+    }
+  ]
+}

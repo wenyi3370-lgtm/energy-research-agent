@@ -1,11 +1,27 @@
 ---
-name: enterprise-energy-research
-description: Evidence-first enterprise industry, energy cooperation and decision-intelligence research. Use when Codex must investigate a company or group to evidence saturation, enumerate subsidiaries/factories/products, assess energy and EPC/zero-carbon/storage/V2G/overseas opportunities, or publish traceable Word, Excel, one unified offline HTML dashboard/product database and PPT from one frozen fact set.
+name: energy-research-agent
+description: Energy Research Agent (新能源产业研究 Agent). One orchestrator understands natural-language research requests, decomposes goals, routes to the enterprise deep-research skill or the overseas energy market research capability pack, recovers evidence gaps with audited rounds, and synthesizes cross-domain findings into unified frozen evidence and consulting-grade Word/Excel/HTML/PPT deliverables. Evidence-first: publishers consume only the frozen snapshot, never the network.
 ---
 
-# Enterprise Energy Research
+# Energy Research Agent
 
 Build every run around one rule: research produces evidence, validation freezes data, and publishers consume only the frozen snapshot. Never let an artifact publisher browse, infer new facts, or silently repair missing data.
+
+## Agent layer (Energy Research Agent)
+
+Natural-language requests are handled by one orchestrator (`src/enterprise_energy_research/agent/`):
+
+- parse → ResearchMission (raw request preserved verbatim) → ResearchGoal plan
+  (enterprise core plan is never shrunk by user-specific asks) → skill routing
+  (ENTERPRISE_RESEARCH / OVERSEAS_MARKET_RESEARCH, HYBRID uses both).
+- execution stays inside this skill's deterministic pipeline; the orchestrator
+  only consumes SkillRunResult and the unified EvidenceStore.
+- recovery: different strategy per round, executed-round accounting, cap from
+  `config/agent.yaml` (default 10); exhaustion produces an Auditable Evidence
+  Limitation, never a silent "资料有限".
+- one human approval (unified mission approval) gates every mission; the agent
+  cannot self-approve. Overseas runs additionally require the skill's own
+  `00_Research_Approval.csv`.
 
 ## Decision-intelligence contract (P0)
 

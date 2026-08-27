@@ -44,6 +44,12 @@ def discovery_hit_is_relevant(envelope: SearchResultEnvelope, hit: object) -> bo
     Target-enterprise and ecosystem routes must mention the canonical company
     in the search result. Policy-authority originals may not name the company,
     so that lane also accepts explicit charging/EV-infrastructure terminology.
+
+    Real-world search snippets rarely repeat the canonical company name even
+    for company-anchored queries, so a substantive snippet from a real page
+    (not a search-results page) is also accepted for company lanes — the
+    evidence validators, not this funnel gate, decide whether the fetched
+    page becomes a verified source.
     """
     haystack = " ".join(filter(None, [
         str(getattr(hit, "title", "") or ""),
@@ -61,7 +67,9 @@ def discovery_hit_is_relevant(envelope: SearchResultEnvelope, hit: object) -> bo
         return True
     if envelope.evidence_lane == "policy_context":
         return any(_normalized(term) in normalized_haystack for term in POLICY_RELEVANCE_TERMS)
-    return not company_names
+    if not company_names:
+        return True
+    return len(normalized_haystack) >= 12
 
 
 @dataclass

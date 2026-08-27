@@ -1,0 +1,96 @@
+platforms:
+  amazon:
+    identifier_required: ASIN
+    product_level_fields:
+      - asin
+      - exact_model
+      - brand
+      - product_url
+      - page_title
+      - variant_bundle
+      - price
+      - currency
+      - rating
+      - review_count
+      - capture_date
+      - tax_shipping_note
+      - preceding_asin_task_id
+    review_fields:
+      - review_id
+      - review_url
+      - rating
+      - original_text
+      - crawl_date
+      - review_limit_note
+  retailer:
+    identifier_required: SKU or model_code or exact product URL
+    product_level_fields:
+      - sku
+      - model_code
+      - exact_model
+      - product_url
+      - channel
+      - price
+      - currency
+      - configuration
+      - tax_included
+      - shipping_included
+      - promotion
+      - capture_date
+    preferred_examples:
+      - MediaMarkt
+      - Galaxus
+  official_brand_site:
+    identifier_required: model_code or official product URL
+    parameter_fields:
+      - exact_model
+      - model_code
+      - parameter_name
+      - raw_value
+      - unit
+      - source_url
+      - access_or_extraction_date
+      - web_source_reason
+  device_report:
+    identifier_required: exact model code plus exact document URL
+    evidence_role: secondary discovery and cross-check only
+    parameter_fields:
+      - exact_model
+      - model_code
+      - document_url
+      - parameter_name
+      - raw_value
+      - unit
+      - access_or_extraction_date
+      - official_source_gap_note
+      - conflict_note
+  community_review:
+    identifier_required: exact model mention plus URL
+    review_fields:
+      - platform
+      - thread_or_video_url
+      - exact_model
+      - original_text
+      - author_date_if_available
+      - model_linkage_note
+    preferred_platforms:
+      - Reddit
+      - YouTube
+  modeling_dataset:
+    preferred_platforms:
+      - World Bank
+      - EnergyData.info
+      - GlobalPetrolPrices
+      - national statistics and official energy/open-data portals
+      - established research institutions and traceable media
+    required_fields:
+      - dataset_title
+      - indicator_or_variable
+      - geography
+      - period_or_vintage
+      - unit
+      - methodology_or_definition
+      - update_date
+      - dataset_or_api_url
+      - transformation_note
+      - value_class

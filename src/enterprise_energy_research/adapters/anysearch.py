@@ -211,6 +211,10 @@ class AnySearchCliAdapter:
             "total free quota", "quota exceeded", "insufficient quota",
             "rate limit exceeded", "too many requests", "invalid api key",
             "unauthorized", "access denied", "api key is required",
+            # Anonymous mode sometimes answers with an auto-registration
+            # notice instead of search results; parsing that notice as a
+            # hit manufactures fake "raw capture" with zero facts.
+            "automatically generated", "use the api key below",
             "免费额度", "额度已用完", "请求过于频繁", "无效的 api key",
         )
         return text[:500] if any(marker in folded for marker in markers) else None

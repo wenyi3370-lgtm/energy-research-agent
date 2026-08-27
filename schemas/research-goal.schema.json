@@ -1,0 +1,176 @@
+{
+  "$defs": {
+    "GoalClass": {
+      "enum": [
+        "CORE_ENTERPRISE",
+        "CUSTOM_ENTERPRISE",
+        "MARKET",
+        "POLICY",
+        "COMPETITION",
+        "CHANNEL",
+        "CUSTOMER",
+        "PRODUCT",
+        "ENGINEERING",
+        "ECONOMICS",
+        "STRATEGY",
+        "CUSTOM"
+      ],
+      "title": "GoalClass",
+      "type": "string"
+    },
+    "GoalStatus": {
+      "enum": [
+        "PLANNED",
+        "RUNNING",
+        "PARTIAL",
+        "SATISFIED",
+        "BLOCKED",
+        "EXHAUSTED"
+      ],
+      "title": "GoalStatus",
+      "type": "string"
+    },
+    "PriorityLevel": {
+      "enum": [
+        "P0",
+        "P1",
+        "P2",
+        "P3"
+      ],
+      "title": "PriorityLevel",
+      "type": "string"
+    },
+    "SkillName": {
+      "enum": [
+        "ENTERPRISE_RESEARCH",
+        "OVERSEAS_MARKET_RESEARCH"
+      ],
+      "title": "SkillName",
+      "type": "string"
+    },
+    "SubjectType": {
+      "enum": [
+        "enterprise",
+        "market",
+        "product",
+        "custom"
+      ],
+      "title": "SubjectType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One bounded research question (§9). Dynamic/custom goals are first-class.",
+  "properties": {
+    "goal_id": {
+      "title": "Goal Id",
+      "type": "string"
+    },
+    "goal_name": {
+      "minLength": 1,
+      "title": "Goal Name",
+      "type": "string"
+    },
+    "goal_description": {
+      "minLength": 1,
+      "title": "Goal Description",
+      "type": "string"
+    },
+    "subject_id": {
+      "title": "Subject Id",
+      "type": "string"
+    },
+    "subject_name": {
+      "minLength": 1,
+      "title": "Subject Name",
+      "type": "string"
+    },
+    "subject_type": {
+      "$ref": "#/$defs/SubjectType",
+      "default": "enterprise"
+    },
+    "goal_class": {
+      "$ref": "#/$defs/GoalClass"
+    },
+    "scope": {
+      "additionalProperties": true,
+      "title": "Scope",
+      "type": "object"
+    },
+    "priority": {
+      "$ref": "#/$defs/PriorityLevel",
+      "default": "P2"
+    },
+    "required_evidence": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Required Evidence",
+      "type": "array"
+    },
+    "success_criteria": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Success Criteria",
+      "type": "array"
+    },
+    "assigned_skill": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SkillName"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "status": {
+      "$ref": "#/$defs/GoalStatus",
+      "default": "PLANNED"
+    },
+    "evidence_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "gap_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Gap Refs",
+      "type": "array"
+    },
+    "recovery_rounds": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Recovery Rounds",
+      "type": "integer"
+    },
+    "routing_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Routing Reason"
+    }
+  },
+  "required": [
+    "goal_id",
+    "goal_name",
+    "goal_description",
+    "subject_id",
+    "subject_name",
+    "goal_class"
+  ],
+  "title": "ResearchGoal",
+  "type": "object"
+}

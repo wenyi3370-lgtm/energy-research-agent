@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -29,6 +30,12 @@ class KimiWebBridgeSearchAdapter:
         # Per-run usage telemetry (P0-14): routing alone is not usage.
         from enterprise_energy_research.research.image_discovery import KimiUsageTelemetry
         self.usage = KimiUsageTelemetry()
+        # The daemon's single-tab actions (snapshot/evaluate) act on the
+        # session's CURRENT tab.  Concurrent research workers sharing one
+        # session would otherwise interleave navigate/snapshot and hit
+        # "No tab with given id" races, so serialize every browser
+        # transaction per adapter instance.
+        self._op_lock = threading.Lock()
 
     @staticmethod
     def _binary() -> Path | None:
@@ -119,10 +126,11 @@ class KimiWebBridgeSearchAdapter:
         url = request.metadata.get("url") or ("https://www.bing.com/search?q=" + urllib.parse.quote(request.query))
         is_target_page = bool(request.metadata.get("url"))
         try:
-            navigation = self.navigate_to(url, new_tab=True)
-            if is_target_page:
-                self.usage.kimi_target_pages_visited += 1
-            snapshot = self._command("snapshot", {})
+            with self._op_lock:
+                navigation = self._navigate_with_retry(url)
+                if is_target_page:
+                    self.usage.kimi_target_pages_visited += 1
+                snapshot = self._command("snapshot", {})
             tree = str(snapshot.get("tree", ""))
             final_url = str(snapshot.get("url") or navigation.get("url") or url)
             # Browser error pages (navigation failures) are not sources.
@@ -152,6 +160,22 @@ class KimiWebBridgeSearchAdapter:
             self.usage.kimi_status = "BLOCKED"
             self.usage.reason = f"webbridge command failed: {type(exc).__name__}: {exc}"
             return SearchResultEnvelope(adapter=self.name, query_id=request.query_id, status="error", diagnostics=[f"webbridge command failed: {type(exc).__name__}: {exc}"])
+
+    def _navigate_with_retry(self, url: str) -> dict[str, Any]:
+        """Navigate reusing the session tab; recover from a dead tab once.
+
+        ``newTab=True`` on every call leaked tabs until the browser dropped
+        them, after which snapshot failed with ``No tab with given id``.
+        Reusing the current tab keeps the session at one tab; if the daemon
+        reports a stale/missing tab, one retry opens a fresh tab.
+        """
+        try:
+            return self.navigate_to(url, new_tab=False)
+        except OSError as exc:
+            message = str(exc)
+            if "no tab with given id" not in message.casefold():
+                raise
+            return self.navigate_to(url, new_tab=True)
 
 
 KimiWebBridgeAdapter = KimiWebBridgeSearchAdapter

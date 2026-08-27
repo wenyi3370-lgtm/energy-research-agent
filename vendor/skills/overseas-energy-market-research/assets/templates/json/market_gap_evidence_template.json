@@ -1,0 +1,59 @@
+{
+  "issue_id": "GAP-XXX",
+  "related_task_ids": [
+    "TASK-R1",
+    "TASK-R2",
+    "TASK-R3"
+  ],
+  "rounds": [
+    {
+      "round": "1",
+      "task_id": "TASK-R1",
+      "attempted_queries": [
+        "local-language and English coverage query"
+      ],
+      "attempted_source_ids": [
+        "SRC-XXX"
+      ],
+      "failure_reasons": [
+        "Explain why the attempted source did not yield the missing market observation."
+      ],
+      "raw_capture_refs": [
+        "raw/market-gap/GAP-XXX-r1.txt"
+      ]
+    },
+    {
+      "round": "2",
+      "task_id": "TASK-R2",
+      "attempted_queries": [
+        "field-specific depth query"
+      ],
+      "attempted_source_ids": [
+        "SRC-XXX"
+      ],
+      "failure_reasons": [
+        "Explain the extraction, access, publication, or field-availability failure."
+      ],
+      "raw_capture_refs": [
+        "raw/market-gap/GAP-XXX-r2.txt"
+      ]
+    },
+    {
+      "round": "3",
+      "task_id": "TASK-R3",
+      "attempted_queries": [
+        "alternative-source, keyword, or language triangulation query"
+      ],
+      "attempted_source_ids": [
+        "SRC-XXX"
+      ],
+      "failure_reasons": [
+        "Explain why triangulation still did not produce another usable observation."
+      ],
+      "raw_capture_refs": [
+        "raw/market-gap/GAP-XXX-r3.txt"
+      ]
+    }
+  ],
+  "remaining_high_priority_ids": []
+}

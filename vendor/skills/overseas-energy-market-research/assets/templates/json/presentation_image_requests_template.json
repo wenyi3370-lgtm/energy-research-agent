@@ -1,0 +1,22 @@
+{
+  "requests": [
+    {
+      "request_id": "cover_hero",
+      "role": "cover",
+      "prompt": "[[region]] [[energy_product]] ecosystem with modern homes, grid, inverter, battery and energy-flow motifs; composition weighted to the right for a left-side title",
+      "output_format": "png",
+      "size": "1536x1024",
+      "quality": "high",
+      "model": "gpt-image-2"
+    },
+    {
+      "request_id": "use_case_illustration",
+      "role": "body",
+      "prompt": "[[target_customer]] using [[energy_product]] in the primary use case, with the energy flow and physical environment visible",
+      "output_format": "png",
+      "size": "1536x1024",
+      "quality": "high",
+      "model": "gpt-image-2"
+    }
+  ]
+}

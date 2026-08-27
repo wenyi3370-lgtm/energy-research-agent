@@ -21,7 +21,16 @@
             "UsesProcess",
             "ConsumesEnergy",
             "HasOpportunity",
-            "SuitableForSolution"
+            "SuitableForSolution",
+            "SUBSIDIARY",
+            "CONTROLLED_BY",
+            "JOINT_VENTURE",
+            "OWNED_BY",
+            "PARTNER",
+            "SUPPLIER",
+            "CUSTOMER",
+            "LICENSEE",
+            "UNKNOWN"
           ],
           "title": "Relation",
           "type": "string"
@@ -352,6 +361,18 @@
           "default": null,
           "title": "Category"
         },
+        "series": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Series"
+        },
         "description": {
           "anyOf": [
             {
@@ -370,6 +391,37 @@
           },
           "title": "Parameters",
           "type": "array"
+        },
+        "applications": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Applications",
+          "type": "array"
+        },
+        "customer_segment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Customer Segment"
+        },
+        "commercial_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Commercial Status"
         },
         "image_id": {
           "anyOf": [

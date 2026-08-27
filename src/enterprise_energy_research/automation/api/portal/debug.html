@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent 调试视图</title>
+<style>
+  body { margin:0; font-family:"Segoe UI","Microsoft YaHei",sans-serif; color:#111; background:#fff; }
+  .wrap { max-width:1100px; margin:0 auto; padding:24px 20px 80px; }
+  h1 { font-size:20px; }
+  input { width:420px; padding:8px; font:inherit; border:1px solid #ddd; border-radius:6px; }
+  button { padding:8px 18px; border:1px solid #1a3a8a; background:#1a3a8a; color:#fff; border-radius:6px; cursor:pointer; }
+  table { border-collapse:collapse; width:100%; font-size:13px; margin-top:8px; }
+  th, td { border:1px solid #e5e5e5; padding:6px 8px; text-align:left; }
+  th { background:#f5f7fb; }
+  .card { border:1px solid #e5e5e5; border-radius:8px; padding:14px; margin-top:14px; }
+  .muted { color:#666; font-size:12px; }
+  pre { font-size:12px; background:#fafafa; border:1px solid #eee; border-radius:6px; padding:10px; overflow:auto; max-height:360px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Agent 调试视图</h1>
+  <div class="muted">Mission / Goals / Skill Routing / Recovery / Metrics / Trace（§50）</div>
+  <div style="margin-top:10px">
+    <input id="mid" placeholder="Mission ID，如 MISSION-01M0V5XTVZT8MXVPZMRZH0B9E9">
+    <button onclick="load()">加载</button>
+  </div>
+  <div id="out"></div>
+</div>
+<script>
+async function load() {
+  const missionId = document.getElementById('mid').value.trim();
+  if (!missionId) return;
+  const res = await fetch(`/api/agent/mission/${missionId}/debug`);
+  const d = await res.json();
+  if (!res.ok) { document.getElementById('out').innerHTML = `<div class="card">${JSON.stringify(d)}</div>`; return; }
+  const rows = (d.goals || []).map(g =>
+    `<tr><td>${g.name}</td><td>${g.goal_class}</td><td>${g.skill || '-'}</td><td>${g.status}</td><td>${g.recovery_rounds}</td><td class="muted">${(g.routing_reason || '').slice(0,60)}</td></tr>`
+  ).join('');
+  const metrics = d.metrics ? Object.entries(d.metrics).map(([k,v]) => `<tr><td>${k}</td><td>${JSON.stringify(v)}</td></tr>`).join('') : '<tr><td colspan="2">暂无</td></tr>';
+  const runs = (d.skill_runs || []).map(r =>
+    `<tr><td>${r.skill_name}</td><td>${r.status}</td><td>${r.failure_class || '-'}</td><td>${JSON.stringify(r.coverage || {})}</td><td>${r.attempts}</td></tr>`
+  ).join('');
+  document.getElementById('out').innerHTML = `
+    <div class="card"><b>${d.subject || d.mission_id}</b> <span class="muted">${d.mode} / ${d.status}</span></div>
+    <div class="card"><h3>Goals（${(d.goals||[]).length}）</h3>
+      <table><tr><th>Goal</th><th>Class</th><th>Skill</th><th>状态</th><th>恢复轮</th><th>路由理由</th></tr>${rows}</table></div>
+    <div class="card"><h3>Metrics（§59）</h3>
+      <table><tr><th>指标</th><th>值</th></tr>${metrics}</table></div>
+    <div class="card"><h3>Skill Runs</h3>
+      <table><tr><th>Skill</th><th>状态</th><th>失败类</th><th>覆盖</th><th>Attempts</th></tr>${runs}</table></div>
+    <div class="card"><h3>Recovery Ledger</h3><pre>${JSON.stringify(d.recovery_ledger || {}, null, 2)}</pre></div>
+    <div class="card"><h3>Trace</h3><pre>${(d.trace || []).map(t => `${t.created_at}  ${t.event}  ${JSON.stringify(t.payload)}`).join('\n')}</pre></div>`;
+}
+</script>
+</body>
+</html>

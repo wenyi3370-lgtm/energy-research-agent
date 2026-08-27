@@ -1,0 +1,48 @@
+# Energy Research Agent — control-plane configuration (§53).
+# All knobs that govern agent behavior live here; nothing agentic is hardcoded
+# into prompts. Loaded by enterprise_energy_research.agent.policies.
+schema_version: "1.0"
+
+agent:
+  enabled: true
+  # Loop ceiling for the whole mission (all goals, all rounds). Shared by
+  # every goal: once spent, remaining goals are force-EXHAUSTED with zero
+  # recovery rounds. 30 starved a 15-goal enterprise mission (12 core goals
+  # need several rounds each); 90 covers that plus ~3 additive user goals.
+  max_agent_iterations: 90
+  # §23: 10 is a configuration value, not a business essence.
+  max_recovery_rounds_per_goal: 10
+  # Deep research (post-completion repair) gives EXHAUSTED goals a fresh,
+  # separately capped budget so repair capability stays bounded (§23).
+  deep_recovery_rounds: 5
+  require_structured_output: true
+  # Parallel goal recovery: >1 runs independent per-goal recovery rounds
+  # concurrently (searches are independent; merges/evaluations serialize).
+  # Set 1 for strictly serial, deterministic ordering.
+  parallel_recovery_rounds: 4
+
+routing:
+  # Open-set goals are first-class citizens (§10); never mapped to a weak OTHER bucket.
+  allow_dynamic_custom_goal: true
+  allow_multi_skill_goal: true
+
+approval:
+  # §27: one human approval serves both enterprise and overseas skill gates.
+  unified_mission_approval: true
+
+evidence:
+  unified_store: true
+  # Overseas ledger value_class -> unified ValueClass (§19). Any value outside
+  # this map is imported as TO_BE_CONFIRMED, never silently dropped.
+  value_class_mapping:
+    observed: OBSERVED
+    derived: DERIVED
+    modeled_estimate: MODEL_ESTIMATE
+    simulated: SIMULATED
+    scenario_assumption: ASSUMPTION
+    pending_verification: TO_BE_CONFIRMED
+
+publication:
+  # §37: exactly one artifact owner; overseas deliverables are validated
+  # sub-artifacts referenced by the unified artifact planner.
+  single_artifact_owner: true

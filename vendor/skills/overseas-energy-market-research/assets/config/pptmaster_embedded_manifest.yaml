@@ -1,0 +1,27 @@
+schema_version: 1
+migrated_at: 2026-08-10
+source:
+  legacy_skill_name: ppt-master
+  source_location_at_migration: external local skill; not retained as a runtime path
+  source_skill_sha256: f9521eb23db691a3b6c00e19a94dcaf50643fcd584fb9713c8a56178d422dfbd
+embedded_inventory:
+  scripts_files_after_merge_and_cache_removal: 191
+  migrated_pptmaster_script_files: 119
+  templates_files: 11841
+  root_reference_files_after_merge: 30
+  detailed_image_reference_files: 48
+  total_reference_files_after_merge: 79
+  workflow_files_after_merge: 10
+  excluded_nonproduction_assets:
+    - references/ai-image-comparison/*.png
+critical_file_hashes:
+  scripts/svg_to_pptx.py: a0c5b98eea7a9d181a8ebb2b8913fe904d7f0b75c3e8e0d9e1e2f08c9cb3ae21
+  scripts/svg_quality_checker.py: 799d09004bb43ebbb09f69490b978cc9924f863b083c0f6649336d22f98f54b2
+  scripts/finalize_svg.py: 9b76376a446709203c729b8ac0efb688d111e773a1de8f421bc9b13c2d8c1c41
+  scripts/svg_editor/server.py: 244c11fc439b83a290153befc2b70a1a96d3bc0e1dd42004160f1719fef021ee
+  templates/design_spec_reference.md: 520d619425f4438bae53003a10af1939f2642ad619f00486c7957588ea7a99b3
+path_rewrites:
+  - imported documentation references to skills/ppt-master were replaced with ${SKILL_DIR}
+formal_pipeline_id: embedded-pptmaster-svg-v1
+fallback_pipeline_id: embedded-presentation-production-v1
+quality_reduction_allowed: false

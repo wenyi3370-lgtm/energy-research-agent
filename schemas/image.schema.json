@@ -92,12 +92,17 @@
     "image_type": {
       "enum": [
         "logo",
+        "headquarters",
         "factory",
+        "workshop",
         "office",
         "production_line",
         "product",
+        "product_application",
+        "equipment",
         "location",
         "certificate",
+        "project",
         "other"
       ],
       "title": "Image Type",
@@ -182,6 +187,85 @@
       ],
       "default": null,
       "title": "Local Asset Ref"
+    },
+    "target_entity_type": {
+      "anyOf": [
+        {
+          "enum": [
+            "factory",
+            "product",
+            "headquarters",
+            "logo",
+            "production_line",
+            "workshop",
+            "office",
+            "equipment",
+            "certificate",
+            "project",
+            "editorial",
+            "other"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Entity Type"
+    },
+    "target_entity_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Entity Id"
+    },
+    "visual_verified": {
+      "default": false,
+      "title": "Visual Verified",
+      "type": "boolean"
+    },
+    "semantic_score": {
+      "default": 0.0,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Semantic Score",
+      "type": "number"
+    },
+    "visual_description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Visual Description"
+    },
+    "publication_priority": {
+      "default": 3,
+      "maximum": 5,
+      "minimum": 1,
+      "title": "Publication Priority",
+      "type": "integer"
+    },
+    "verification_method": {
+      "default": "none",
+      "enum": [
+        "vision",
+        "context",
+        "none"
+      ],
+      "title": "Verification Method",
+      "type": "string"
     }
   },
   "required": [

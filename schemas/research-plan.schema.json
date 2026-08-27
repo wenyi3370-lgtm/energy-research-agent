@@ -78,6 +78,202 @@
           "title": "Requires Browser",
           "type": "boolean"
         },
+        "collection_round": {
+          "default": "R1",
+          "enum": [
+            "R1",
+            "R2",
+            "R3",
+            "R4"
+          ],
+          "title": "Collection Round",
+          "type": "string"
+        },
+        "round_goal": {
+          "default": "coverage",
+          "enum": [
+            "coverage",
+            "depth",
+            "triangulation"
+          ],
+          "title": "Round Goal",
+          "type": "string"
+        },
+        "high_priority": {
+          "default": true,
+          "title": "High Priority",
+          "type": "boolean"
+        },
+        "raw_capture_required": {
+          "default": true,
+          "title": "Raw Capture Required",
+          "type": "boolean"
+        },
+        "trigger": {
+          "default": "baseline",
+          "enum": [
+            "baseline",
+            "official_discovery",
+            "catalog_enumeration",
+            "gap",
+            "conflict",
+            "triangulation",
+            "coverage",
+            "user_requirement"
+          ],
+          "title": "Trigger",
+          "type": "string"
+        },
+        "target_gap_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Target Gap Ids",
+          "type": "array"
+        },
+        "target_conflict_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Target Conflict Ids",
+          "type": "array"
+        },
+        "target_claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Target Claim Ids",
+          "type": "array"
+        },
+        "goal_domain": {
+          "default": "general_enterprise_research",
+          "title": "Goal Domain",
+          "type": "string"
+        },
+        "subject_role": {
+          "default": "target_enterprise",
+          "enum": [
+            "target_enterprise",
+            "group_member",
+            "competitor",
+            "ecosystem_party",
+            "public_authority",
+            "market_context"
+          ],
+          "title": "Subject Role",
+          "type": "string"
+        },
+        "evidence_lane": {
+          "default": "target",
+          "enum": [
+            "target",
+            "enterprise_group",
+            "comparison",
+            "ecosystem",
+            "policy_context"
+          ],
+          "title": "Evidence Lane",
+          "type": "string"
+        },
+        "evidence_use": {
+          "default": "target_fact",
+          "enum": [
+            "target_fact",
+            "target_context",
+            "comparison_context",
+            "relationship_context",
+            "policy_context",
+            "visual_support"
+          ],
+          "title": "Evidence Use",
+          "type": "string"
+        },
+        "requirement_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requirement Text"
+        },
+        "canonical_company_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical Company Name"
+        },
+        "canonical_company_aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Canonical Company Aliases",
+          "type": "array"
+        },
+        "expected_fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Expected Fields",
+          "type": "array"
+        },
+        "interpretation_goal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interpretation Goal"
+        },
+        "evidence_patterns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Patterns",
+          "type": "array"
+        },
+        "counter_evidence_patterns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Counter Evidence Patterns",
+          "type": "array"
+        },
+        "time_scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Time Scope"
+        },
+        "comparison_required": {
+          "default": false,
+          "title": "Comparison Required",
+          "type": "boolean"
+        },
+        "historical_required": {
+          "default": false,
+          "title": "Historical Required",
+          "type": "boolean"
+        },
         "status": {
           "$ref": "#/$defs/QueryStatus",
           "default": "PLANNED"
@@ -137,6 +333,30 @@
       },
       "title": "Completion Contract",
       "type": "array"
+    },
+    "scoped_goal_families": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Scoped Goal Families",
+      "type": "array"
+    },
+    "requires_catalog_enumeration": {
+      "default": true,
+      "title": "Requires Catalog Enumeration",
+      "type": "boolean"
+    },
+    "canonical_company_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Canonical Company Name"
     },
     "created_at": {
       "format": "date-time",

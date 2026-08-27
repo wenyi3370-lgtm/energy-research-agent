@@ -1,0 +1,106 @@
+{
+  "$defs": {
+    "FailureClass": {
+      "enum": [
+        "MODEL_FAILURE",
+        "SKILL_FAILURE",
+        "ADAPTER_FAILURE",
+        "SOURCE_UNAVAILABLE",
+        "AUTH_REQUIRED",
+        "EVIDENCE_INSUFFICIENT",
+        "BUDGET_EXHAUSTED",
+        "RECOVERY_EXHAUSTED",
+        "VALIDATION_FAILED",
+        "ARTIFACT_FAILED"
+      ],
+      "title": "FailureClass",
+      "type": "string"
+    },
+    "GoalStatus": {
+      "enum": [
+        "PLANNED",
+        "RUNNING",
+        "PARTIAL",
+        "SATISFIED",
+        "BLOCKED",
+        "EXHAUSTED"
+      ],
+      "title": "GoalStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Post-execution judgment. Success is never self-declared (§63).",
+  "properties": {
+    "goal_id": {
+      "title": "Goal Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/GoalStatus"
+    },
+    "satisfied_criteria": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Satisfied Criteria",
+      "type": "array"
+    },
+    "unmet_criteria": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Unmet Criteria",
+      "type": "array"
+    },
+    "gaps": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Gaps",
+      "type": "array"
+    },
+    "evidence_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Evidence Count",
+      "type": "integer"
+    },
+    "required_evidence_missing": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Required Evidence Missing",
+      "type": "array"
+    },
+    "evaluation_reason": {
+      "minLength": 1,
+      "title": "Evaluation Reason",
+      "type": "string"
+    },
+    "failure_class": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FailureClass"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "evaluated_at": {
+      "format": "date-time",
+      "title": "Evaluated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "goal_id",
+    "status",
+    "evaluation_reason"
+  ],
+  "title": "GoalEvaluation",
+  "type": "object"
+}

@@ -1,0 +1,14 @@
+# ===== 可选增强依赖（缺失时自动降级或功能不可用，不影响核心交付）=====
+# SVG 高质量 PNG 渲染（缺失时回退 svglib+reportlab）
+cairosvg>=2.7,<3
+# 网页抓取 TLS 指纹模拟（缺失时回退普通 requests）
+curl-cffi>=0.7,<1
+# SVG 实时预览（PPT 高保真管线的 live preview 环节；缺失时跳过预览）
+playwright>=1.40,<2
+# Gemini 图片后端（EWO 之外的备选生图通道；缺失时该后端不可用）
+google-genai>=1.0,<2
+# ipynb 转 Markdown（doc_to_md.py，缺失时该格式跳过）
+nbformat>=5,<6
+# web 抓取警告抑制（web_to_md.py CLI，缺失时仅少一个警告抑制调用）
+urllib3>=2,<3
+# 完整 Public Suffix List 解析（source_independence 优先使用；缺失时用内置冻结快照）

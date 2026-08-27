@@ -1,0 +1,1 @@
+record_id,record_ref,owner_task_id,supporting_task_ids,market,exact_model,goal_family,collection_goal,round,source_ids,canonical_record_key,content_sha256,novelty_type,parent_record_id,duplicate_of_record_id,material_new_fields,counts_toward_floor,status,created_date

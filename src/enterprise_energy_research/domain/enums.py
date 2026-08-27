@@ -44,6 +44,23 @@ class StatementType(StrEnum):
     TO_BE_CONFIRMED = "TO_BE_CONFIRMED"
 
 
+class ValueClass(StrEnum):
+    """Unified evidence value class (Agent integration, §19).
+
+    Superset of the overseas market skill's ledger vocabulary:
+    observed -> OBSERVED, derived -> DERIVED, modeled_estimate -> MODEL_ESTIMATE,
+    simulated -> SIMULATED, scenario_assumption -> ASSUMPTION,
+    pending_verification -> TO_BE_CONFIRMED.
+    """
+
+    OBSERVED = "OBSERVED"
+    DERIVED = "DERIVED"
+    MODEL_ESTIMATE = "MODEL_ESTIMATE"
+    SIMULATED = "SIMULATED"
+    ASSUMPTION = "ASSUMPTION"
+    TO_BE_CONFIRMED = "TO_BE_CONFIRMED"
+
+
 class ValidationStatus(StrEnum):
     PASS = "PASS"
     PASS_WITH_WARNINGS = "PASS_WITH_WARNINGS"

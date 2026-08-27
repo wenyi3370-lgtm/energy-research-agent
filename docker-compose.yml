@@ -35,10 +35,20 @@ services:
       EER_DESKTOP_PATH: /desktop
       # Run mode: synthetic (default, zero-config) | orchestrating (real research)
       EER_AUTOMATION_EXECUTOR: orchestrating
+      # 每日情报补跑巡检（10:40 后当天未发布且无运行锁则自动补跑）；
+      # 置为 off 可关闭（调试用），缺省即开启。
+      EER_INTELLIGENCE_CATCHUP: on
       # LLM gateway for real extraction (至少配置一个 provider):
       EER_DEEPSEEK_API_KEY: ${EER_DEEPSEEK_API_KEY:-}
+      EER_DEEPSEEK_API_BASE: ${EER_DEEPSEEK_API_BASE:-}
+      EER_PRIMARY_MODEL: ${EER_PRIMARY_MODEL:-}
+      # Vision pixel verification stays on the native DeepSeek vision model
+      # (dedicated credentials; research gateway may point elsewhere).
+      EER_VISION_API_KEY: ${EER_VISION_API_KEY:-}
+      EER_VISION_API_BASE: ${EER_VISION_API_BASE:-}
       # Runtime-only account rotation; passed to AnySearch as --api_key and
       # never baked into the image or committed configuration.
+      # 2026-08-26: 邮箱账号 2504575390@qq.com 注册的 key（.env），独立配额。
       EER_ANYSEARCH_API_KEY: ${EER_ANYSEARCH_API_KEY:-}
       # EER_OPENAI_API_KEY: ""
       # Kimi WebBridge browser session (daemon runs on host, port 10086):
@@ -88,6 +98,14 @@ services:
       - research-api
 
 volumes:
+  # 原栈（enterprise-energy-research 项目）的历史数据卷，以固定名显式挂载，
+  # 迁移项目名后数据保持连续。
   pgdata:
+    external: true
+    name: enterprise-energy-research_pgdata
   research-data:
+    external: true
+    name: enterprise-energy-research_research-data
   n8n-data:
+    external: true
+    name: enterprise-energy-research_n8n-data

@@ -239,6 +239,17 @@ class DeepResearchPayload(StrictModel):
     include_images: bool = True
     save_to_desktop: bool = False
     notify_feishu: bool = True
+    # Wall-clock budget for the whole recovery loop.  Evidence-absent gaps
+    # can stall the loop for hours; the budget guarantees a graceful
+    # terminal state (time_budget_exhausted) with all evidence retained.
+    time_budget_minutes: int = Field(default=90, ge=5, le=1440)
+    # When the recovery loop ends without passing the formal-publication
+    # gate (evidence absent from public channels / budget exhausted),
+    # publish a CONDITIONAL report from the verified evidence with a
+    # prominent caveat banner and the blocking-gap register, instead of
+    # leaving the run BLOCKED with no deliverables.  No fabricated facts:
+    # every published claim still comes from frozen, verified evidence.
+    publish_conditional: bool = True
 
 
 class NaturalResearchRequest(StrictModel):

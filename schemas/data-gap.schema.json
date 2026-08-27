@@ -48,7 +48,17 @@
         "conflicting",
         "stale",
         "unverifiable",
-        "requires_site_due_diligence"
+        "requires_site_due_diligence",
+        "NOT_SEARCHED",
+        "SEARCH_FAILED",
+        "SEARCHED_NOT_FOUND",
+        "FOUND_NOT_RETRIEVED",
+        "RETRIEVED_NOT_EXTRACTED",
+        "EXTRACTED_NOT_NORMALIZED",
+        "NORMALIZED_NOT_VERIFIED",
+        "VERIFIED_NOT_SYNTHESIZED",
+        "SYNTHESIZED_NOT_PUBLISHED",
+        "PUBLIC_EVIDENCE_GAP"
       ],
       "title": "Reason",
       "type": "string"

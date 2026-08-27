@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/assets/portal-logo.jpg">
+<title>新能源产业研究 Agent｜四川动力电池产业创新中心</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg0:#0A0314; --bg1:#160829;
+    --tsinghua:#660874; --violet:#8B3DFF; --magenta:#C77DFF; --lav:#E0AAFF;
+    --cyan:#4DE3FF; --green:#3DFFA8; --red:#FF5D7A; --amber:#FFB45D;
+    --ink:#F3EDFF; --ink-dim:rgba(226,212,255,.62); --ink-faint:rgba(226,212,255,.38);
+    --line:rgba(168,120,255,.18); --line-strong:rgba(168,120,255,.38);
+    --glass:rgba(26,11,50,.55);
+    --serif:"Noto Serif SC","Songti SC","SimSun",serif;
+    --sans:"Noto Sans SC","Microsoft YaHei",sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior:smooth; }
+  body {
+    margin:0; font-family:var(--sans); font-weight:300; color:var(--ink);
+    background:var(--bg0); min-height:100vh; overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection { background:rgba(139,61,255,.45); color:#fff; }
+  /* ————— 动态背景：清华紫极光 + 能源网格 ————— */
+  .bg { position:fixed; inset:0; z-index:-2; background:
+    radial-gradient(1200px 700px at 85% -10%, rgba(102,8,116,.55), transparent 60%),
+    radial-gradient(1000px 800px at -10% 110%, rgba(60,16,110,.6), transparent 55%),
+    linear-gradient(160deg,#0A0314 0%,#160829 45%,#1E0A38 100%);
+    background-size:100% 100%,100% 100%,200% 200%;
+    animation:bgShift 24s ease-in-out infinite alternate; }
+  @keyframes bgShift { from{background-position:0 0,0 0,0% 0%} to{background-position:0 0,0 0,100% 100%} }
+  .orb { position:fixed; border-radius:50%; filter:blur(90px); z-index:-1; opacity:.5; pointer-events:none; will-change:transform; }
+  .orb.o1 { width:46vw; height:46vw; left:-12vw; top:-14vh; background:radial-gradient(circle,rgba(139,61,255,.55),transparent 65%); animation:drift1 26s ease-in-out infinite alternate; }
+  .orb.o2 { width:38vw; height:38vw; right:-10vw; top:22vh; background:radial-gradient(circle,rgba(199,125,255,.4),transparent 65%); animation:drift2 32s ease-in-out infinite alternate; }
+  .orb.o3 { width:34vw; height:34vw; left:24vw; bottom:-18vh; background:radial-gradient(circle,rgba(77,227,255,.22),transparent 65%); animation:drift3 38s ease-in-out infinite alternate; }
+  @keyframes drift1 { from{transform:translate(0,0) scale(1)} to{transform:translate(9vw,7vh) scale(1.18)} }
+  @keyframes drift2 { from{transform:translate(0,0) scale(1.1)} to{transform:translate(-8vw,10vh) scale(.92)} }
+  @keyframes drift3 { from{transform:translate(0,0) scale(.95)} to{transform:translate(7vw,-9vh) scale(1.15)} }
+  .grid { position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.5;
+    background:
+      linear-gradient(rgba(168,120,255,.06) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(168,120,255,.06) 1px,transparent 1px);
+    background-size:56px 56px;
+    -webkit-mask-image:radial-gradient(ellipse 90% 70% at 50% 0%,#000 30%,transparent 75%);
+    mask-image:radial-gradient(ellipse 90% 70% at 50% 0%,#000 30%,transparent 75%);
+    animation:gridPan 30s linear infinite; }
+  @keyframes gridPan { from{background-position:0 0,0 0} to{background-position:0 56px,56px 0} }
+  /* ————— 布局 ————— */
+  .wrap { max-width:1180px; margin:0 auto; padding:36px 24px 80px; position:relative; }
+  /* ————— 顶栏：Logo + 中心名称 ————— */
+  .topbar { display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; margin-bottom:34px; }
+  .brand { display:flex; align-items:center; gap:16px; }
+  .logo-ring { position:relative; width:64px; height:64px; flex:0 0 auto; display:grid; place-items:center; }
+  .logo-ring::before { content:""; position:absolute; inset:0; border-radius:50%;
+    background:conic-gradient(from 0deg,var(--violet),var(--cyan),var(--magenta),var(--violet));
+    animation:spin 7s linear infinite; filter:blur(1px); }
+  .logo-ring::after { content:""; position:absolute; inset:3px; border-radius:50%; background:#0E0620; }
+  .logo-ring img { position:relative; z-index:1; width:52px; height:52px; border-radius:50%; background:#fff; padding:2px;
+    box-shadow:0 0 22px rgba(139,61,255,.55); }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .brand-text .cn { font-family:var(--serif); font-weight:700; font-size:19px; letter-spacing:.06em;
+    background:linear-gradient(90deg,#fff,var(--lav) 55%,#fff); background-size:200% 100%;
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    animation:shimmer 6s ease-in-out infinite; }
+  .brand-text .en { font-size:10px; letter-spacing:.24em; color:var(--ink-faint); margin-top:3px; text-transform:uppercase; }
+  @keyframes shimmer { 0%,100%{background-position:0% 0} 50%{background-position:100% 0} }
+  .top-tag { display:flex; align-items:center; gap:9px; padding:8px 16px; border-radius:999px;
+    border:1px solid var(--line); background:var(--glass); backdrop-filter:blur(12px);
+    font-size:12px; color:var(--ink-dim); letter-spacing:.14em; }
+  .top-tag .pulse-dot { width:8px; height:8px; border-radius:50%; background:var(--green); position:relative; }
+  .top-tag .pulse-dot::after { content:""; position:absolute; inset:-4px; border-radius:50%;
+    border:1px solid var(--green); animation:pulse 1.8s ease-out infinite; }
+  @keyframes pulse { from{transform:scale(.6);opacity:1} to{transform:scale(1.8);opacity:0} }
+  /* ————— Hero：标题 + V2G 产品主视觉（渐变融合） ————— */
+  .hero { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr); gap:36px; align-items:center; margin-bottom:36px; }
+  .hero .kicker { display:inline-flex; align-items:center; gap:8px; font-size:11px; letter-spacing:.3em; color:var(--cyan);
+    border:1px solid rgba(77,227,255,.3); border-radius:999px; padding:6px 14px; margin-bottom:18px;
+    background:rgba(77,227,255,.06); }
+  .hero .kicker svg { animation:boltFlicker 2.6s ease-in-out infinite; }
+  @keyframes boltFlicker { 0%,100%{opacity:1;filter:drop-shadow(0 0 4px rgba(77,227,255,.8))} 45%{opacity:.55;filter:none} 60%{opacity:1;filter:drop-shadow(0 0 8px rgba(77,227,255,1))} }
+  h1 { font-family:var(--serif); font-weight:900; font-size:clamp(28px,4.6vw,42px); line-height:1.22; margin:0 0 12px;
+    background:linear-gradient(115deg,#fff 15%,var(--lav) 45%,var(--violet) 75%,#fff 100%);
+    background-size:220% 100%; -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    animation:shimmer 8s ease-in-out infinite; }
+  .sub { color:var(--ink-dim); font-size:13px; line-height:1.8; margin-top:4px; }
+  .energy-line { display:block; margin-top:18px; width:min(420px,90%); height:26px; }
+  .energy-line path { stroke:url(#flowGrad); stroke-width:2; fill:none; stroke-linecap:round;
+    stroke-dasharray:14 22; animation:flow 2.6s linear infinite; }
+  @keyframes flow { to{stroke-dashoffset:-36} }
+  .hero-visual { position:relative; border-radius:22px; overflow:hidden; border:1px solid var(--line-strong);
+    box-shadow:0 24px 60px rgba(5,0,15,.55), 0 0 44px rgba(139,61,255,.16);
+    animation:heroFloat 7s ease-in-out infinite; }
+  @keyframes heroFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+  .hero-visual img { display:block; width:100%; height:270px; object-fit:cover; object-position:center 38%;
+    transform:scale(1.02); transition:transform 6s ease; }
+  .hero-visual:hover img { transform:scale(1.08); }
+  .hero-visual::after { content:""; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(100deg, rgba(10,3,20,.82) 0%, rgba(102,8,116,.38) 34%, transparent 62%),
+               linear-gradient(0deg, rgba(10,3,20,.78) 0%, transparent 42%); }
+  .hero-visual .tag { position:absolute; left:16px; bottom:14px; z-index:1; display:flex; align-items:center; gap:8px;
+    font-size:11px; letter-spacing:.18em; color:#fff; padding:7px 14px; border-radius:999px;
+    background:linear-gradient(120deg, rgba(102,8,116,.72), rgba(139,61,255,.5));
+    border:1px solid var(--line-strong); backdrop-filter:blur(8px); }
+  .hero-visual .tag svg { flex:0 0 auto; }
+  /* ————— Tab 栏：玻璃胶囊 + 渐变激活态 ————— */
+  .tabs { display:flex; gap:8px; flex-wrap:wrap; padding:8px; margin-top:6px;
+    border:1px solid var(--line); border-radius:16px; background:var(--glass); backdrop-filter:blur(14px);
+    box-shadow:0 14px 40px rgba(5,0,15,.4), inset 0 1px 0 rgba(255,255,255,.05); }
+  .tab { padding:10px 22px; cursor:pointer; color:var(--ink-dim); font-size:14px; letter-spacing:.04em;
+    border-radius:11px; user-select:none; border:1px solid transparent;
+    transition:color .25s, background .35s, box-shadow .35s, transform .2s; }
+  .tab:hover { color:#fff; background:rgba(139,61,255,.14); transform:translateY(-1px); }
+  .tab.active { color:#fff; font-weight:500;
+    background:linear-gradient(120deg, var(--tsinghua), var(--violet) 60%, var(--magenta));
+    background-size:180% 100%;
+    box-shadow:0 8px 22px rgba(102,8,116,.45), inset 0 1px 0 rgba(255,255,255,.18);
+    animation:tabGlow 3s ease-in-out infinite alternate; }
+  @keyframes tabGlow { from{background-position:0% 0} to{background-position:100% 0} }
+  .panel { display:none; padding-top:22px; }
+  .panel.active { display:block; animation:panelIn .5s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes panelIn { from{opacity:0; transform:translateY(16px)} to{opacity:1; transform:none} }
+  /* ————— 卡片：玻璃拟态 ————— */
+  .card { position:relative; border:1px solid var(--line); border-radius:18px; padding:22px 22px 20px; margin-top:16px;
+    background:var(--glass); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+    box-shadow:0 18px 50px rgba(5,0,15,.5), inset 0 1px 0 rgba(255,255,255,.05);
+    transition:transform .35s cubic-bezier(.2,.8,.2,1), border-color .35s, box-shadow .35s;
+    animation:rise .7s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes rise { from{opacity:0; transform:translateY(22px)} to{opacity:1; transform:none} }
+  .card:first-child { margin-top:0; }
+  .card:hover { transform:translateY(-3px); border-color:var(--line-strong);
+    box-shadow:0 26px 60px rgba(5,0,15,.6), 0 0 40px rgba(139,61,255,.12), inset 0 1px 0 rgba(255,255,255,.06); }
+  .card::before { content:""; position:absolute; top:0; left:22px; right:22px; height:1px;
+    background:linear-gradient(90deg, transparent, var(--violet), var(--cyan), transparent); opacity:.7; }
+  .card h3 { font-family:var(--serif); font-weight:700; color:#fff; letter-spacing:.03em; }
+  /* ————— 表单 ————— */
+  textarea { width:100%; min-height:96px; padding:13px 14px; font:inherit; font-size:14px; line-height:1.7;
+    color:var(--ink); background:rgba(255,255,255,.045); border:1px solid var(--line); border-radius:12px;
+    resize:vertical; outline:none; transition:border-color .25s, box-shadow .25s, background .25s; }
+  input[type=text] { padding:10px 13px; font:inherit; font-size:14px; color:var(--ink);
+    background:rgba(255,255,255,.045); border:1px solid var(--line); border-radius:11px; outline:none;
+    transition:border-color .25s, box-shadow .25s, background .25s; }
+  textarea::placeholder, input::placeholder { color:var(--ink-faint); }
+  textarea:focus, input[type=text]:focus { border-color:var(--violet);
+    box-shadow:0 0 0 3px rgba(139,61,255,.22), 0 0 18px rgba(139,61,255,.15); background:rgba(255,255,255,.07); }
+  /* ————— 按钮：全部渐变 ————— */
+  button { position:relative; overflow:hidden; padding:10px 22px; border:0; border-radius:12px; cursor:pointer;
+    font:inherit; font-size:14px; font-weight:500; letter-spacing:.06em; color:#fff;
+    background:linear-gradient(120deg, var(--tsinghua), var(--violet) 60%, var(--magenta));
+    background-size:180% 100%;
+    box-shadow:0 8px 24px rgba(102,8,116,.45), inset 0 1px 0 rgba(255,255,255,.18);
+    transition:background-position .5s, transform .2s, box-shadow .3s; }
+  button:hover { background-position:100% 0; transform:translateY(-1px);
+    box-shadow:0 12px 32px rgba(139,61,255,.5), inset 0 1px 0 rgba(255,255,255,.2); }
+  button:active { transform:translateY(0); }
+  button::after { content:""; position:absolute; top:0; bottom:0; width:60%; left:-80%; transform:skewX(-20deg);
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent);
+    animation:shine 3.6s ease-in-out infinite; }
+  @keyframes shine { 0%,60%{left:-80%} 100%{left:130%} }
+  button.ghost { color:var(--lav); border:1px solid var(--line-strong);
+    background:linear-gradient(120deg, rgba(139,61,255,.18), rgba(77,227,255,.10));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06); }
+  button.ghost:hover { color:#fff; box-shadow:0 10px 26px rgba(139,61,255,.28), inset 0 1px 0 rgba(255,255,255,.1); }
+  button.danger { background:linear-gradient(120deg, #8C1D3F, #D9365E 60%, #FF5D7A); background-size:180% 100%;
+    box-shadow:0 8px 24px rgba(217,54,94,.35), inset 0 1px 0 rgba(255,255,255,.16); }
+  button.small { padding:5px 12px; font-size:12.5px; border-radius:9px; }
+  button:disabled { background:rgba(255,255,255,.08); color:var(--ink-faint); cursor:not-allowed;
+    box-shadow:none; transform:none; }
+  button:disabled::after { display:none; }
+  /* ————— 通用元素 ————— */
+  .row { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .label { color:var(--ink-faint); font-size:12px; letter-spacing:.06em; }
+  .group { margin-top:14px; }
+  .group h3 { font-size:14px; margin:0 0 8px; }
+  ul { margin:0; padding-left:18px; font-size:13px; color:var(--ink-dim); line-height:1.9; }
+  .status { font-weight:600; }
+  .status.APPROVED,.status.COMPLETED { color:var(--green); }
+  .status.BLOCKED,.status.EXHAUSTED,.status.FAILED,.status.CANCELLED { color:var(--red); }
+  .status.AWAITING_APPROVAL,.status.PARTIAL,.status.RUNNING { color:var(--amber); }
+  .badge { display:inline-block; font-size:11px; padding:2px 10px; border-radius:999px; margin-right:6px;
+    color:var(--lav); border:1px solid var(--line-strong);
+    background:linear-gradient(120deg, rgba(139,61,255,.28), rgba(77,227,255,.12)); }
+  .hint { font-size:12.5px; color:var(--amber); margin-top:10px; white-space:pre-wrap; line-height:1.8; }
+  .okmsg { font-size:13px; color:var(--green); }
+  .errmsg { font-size:13px; color:var(--red); }
+  .trace { font-family:ui-monospace,Consolas,monospace; font-size:12px; white-space:pre-wrap; line-height:1.7;
+    color:var(--ink-dim); background:rgba(5,0,15,.55); border:1px solid var(--line); border-radius:12px;
+    padding:12px; max-height:260px; overflow:auto; }
+  table.goals { width:100%; border-collapse:collapse; font-size:13px; }
+  table.goals th { text-align:left; color:var(--ink-faint); font-weight:500; padding:7px 8px; border-bottom:1px solid var(--line-strong); letter-spacing:.06em; }
+  table.goals td { padding:7px 8px; border-bottom:1px solid rgba(168,120,255,.1); vertical-align:middle; }
+  table.goals input[type=text] { width:100%; }
+  .mission-item { border:1px solid var(--line); border-radius:14px; padding:13px 15px; margin-top:10px; cursor:pointer;
+    background:rgba(255,255,255,.03); transition:border-color .25s, background .25s, transform .25s, box-shadow .25s; }
+  .mission-item:hover { border-color:var(--violet); background:rgba(139,61,255,.1); transform:translateX(3px); }
+  .mission-item.selected { border-color:transparent; background:
+      linear-gradient(rgba(30,10,56,.92), rgba(30,10,56,.92)) padding-box,
+      linear-gradient(120deg, var(--violet), var(--cyan)) border-box;
+    box-shadow:0 0 26px rgba(139,61,255,.22); }
+  .mission-item .name { font-weight:600; color:#fff; }
+  .artifacts a { display:block; font-size:13px; color:var(--lav); margin-top:6px; word-break:break-all;
+    text-decoration:none; border-bottom:1px solid rgba(224,170,255,.3); padding-bottom:1px; transition:color .2s, border-color .2s; }
+  .artifacts a:hover { color:#fff; border-color:#fff; }
+  .actions { display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; }
+  .hidden { display:none !important; }
+  /* ————— 空态填充：研究轨道侧栏（未输入需求时展示） ————— */
+  .deco { position:relative; border:1px solid var(--line); border-radius:18px; overflow:hidden;
+    background:var(--glass); backdrop-filter:blur(18px);
+    box-shadow:0 18px 50px rgba(5,0,15,.5), inset 0 1px 0 rgba(255,255,255,.05);
+    animation:rise .8s cubic-bezier(.2,.8,.2,1) both; }
+  .deco-img { position:relative; height:170px; overflow:hidden; }
+  .deco-img img { width:100%; height:100%; object-fit:cover; display:block; }
+  .deco-img::after { content:""; position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(102,8,116,.15) 0%, rgba(10,3,20,.35) 55%, rgba(26,11,50,.95) 100%); }
+  .deco-body { padding:16px 18px 18px; }
+  .deco-title { font-family:var(--serif); font-weight:700; font-size:15px; color:#fff; letter-spacing:.05em; margin-bottom:10px;
+    display:flex; align-items:center; gap:8px; }
+  .deco-title svg { flex:0 0 auto; animation:boltFlicker 2.6s ease-in-out infinite; }
+  .deco-list { list-style:none; margin:0; padding:0; font-size:12.5px; color:var(--ink-dim); }
+  .deco-list li { position:relative; padding:7px 0 7px 20px; border-bottom:1px dashed rgba(168,120,255,.14); line-height:1.6; }
+  .deco-list li:last-child { border-bottom:0; }
+  .deco-list li::before { content:""; position:absolute; left:2px; top:13px; width:7px; height:7px; border-radius:50%;
+    background:linear-gradient(120deg, var(--violet), var(--cyan)); box-shadow:0 0 8px rgba(77,227,255,.5); }
+  .deco-flow { display:block; width:100%; height:22px; margin-top:12px; }
+  .deco-flow path { stroke:url(#flowGrad); stroke-width:2; fill:none; stroke-linecap:round;
+    stroke-dasharray:10 16; animation:flow 2.2s linear infinite; }
+  /* ————— 面板布局：未输入需求时侧栏填充页面 ————— */
+  @media (min-width:900px) {
+    #panel-enterprise.active, #panel-market.active { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:24px; align-items:start; }
+    #panel-enterprise > div:not(.deco), #panel-market > div:not(.deco) { grid-column:1; grid-row:1; }
+    #panel-enterprise > .deco, #panel-market > .deco { grid-column:2; grid-row:1; position:sticky; top:24px; }
+    #panel-enterprise.active:has([id$="-preview"]:not(.hidden)),
+    #panel-enterprise.active:has([id$="-statusCard"]:not(.hidden)),
+    #panel-market.active:has([id$="-preview"]:not(.hidden)),
+    #panel-market.active:has([id$="-statusCard"]:not(.hidden)) { grid-template-columns:1fr; }
+    #panel-enterprise.active:has([id$="-preview"]:not(.hidden)) > .deco,
+    #panel-enterprise.active:has([id$="-statusCard"]:not(.hidden)) > .deco,
+    #panel-market.active:has([id$="-preview"]:not(.hidden)) > .deco,
+    #panel-market.active:has([id$="-statusCard"]:not(.hidden)) > .deco { display:none; }
+    .intel-grid { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:24px; align-items:start; }
+  }
+  @media (max-width:899px) {
+    .hero { grid-template-columns:1fr; }
+    .deco { display:none; }
+  }
+  @media (max-width:560px) {
+    .card { padding:18px 16px; }
+    .brand-text .cn { font-size:16px; }
+    .tab { padding:9px 14px; font-size:13px; }
+  }
+  .footer { margin-top:48px; text-align:center; font-size:11px; letter-spacing:.16em; color:var(--ink-faint); line-height:2; }
+  .footer .credit { letter-spacing:.04em; opacity:.75; }
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div>
+<div class="grid"></div>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+<linearGradient id="flowGrad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#8B3DFF"/><stop offset=".5" stop-color="#4DE3FF"/><stop offset="1" stop-color="#C77DFF"/>
+</linearGradient></defs></svg>
+
+<div class="wrap">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo-ring"><img src="/assets/portal-logo.jpg" alt="四川动力电池产业创新中心"></div>
+      <div class="brand-text">
+        <div class="cn">四川动力电池产业创新中心</div>
+        <div class="en">Sichuan Power Battery Industry Innovation Center</div>
+      </div>
+    </div>
+    <div class="top-tag"><span class="pulse-dot"></span>ENERGY RESEARCH AGENT</div>
+  </header>
+
+  <section class="hero">
+    <div>
+      <span class="kicker">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2Z" fill="#4DE3FF"/></svg>
+        SMART ENERGY INTELLIGENCE
+      </span>
+      <h1>新能源产业研究 Agent</h1>
+      <div class="sub">企业调查与海外市场调研分轨进行；对已完成的任务可发起深度研究修复补充；每日情报定时推送。</div>
+      <svg class="energy-line" viewBox="0 0 420 26" preserveAspectRatio="none">
+        <path d="M2 16 C 60 4, 110 24, 170 13 S 290 4, 350 15 S 410 10, 418 13"/>
+      </svg>
+    </div>
+    <div class="hero-visual">
+      <img src="/assets/v2g-hero.jpg" alt="V2G 双向充放电桩">
+      <span class="tag">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2Z" fill="#4DE3FF"/></svg>
+        V2G 双向充放电 · VEHICLE-TO-GRID
+      </span>
+    </div>
+  </section>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="enterprise">企业调查</div>
+    <div class="tab" data-tab="market">海外市场调研</div>
+    <div class="tab" data-tab="deep">深度研究</div>
+    <div class="tab" data-tab="intel">每日情报</div>
+  </div>
+
+  <!-- ============ Tab 1/2: 企业调查 / 海外市场调研 ============ -->
+  <div class="panel active" id="panel-enterprise">
+    <aside class="deco">
+      <div class="deco-img"><img src="/assets/battery-pack.jpg" alt="动力电池包"></div>
+      <div class="deco-body">
+        <div class="deco-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2Z" fill="#4DE3FF"/></svg>
+          企业调查研究轨道
+        </div>
+        <ul class="deco-list">
+          <li>全量调研：主营业务 / 生产基地 / 产品线 / 竞争格局</li>
+          <li>证据校验：所有结论均可溯源复核</li>
+          <li>研究框架可编辑：改名、删除或新增自定义目标</li>
+          <li>交付物：Word · HTML · Excel，可推送飞书</li>
+        </ul>
+        <svg class="deco-flow" viewBox="0 0 300 22" preserveAspectRatio="none">
+          <path d="M2 12 C 45 3, 80 20, 125 11 S 215 3, 255 13 S 292 8, 298 11"/>
+        </svg>
+      </div>
+    </aside>
+  </div>
+  <div class="panel" id="panel-market">
+    <aside class="deco">
+      <div class="deco-img"><img src="/assets/market-port.jpg" alt="海外贸易港口"></div>
+      <div class="deco-body">
+        <div class="deco-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2Z" fill="#4DE3FF"/></svg>
+          海外市场调研轨道
+        </div>
+        <ul class="deco-list">
+          <li>目标市场：国家 / 地区 + 品类一句话锁定</li>
+          <li>关注维度：政策补贴 / 竞争格局 / 经济性测算</li>
+          <li>研究框架可编辑：改名、删除或新增自定义目标</li>
+          <li>交付物：Word · HTML · Excel，可推送飞书</li>
+        </ul>
+        <svg class="deco-flow" viewBox="0 0 300 22" preserveAspectRatio="none">
+          <path d="M2 12 C 45 3, 80 20, 125 11 S 215 3, 255 13 S 292 8, 298 11"/>
+        </svg>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ============ Tab 3: 深度研究 ============ -->
+  <div class="panel" id="panel-deep">
+    <div class="card">
+      <h3 style="margin:0 0 8px;font-size:15px">锁定已完成的调查任务</h3>
+      <div class="row">
+        <input type="text" id="deepQuery" placeholder="输入调查名称关键词，例如：宁德时代" style="flex:1">
+        <button id="deepSearchBtn">查找任务</button>
+      </div>
+      <div id="deepList"></div>
+    </div>
+
+    <div class="card hidden" id="deepForm">
+      <div class="row"><span class="label">已锁定任务</span><span id="deepTarget" style="font-weight:600"></span></div>
+      <div class="row" style="margin-top:4px"><span class="label">当前状态</span><span id="deepTargetStatus"></span></div>
+      <div class="group">
+        <h3>补充 / 修复需求（自然语言，可留空表示仅修复未达标目标）</h3>
+        <textarea id="deepRequest" placeholder="例如：补充宁德时代在德国的储能订单与产能布局；修复财务与经营目标缺失的证据。"></textarea>
+      </div>
+      <div class="actions">
+        <button id="deepStartBtn">启动深度研究</button>
+      </div>
+      <div class="hint" id="deepHint"></div>
+    </div>
+
+    <div class="card hidden" id="deepStatusCard">
+      <div class="row">
+        <span class="label">深度研究状态</span>
+        <span class="status" id="deepStatus"></span>
+      </div>
+      <div class="group">
+        <h3>目标修复进展</h3>
+        <div id="deepGoals"></div>
+      </div>
+      <div class="actions">
+        <button id="deepStopBtn" class="danger">停止深度研究</button>
+      </div>
+      <div class="group">
+        <h3>阶段轨迹（调试信息）</h3>
+        <div class="trace" id="deepTrace"></div>
+      </div>
+      <div class="group hidden artifacts" id="deepArtifacts">
+        <h3>交付物</h3>
+        <div id="deepArtifactLinks"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Tab 4: 每日情报 ============ -->
+  <div class="panel" id="panel-intel">
+    <div class="intel-grid">
+      <div>
+        <div class="card">
+          <div class="row">
+            <div>
+              <h3 style="margin:0;font-size:15px">V2G &amp; 储能每日情报</h3>
+              <div class="sub">n8n 每天定时触发；也可在此手动生成。暂停期间定时触发会被拦截。</div>
+            </div>
+            <span class="status" id="intelState"></span>
+          </div>
+          <div class="actions">
+            <button id="intelRunBtn">立即生成今日情报并推送</button>
+            <button id="intelPauseBtn" class="ghost">暂停推送</button>
+            <button id="intelResumeBtn" class="ghost">恢复推送</button>
+          </div>
+          <div class="hint" id="intelHint"></div>
+        </div>
+        <div class="card hidden" id="intelBriefCard">
+          <h3 style="margin:0 0 8px;font-size:15px">最新日报</h3>
+          <div id="intelBrief"></div>
+        </div>
+      </div>
+      <aside class="deco">
+        <div class="deco-img"><img src="/assets/intel-bess.jpg" alt="储能电站"></div>
+        <div class="deco-body">
+          <div class="deco-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2Z" fill="#4DE3FF"/></svg>
+            每日情报机制
+          </div>
+          <ul class="deco-list">
+            <li>每日 10:00（北京时间）自动采集生成</li>
+            <li>聚焦 V2G &amp; 储能行业动态</li>
+            <li>完成后自动推送飞书群</li>
+            <li>同日不重复采集；可随时暂停 / 恢复</li>
+          </ul>
+          <svg class="deco-flow" viewBox="0 0 300 22" preserveAspectRatio="none">
+            <path d="M2 12 C 45 3, 80 20, 125 11 S 215 3, 255 13 S 292 8, 298 11"/>
+          </svg>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="footer">
+    SICHUAN POWER BATTERY INDUSTRY INNOVATION CENTER · ENERGY RESEARCH AGENT<br>
+    <span class="credit">页面配图（V2G 充电桩 / 动力电池包 / 贸易港口 / 储能电站）：Wikimedia Commons · 仅作示意</span>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const MODE_CN = {ENTERPRISE:'企业研究', MARKET:'市场研究', HYBRID:'企业 + 市场研究'};
+const STATUS_CN = {PARSED:'已解析', PLANNED:'已规划', ROUTED:'已路由', AWAITING_APPROVAL:'待审批', APPROVED:'已批准',
+  RUNNING:'研究中', COMPLETED:'已完成', PARTIAL:'部分完成', BLOCKED:'已阻断', EXHAUSTED:'证据受限', FAILED:'失败', CANCELLED:'已取消'};
+const GOAL_CN = {PLANNED:'待研究', RUNNING:'研究中', PARTIAL:'部分达标', SATISFIED:'已达标', BLOCKED:'已阻断', EXHAUSTED:'预算耗尽'};
+const TERMINAL = ['COMPLETED','PARTIAL','BLOCKED','EXHAUSTED','FAILED','CANCELLED'];
+
+async function api(method, url, body) {
+  const res = await fetch(url, {
+    method, headers: body ? {'Content-Type':'application/json'} : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data && data.detail) || res.status);
+  return data;
+}
+
+/* ---------------- tabs ---------------- */
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === tab));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    $('panel-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'intel') refreshIntel();
+    if (tab.dataset.tab === 'deep') deepSearch();
+  };
+});
+
+/* ============ Tab 1/2: shared research-track builder ============ */
+function buildTrackPanel(track) {
+  const isEnterprise = track === 'enterprise';
+  const panel = document.createElement('div');
+  panel.innerHTML = `
+    <div class="card">
+      <h3 style="margin:0 0 6px;font-size:15px">${isEnterprise ? '企业调查' : '海外市场调研'}</h3>
+      <div class="sub">${isEnterprise
+        ? '用一句话描述企业调研需求（主体、关注点），系统解析出研究框架，你可修改框架后开始。'
+        : '用一句话描述海外市场调研需求（国家/地区、品类、关注点），系统解析出研究框架，你可修改框架后开始。'}</div>
+      <textarea id="${track}-request" placeholder="${isEnterprise
+        ? '例如：调研宁波鄞开集团，重点分析主营业务、生产基地、产品线和竞争情况。'
+        : '例如：调研德国户用储能市场，关注政策补贴、竞争格局与经济性。'}"></textarea>
+      <div class="actions">
+        <button id="${track}-parseBtn">解析需求</button>
+        <button id="${track}-backBtn" class="ghost hidden">重新输入</button>
+      </div>
+    </div>
+    <div class="card hidden" id="${track}-preview"></div>
+    <div class="card hidden" id="${track}-statusCard">
+      <div class="row">
+        <span class="label">任务状态</span><span class="status" id="${track}-status"></span>
+      </div>
+      <div class="group">
+        <h3>目标进展</h3>
+        <div id="${track}-goals"></div>
+      </div>
+      <div class="actions">
+        <button id="${track}-stopBtn" class="danger">停止调查</button>
+      </div>
+      <div class="hint" id="${track}-stopHint"></div>
+      <div class="group">
+        <h3>研究阶段轨迹（调试信息）</h3>
+        <div class="trace" id="${track}-trace"></div>
+      </div>
+      <div class="group hidden artifacts" id="${track}-artifacts">
+        <h3>交付物</h3>
+        <div id="${track}-artifactLinks"></div>
+      </div>
+    </div>`;
+  const state = {missionId: null, goalRows: [], timer: null};
+
+  const q = (suffix) => $(track + '-' + suffix);
+  panel.querySelector(`#${track}-parseBtn`).onclick = async () => {
+    const raw = q('request').value.trim();
+    if (!raw) return;
+    try {
+      const data = await api('POST', '/api/agent/parse', {raw_request: raw, track});
+      state.missionId = data.mission_id;
+      renderPreview(data);
+    } catch (e) { alert('解析失败：' + e.message); }
+  };
+  panel.querySelector(`#${track}-backBtn`).onclick = () => q('preview').classList.add('hidden');
+
+  function renderPreview(data) {
+    const preview = q('preview');
+    state.goalRows = [];
+    const rowsHtml = Object.entries(data.goal_groups || {}).map(([kind, goals]) =>
+      goals.map(g => { state.goalRows.push({goal_id: g.id, goal_name: g.name, kind}); return goalRowHtml({goal_id: g.id, goal_name: g.name, kind}); }).join('')
+    ).join('');
+    const hint = (data.diagnostics || []).length
+      ? `<div class="hint">${data.diagnostics.join('\n')}</div>` : '';
+    preview.innerHTML = `
+      <div class="row"><span class="label">研究主体</span><span>${data.primary_subject || '（未识别出明确主体）'}</span></div>
+      <div class="row" style="margin-top:4px"><span class="label">研究类型</span><span>${MODE_CN[data.research_mode] || data.research_mode}</span></div>
+      ${hint}
+      <div class="group">
+        <h3>研究框架（可直接修改名称或删除；也可新增自定义目标）</h3>
+        <table class="goals"><thead><tr><th style="width:130px">类别</th><th>目标名称</th><th style="width:44px"></th></tr></thead>
+        <tbody id="${track}-goalBody">${rowsHtml}</tbody></table>
+        <div class="actions">
+          <button id="${track}-addGoalBtn" class="ghost small">+ 添加自定义目标</button>
+          <button id="${track}-saveGoalsBtn" class="ghost small">保存框架修改</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="${track}-approveBtn">确认框架并开始研究</button>
+      </div>`;
+    preview.classList.remove('hidden');
+    q('backBtn').classList.remove('hidden');
+    preview.querySelector(`#${track}-addGoalBtn`).onclick = () => {
+      const tbody = preview.querySelector(`#${track}-goalBody`);
+      tbody.insertAdjacentHTML('beforeend', goalRowHtml({goal_id: '', goal_name: '', kind: '自定义', custom: true}));
+    };
+    preview.querySelector(`#${track}-saveGoalsBtn`).onclick = saveGoals;
+    preview.querySelector(`#${track}-approveBtn`).onclick = approve;
+    // Event delegation: covers rows added later by "+ 添加自定义目标".
+    preview.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('button[data-del]');
+      if (btn) btn.closest('tr').remove();
+    });
+  }
+
+  function goalRowHtml(g) {
+    return `<tr class="goal-row">
+      <td><span class="badge">${g.kind}</span></td>
+      <td><input type="text" data-goal-id="${g.goal_id || ''}" value="${(g.goal_name || '').replace(/"/g, '&quot;')}" placeholder="目标名称"></td>
+      <td><button class="ghost small" data-del>✕</button></td></tr>`;
+  }
+
+  async function saveGoals() {
+    const goals = [...q('preview').querySelectorAll('input[data-goal-id]')]
+      .map(input => ({goal_id: input.dataset.goal_id, goal_name: input.value.trim()}))
+      .filter(g => g.goal_name);
+    if (!goals.length) { alert('研究框架至少保留一个目标'); return; }
+    try {
+      const data = await api('POST', `/api/agent/mission/${state.missionId}/goals`, {goals});
+      renderPreview(data);
+    } catch (e) { alert('保存失败：' + e.message); }
+  }
+
+  async function approve() {
+    try {
+      await api('POST', `/api/agent/mission/${state.missionId}/approve`, {approve: true, message: '用户在 Agent 引导页确认'});
+      q('preview').classList.add('hidden');
+      q('statusCard').classList.remove('hidden');
+      q('stopBtn').disabled = false;
+      q('stopHint').textContent = '';
+      poll();
+    } catch (e) { alert('启动失败：' + e.message); }
+  }
+
+  panel.querySelector(`#${track}-stopBtn`).onclick = async () => {
+    try {
+      const r = await api('POST', `/api/agent/mission/${state.missionId}/stop`);
+      q('stopBtn').disabled = true;
+      q('stopHint').textContent = '停止指令已下发：海外采集进程立即终止；企业研究在当前步骤完成后停止。';
+    } catch (e) { alert('停止失败：' + e.message); }
+  };
+
+  async function poll() {
+    if (!state.missionId) return;
+    try {
+      const data = await api('GET', `/api/agent/mission/${state.missionId}`);
+      const m = data.mission;
+      q('status').textContent = STATUS_CN[m.status] || m.status;
+      q('status').className = 'status ' + m.status;
+      q('goals').innerHTML = (m.goals || []).map(g =>
+        `<div class="row"><span>${g.goal_name}</span><span class="label">${GOAL_CN[g.status] || g.status}</span></div>`
+      ).join('');
+      q('trace').textContent = (data.trace || []).map(t => `${t.created_at}  ${t.event}  ${JSON.stringify(t.payload)}`).join('\n');
+      if (m.artifact_refs && m.artifact_refs.length) {
+        q('artifacts').classList.remove('hidden');
+        q('artifactLinks').innerHTML = m.artifact_refs.map(ref => `<a href="javascript:void(0)" title="${ref}">${ref.split(/[\\/]/).pop()}</a>`).join('');
+      }
+      if (TERMINAL.includes(m.status)) { q('stopBtn').disabled = true; return; }
+    } catch (e) { /* transient poll error */ }
+    state.timer = setTimeout(poll, 4000);
+  }
+
+  return panel;
+}
+
+$('panel-enterprise').appendChild(buildTrackPanel('enterprise'));
+$('panel-market').appendChild(buildTrackPanel('market'));
+
+/* ============ Tab 3: deep research ============ */
+const deep = {missionId: null, timer: null};
+
+$('deepSearchBtn').onclick = deepSearch;
+
+async function deepSearch() {
+  const query = $('deepQuery').value.trim();
+  try {
+    const data = await api('GET', `/api/agent/missions?status=COMPLETED,PARTIAL,EXHAUSTED,BLOCKED&limit=10&query=${encodeURIComponent(query)}`);
+    const list = data.missions || [];
+    $('deepList').innerHTML = list.length ? '' : '<div class="sub" style="margin-top:10px">没有找到已完成的调查任务。</div>';
+    list.forEach(m => {
+      const item = document.createElement('div');
+      item.className = 'mission-item';
+      const gs = m.goal_summary || {};
+      item.innerHTML = `
+        <div class="row">
+          <span class="name">${m.primary_subject || m.mission_id}</span>
+          <span class="status ${m.status}">${STATUS_CN[m.status] || m.status}</span>
+        </div>
+        <div class="sub" style="margin-top:4px">${MODE_CN[m.mode] || m.mode} · 目标达标 ${gs.satisfied || 0}/${gs.total || 0}` +
+        (gs.exhausted ? ` · 预算耗尽 ${gs.exhausted}` : '') + (gs.blocked ? ` · 阻断 ${gs.blocked}` : '') +
+        ` · 更新于 ${String(m.updated_at || '').replace('T', ' ').slice(0, 16)}</div>`;
+      item.onclick = () => {
+        document.querySelectorAll('.mission-item').forEach(el => el.classList.remove('selected'));
+        item.classList.add('selected');
+        deep.missionId = m.mission_id;
+        $('deepTarget').textContent = m.primary_subject || m.mission_id;
+        $('deepTargetStatus').textContent = `${STATUS_CN[m.status] || m.status}（目标达标 ${gs.satisfied || 0}/${gs.total || 0}）`;
+        $('deepForm').classList.remove('hidden');
+      };
+      $('deepList').appendChild(item);
+    });
+  } catch (e) { $('deepList').innerHTML = `<div class="errmsg">查找失败：${e.message}</div>`; }
+}
+
+$('deepStartBtn').onclick = async () => {
+  if (!deep.missionId) return;
+  try {
+    await api('POST', `/api/agent/mission/${deep.missionId}/deep-research`, {raw_request: $('deepRequest').value.trim()});
+    $('deepHint').textContent = '';
+    $('deepStatusCard').classList.remove('hidden');
+    $('deepStopBtn').disabled = false;
+    deepPoll();
+  } catch (e) { $('deepHint').textContent = '启动失败：' + e.message; }
+};
+
+$('deepStopBtn').onclick = async () => {
+  try {
+    await api('POST', `/api/agent/mission/${deep.missionId}/stop`);
+    $('deepStopBtn').disabled = true;
+  } catch (e) { alert('停止失败：' + e.message); }
+};
+
+async function deepPoll() {
+  if (!deep.missionId) return;
+  try {
+    const data = await api('GET', `/api/agent/mission/${deep.missionId}`);
+    const m = data.mission;
+    $('deepStatus').textContent = STATUS_CN[m.status] || m.status;
+    $('deepStatus').className = 'status ' + m.status;
+    $('deepGoals').innerHTML = (m.goals || []).map(g =>
+      `<div class="row"><span>${g.goal_name}</span><span class="label">${GOAL_CN[g.status] || g.status}${g.recovery_rounds ? ` · 补救 ${g.recovery_rounds} 轮` : ''}</span></div>`
+    ).join('');
+    $('deepTrace').textContent = (data.trace || []).map(t => `${t.created_at}  ${t.event}  ${JSON.stringify(t.payload)}`).join('\n');
+    if (m.artifact_refs && m.artifact_refs.length) {
+      $('deepArtifacts').classList.remove('hidden');
+      $('deepArtifactLinks').innerHTML = m.artifact_refs.map(ref => `<a href="javascript:void(0)" title="${ref}">${ref.split(/[\\/]/).pop()}</a>`).join('');
+    }
+    if (TERMINAL.includes(m.status)) { $('deepStopBtn').disabled = true; return; }
+  } catch (e) { /* transient poll error */ }
+  deep.timer = setTimeout(deepPoll, 4000);
+}
+
+/* ============ Tab 4: daily intelligence ============ */
+async function refreshIntel() {
+  try {
+    const s = await api('GET', '/api/v1/intelligence/status');
+    let label = s.paused ? '已暂停' : (s.running ? '生成中' : (s.published_today ? '今日已发布' : '待生成'));
+    $('intelState').textContent = `${label} · ${s.date}`;
+  } catch (e) { $('intelState').textContent = '状态未知'; }
+}
+
+$('intelRunBtn').onclick = async () => {
+  $('intelHint').textContent = '正在采集与推送今日情报（约 3-5 分钟）…';
+  $('intelRunBtn').disabled = true;
+  try {
+    const r = await api('POST', '/api/v1/intelligence/daily');
+    $('intelHint').textContent = r.already_published ? '今日情报已发布；不会重复采集或推送。'
+      : (r.running && !r.triggered ? '今日情报正在生成；重复点击已被拦截。' : '今日情报生成中，完成后将推送飞书群。');
+  } catch (e) { $('intelHint').textContent = '触发失败：' + e.message; }
+  $('intelRunBtn').disabled = false;
+  refreshIntel(); loadLatestBrief();
+};
+
+$('intelPauseBtn').onclick = async () => {
+  await api('POST', '/api/v1/intelligence/pause');
+  $('intelHint').textContent = '每日情报推送已暂停；定时触发会被拦截。';
+  refreshIntel();
+};
+$('intelResumeBtn').onclick = async () => {
+  await api('POST', '/api/v1/intelligence/resume');
+  $('intelHint').textContent = '每日情报推送已恢复。';
+  refreshIntel();
+};
+
+async function loadLatestBrief() {
+  try {
+    const brief = await api('GET', '/api/v1/intelligence/daily/latest');
+    if (!brief || !brief.brief_date) { $('intelBriefCard').classList.add('hidden'); return; }
+    $('intelBriefCard').classList.remove('hidden');
+    const items = (brief.items || []).map(item => `<li>${item.title || item.summary || JSON.stringify(item).slice(0, 80)}</li>`).join('');
+    const watch = (brief.watch_list || []).map(w => `<li>${w}</li>`).join('');
+    $('intelBrief').innerHTML = `
+      <div class="row"><span class="label">日期</span><span>${brief.brief_date}</span></div>
+      ${brief.judgment ? `<div class="group"><h3>今日判断</h3><div style="font-size:13px">${brief.judgment}</div></div>` : ''}
+      ${items ? `<div class="group"><h3>情报条目（${(brief.items || []).length}）</h3><ul>${items}</ul></div>` : ''}
+      ${watch ? `<div class="group"><h3>建议关注</h3><ul>${watch}</ul></div>` : ''}`;
+  } catch (e) { $('intelBriefCard').classList.add('hidden'); }
+}
+loadLatestBrief();
+</script>
+</body>
+</html>

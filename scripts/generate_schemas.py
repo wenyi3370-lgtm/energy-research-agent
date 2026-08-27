@@ -21,6 +21,14 @@ def main() -> None:
         ResearchRequest,
         ValidationReport,
     )
+    from enterprise_energy_research.agent.models import (
+        GoalEvaluation,
+        RecoveryPlan,
+        ResearchGoal,
+        ResearchMission,
+        RoutingDecision,
+        SkillRunResult,
+    )
 
     targets = {
         "research-request.schema.json": ResearchRequest,
@@ -34,6 +42,13 @@ def main() -> None:
         "data-freeze.schema.json": DataFreeze,
         "artifact-manifest.schema.json": ArtifactManifest,
         "validation-report.schema.json": ValidationReport,
+        # Agent control-plane contracts (§54)
+        "research-mission.schema.json": ResearchMission,
+        "research-goal.schema.json": ResearchGoal,
+        "routing-decision.schema.json": RoutingDecision,
+        "skill-run-result.schema.json": SkillRunResult,
+        "goal-evaluation.schema.json": GoalEvaluation,
+        "recovery-plan.schema.json": RecoveryPlan,
     }
     output = root / "schemas"
     output.mkdir(exist_ok=True)

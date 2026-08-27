@@ -1,0 +1,62 @@
+{
+  "evidence_id": "PLATFORM-LIMIT-XXX",
+  "task_id": "TASK-R2",
+  "related_task_ids": [
+    "TASK-R1",
+    "TASK-R2",
+    "TASK-R3"
+  ],
+  "platform_limits": [
+    {
+      "platform": "platform-1",
+      "source_ids": [
+        "SRC-XXX"
+      ],
+      "url": "https://example.com/reviews",
+      "access_date": "YYYY-MM-DD",
+      "visible_total_count": 0,
+      "accessible_unique_count": 0,
+      "collected_raw_count": 0,
+      "duplicate_removed_count": 0,
+      "attempted_methods": [
+        "browser_pagination",
+        "alternate_query_or_endpoint"
+      ],
+      "blocker_reason": "Explain the observed platform boundary after all retrieval attempts.",
+      "raw_capture_refs": [
+        "raw/platform-limit/platform-1.txt"
+      ],
+      "record_refs": []
+    },
+    {
+      "platform": "platform-2",
+      "source_ids": [
+        "SRC-YYY"
+      ],
+      "url": "https://example.org/reviews",
+      "access_date": "YYYY-MM-DD",
+      "visible_total_count": 0,
+      "accessible_unique_count": 0,
+      "collected_raw_count": 0,
+      "duplicate_removed_count": 0,
+      "attempted_methods": [
+        "browser_pagination",
+        "alternate_query_or_endpoint"
+      ],
+      "blocker_reason": "Explain the observed platform boundary after all retrieval attempts.",
+      "raw_capture_refs": [
+        "raw/platform-limit/platform-2.txt"
+      ],
+      "record_refs": []
+    }
+  ],
+  "combined_accessible_unique_count": 0,
+  "combined_collected_valid_count": 0,
+  "remaining_high_priority_ids": [],
+  "approval": {
+    "status": "approved",
+    "approved_by": "human name or role",
+    "approval_date": "YYYY-MM-DD",
+    "approval_message": "Confirm that all accessible reviews were collected and the evidence was inspected."
+  }
+}

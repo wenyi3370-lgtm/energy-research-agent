@@ -1,5 +1,17 @@
 # Workflow
 
+## 0. Agent control flow (Energy Research Agent)
+
+```text
+PREFLIGHT → MISSION_PARSE → GOAL_PLAN → ROUTING → APPROVAL → EXECUTE_SKILLS
+→ INGEST → GOAL_EVALUATION → (RECOVERY → EXECUTE_SKILLS)* → SYNTHESIS
+→ UNIFIED_VALIDATE → FREEZE → ARTIFACT_PLAN → PUBLISH → CROSS_VALIDATE → PACKAGE
+```
+
+One orchestrator owns the LLM steps (mission parse, goal decomposition, routing,
+evaluation, recovery, synthesis); deterministic skills own execution and gates.
+See ADR-AGENT-001..006 and `src/enterprise_energy_research/agent/`.
+
 ## 1. State machine
 
 ```mermaid

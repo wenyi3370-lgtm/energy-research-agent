@@ -18,6 +18,7 @@ from .enums import (
     SourceLevel,
     StatementType,
     ValidationStatus,
+    ValueClass,
     VerificationStatus,
 )
 
@@ -188,6 +189,25 @@ class Claim(StrictModel):
     confidence: float = Field(ge=0.0, le=1.0)
     conflict_group_id: str | None = None
     notes: str | None = None
+    # Agent integration (§20): goal-family attribution chain —
+    # LLM-declared family, else the originating query's topic, else the
+    # extraction-contract inverse lookup. Never a fuzzy "looks relevant".
+    goal_family: str | None = None
+    # Unified evidence-layer extensions (Energy Research Agent). Optional so that
+    # enterprise-only evidence stays byte-compatible; populated by the market
+    # evidence importer and the agent orchestrator (§19 five-boundary fields).
+    mission_id: str | None = None
+    goal_id: str | None = None
+    subject_id: str | None = None
+    subject_role: Literal["SUBJECT", "COMPETITOR", "ECOSYSTEM", "MARKET_CONTEXT", "OTHER"] | None = None
+    originating_skill: str | None = None
+    claim_type: str | None = None
+    value_class: ValueClass | None = None
+    geography: str | None = None
+    source_url: HttpUrl | None = None
+    source_type: str | None = None
+    source_grade: str | None = None
+    raw_capture_ref: str | None = None
 
     @model_validator(mode="after")
     def validate_period(self) -> "Claim":
@@ -449,6 +469,10 @@ class ExtractedClaim(StrictModel):
     scope: str | None = None
     qualifier: Literal["exact", "approximately", "at_least", "at_most", "range", "unknown"] = "unknown"
     locator: dict[str, Any] = Field(default_factory=dict)
+    # Agent integration (§20): the extraction LLM names the goal family this
+    # claim belongs to, chosen from the planner's goal-family vocabulary. The
+    # binding layer validates it against the plan contract deterministically.
+    goal_family: str | None = None
 
 
 class ExtractedEntity(StrictModel):
@@ -634,6 +658,9 @@ class ArtifactManifest(StrictModel):
     run_id: str
     freeze_id: str
     artifacts: list[ArtifactBinding]
+    # §37: validated sub-artifacts (e.g. overseas market Excel models, Five
+    # Views reports) referenced — never re-published — by the unified plane.
+    sub_artifact_refs: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utc_now)
     schema_version: str = "1.0"
 
@@ -675,3 +702,27 @@ class FrozenResearchBundle(StrictModel):
     products: list[Product] = Field(default_factory=list)
     energy_profiles: list[EnergyProfile] = Field(default_factory=list)
     solutions: list[Solution] = Field(default_factory=list)
+    # Agent cross-domain findings (§35/§36). Populated by the unified publisher
+    # before artifact rendering; publishers consume them unchanged.
+    cross_domain_findings: list["CrossDomainFinding"] = Field(default_factory=list)
+
+
+class CrossDomainFinding(StrictModel):
+    """Traceable cross-domain conclusion (§36). Never a bare LLM opinion.
+
+    Lives in the domain plane because the frozen bundle and narrative consume
+    it; the agent layer imports and re-exports this model.
+    """
+
+    finding_id: str
+    finding_type: Literal[
+        "MARKET_FIT", "PRODUCT_FIT", "CHANNEL_FIT", "TIMING", "RISK",
+        "OPPORTUNITY", "COOPERATION_POTENTIAL", "ENTRY_STRATEGY",
+    ]
+    statement: str = Field(min_length=1)
+    enterprise_evidence_refs: list[str] = Field(default_factory=list)
+    market_evidence_refs: list[str] = Field(default_factory=list)
+    counter_evidence_refs: list[str] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0)
+    conditions: list[str] = Field(default_factory=list)

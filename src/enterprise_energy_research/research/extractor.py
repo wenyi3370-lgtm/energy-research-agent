@@ -76,6 +76,7 @@ class EvidenceExtractor:
             "raw_text": "原文中写明的成立时间",
             "context_text": "原文中的一句完整引用",
             "qualifier": "exact",
+            "goal_family": "company_identity",
         }],
         "factories": [],
         "products": [],
@@ -90,6 +91,7 @@ class EvidenceExtractor:
         "raw_text": "原文中写明公司全称的句子",
         "context_text": "包含公司全称的完整原文引用",
         "qualifier": "exact",
+        "goal_family": "company_identity",
     }
 
     def __init__(self, gateway: ModelGateway | None = None) -> None:
@@ -98,6 +100,14 @@ class EvidenceExtractor:
         # Failures are surfaced (never silently dropped) by the orchestrator
         # via ExecutionOutcome.review_reasons.
         self.last_failures: list[str] = []
+        # Full-text hydration rebinds one fetched URL to every originating
+        # goal, so the same page can arrive via several envelopes.  The
+        # structured extraction of a URL is deterministic enough to reuse
+        # within one research pass: one LLM call per URL, goal context
+        # rewritten per envelope.  ``None`` marks "extraction already
+        # attempted, nothing usable" (deterministic drop, e.g. target
+        # enterprise absent) so repeated goals skip the wasted call too.
+        self._url_batches: dict[str, list[ExtractedEvidenceBatch] | None] = {}
 
     def extract(self, result: SearchResultEnvelope) -> list[ExtractedEvidenceBatch]:
         self.last_failures = []
@@ -108,6 +118,27 @@ class EvidenceExtractor:
                 batches.append(ExtractedEvidenceBatch.model_validate(recorded))
                 continue
             if not hit.final_url or not hit.text or self.gateway is None:
+                continue
+            url = str(hit.final_url)
+            goal_metadata = {
+                "is_search_snippet": bool(hit.metadata.get("snippet")),
+                "origin_query_id": result.query_id,
+                "origin_topic": result.topic,
+                "goal_domain": result.goal_domain,
+                "subject_role": result.subject_role,
+                "evidence_lane": result.evidence_lane,
+                "evidence_use": result.evidence_use,
+                "requirement_text": result.requirement_text,
+            }
+            if url in self._url_batches:
+                cached = self._url_batches[url]
+                if cached is not None:
+                    # Snippet status is ADAPTER metadata, not model judgement:
+                    # the model must never upgrade a snippet to a page, nor
+                    # downgrade an extracted full page to a snippet.
+                    batches.extend(
+                        batch.model_copy(update=goal_metadata) for batch in cached
+                    )
                 continue
             prompt = self._build_prompt(result, hit)
             try:
@@ -141,22 +172,18 @@ class EvidenceExtractor:
                     f"{result.query_id} {hit.final_url}: schema validation: {str(exc)[:160]}"
                 )
                 continue
-            batch = self._sanitize_batch(batch, result, hit.final_url)
+            batch = self._sanitize_batch(batch, result, hit.final_url, hit)
             if batch is not None:
                 # Snippet status is ADAPTER metadata, not model judgement:
                 # the model must never upgrade a snippet to a page, nor
                 # downgrade an extracted full page to a snippet.
-                batch = batch.model_copy(update={
-                    "is_search_snippet": bool(hit.metadata.get("snippet")),
-                    "origin_query_id": result.query_id,
-                    "origin_topic": result.topic,
-                    "goal_domain": result.goal_domain,
-                    "subject_role": result.subject_role,
-                    "evidence_lane": result.evidence_lane,
-                    "evidence_use": result.evidence_use,
-                    "requirement_text": result.requirement_text,
-                })
+                batch = batch.model_copy(update=goal_metadata)
+                self._url_batches[url] = [batch]
                 batches.append(batch)
+            else:
+                # Deterministic drop (dangling records / target absent):
+                # remember it so later goals skip the same doomed call.
+                self._url_batches[url] = None
         return batches
 
     def _build_prompt(self, result: SearchResultEnvelope, hit) -> str:
@@ -176,10 +203,18 @@ class EvidenceExtractor:
                 "不得把输入的公司简称直接当成注册全称。\n"
                 f"Identity claim example:\n{json.dumps(self.IDENTITY_CLAIM_EXAMPLE, ensure_ascii=False)}\n"
             )
+        canonical = result.canonical_company_name or '未提供'
+        aliases = '、'.join(result.canonical_company_aliases) or '无'
         return (
             "从提供的页面中提取企业事实。\n"
-            f"本次唯一研究主体是：{result.canonical_company_name or '未提供'}。"
-            f"已验证的同一主体名称/别名仅包括：{'、'.join(result.canonical_company_aliases) or '无'}。"
+            f"本次唯一研究主体是：{canonical}。"
+            f"已验证的同一主体名称/别名仅包括：{aliases}。\n"
+            "VERBATIM NAME RULE（最重要）：企业名称必须与页面原文逐字一致——"
+            "严禁改写、替换、简化、纠错或'补全'任何汉字，包括生僻字、繁体字和"
+            "异体字（例如'鄞'就是'鄞'，不得写成'开'、'宁'或其他形近字）。"
+            "若页面写出的研究主体名称与上述主体名称或其别名逐字不一致，"
+            "该页面讨论的是另一家企业：不得把它的任何事实归入研究主体，"
+            "也不得把它的名称改写成研究主体名称。\n"
             "页面若涉及其他企业，只能作为独立实体记录，并明确其与研究主体的关系；"
             "不得把其他企业的任何数值或业务事实归入研究主体。\n"
             "页面是为以下研究目标检索的：\n\n"
@@ -190,6 +225,9 @@ class EvidenceExtractor:
             "official_company, industry_association, university, research_institute, "
             "certification_body, recruitment, commercial_database, marketplace, channel, "
             "social_media, forum, ordinary_media。\n"
+            f"每条 Claim 的 goal_family 填写本页研究目标族：{contract.goal_family}；"
+            "若某条事实明确属于身份/股权/产品等既定族（company_identity, ownership_structure, "
+            "products, factories, financials 等），可填写对应族名。不得自创族名。\n"
             "Return ONE JSON object matching exactly the following JSON Schema "
             "(strict: no extra keys, no missing required keys, empty lists stay empty):\n"
             f"{json.dumps(ExtractedEvidenceBatch.model_json_schema(), ensure_ascii=False)}\n\n"
@@ -205,6 +243,7 @@ class EvidenceExtractor:
         batch: ExtractedEvidenceBatch,
         result: SearchResultEnvelope,
         url: str,
+        hit=None,
     ) -> ExtractedEvidenceBatch | None:
         """Drop records whose references point at undeclared keys (抽取一致性清洗).
 
@@ -259,6 +298,11 @@ class EvidenceExtractor:
         }
         if target_names:
             target_keys: set[str] = set()
+            # Deterministic defense against LLM character substitution (e.g.
+            # 鄞开→开集): an entity whose names never appear VERBATIM on the
+            # page is a rewrite, not an extraction — it is dropped instead of
+            # being silently re-bound to the research subject.
+            page_text = str(hit.text or "") if hit is not None else ""
             for entity in batch.entities:
                 names = {
                     normalized_entity_name(entity.canonical_name),
@@ -271,6 +315,13 @@ class EvidenceExtractor:
                     or (len(name) >= 4 and name in target_name)
                     for name in names for target_name in target_names
                 ):
+                    if page_text and not self._name_appears_on_page(entity, page_text):
+                        self.last_failures.append(
+                            f"{query_id} {url}: entity '{entity.canonical_name}' "
+                            "name never appears verbatim on the page; suspected "
+                            "character substitution, entity dropped"
+                        )
+                        continue
                     target_keys.add(entity.entity_key)
             if not target_keys:
                 self.last_failures.append(
@@ -308,6 +359,12 @@ class EvidenceExtractor:
         if not batch.entities and not batch.claims:
             return None  # nothing usable left on this page
         return batch
+
+    @staticmethod
+    def _name_appears_on_page(entity, page_text: str) -> bool:
+        """True when any raw entity name occurs literally in the page text."""
+        candidates = [entity.canonical_name, entity.registered_name, *entity.aliases]
+        return any(name and str(name).strip() in page_text for name in candidates)
 
 
 def extract_goal_context(result: SearchResultEnvelope) -> dict[str, Any]:

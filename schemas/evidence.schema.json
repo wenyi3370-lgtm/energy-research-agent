@@ -1,5 +1,18 @@
 {
   "$defs": {
+    "ValueClass": {
+      "description": "Unified evidence value class (Agent integration, §19).\n\nSuperset of the overseas market skill's ledger vocabulary:\nobserved -> OBSERVED, derived -> DERIVED, modeled_estimate -> MODEL_ESTIMATE,\nsimulated -> SIMULATED, scenario_assumption -> ASSUMPTION,\npending_verification -> TO_BE_CONFIRMED.",
+      "enum": [
+        "OBSERVED",
+        "DERIVED",
+        "MODEL_ESTIMATE",
+        "SIMULATED",
+        "ASSUMPTION",
+        "TO_BE_CONFIRMED"
+      ],
+      "title": "ValueClass",
+      "type": "string"
+    },
     "VerificationStatus": {
       "enum": [
         "UNVERIFIED",
@@ -27,6 +40,18 @@
       "minLength": 1,
       "title": "Field Name",
       "type": "string"
+    },
+    "raw_field_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Raw Field Name"
     },
     "value": {
       "default": null,
@@ -181,6 +206,159 @@
       ],
       "default": null,
       "title": "Notes"
+    },
+    "mission_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Mission Id"
+    },
+    "goal_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Goal Id"
+    },
+    "subject_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Subject Id"
+    },
+    "subject_role": {
+      "anyOf": [
+        {
+          "enum": [
+            "SUBJECT",
+            "COMPETITOR",
+            "ECOSYSTEM",
+            "MARKET_CONTEXT",
+            "OTHER"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Subject Role"
+    },
+    "originating_skill": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Originating Skill"
+    },
+    "claim_type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Claim Type"
+    },
+    "value_class": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ValueClass"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "geography": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Geography"
+    },
+    "source_url": {
+      "anyOf": [
+        {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Url"
+    },
+    "source_type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Type"
+    },
+    "source_grade": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Grade"
+    },
+    "raw_capture_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Raw Capture Ref"
     }
   },
   "required": [

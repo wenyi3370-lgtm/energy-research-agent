@@ -71,6 +71,17 @@ def _load_gateway_config() -> dict[str, Any] | None:
         from enterprise_energy_research.settings import Settings
         settings = Settings()  # type: ignore[call-arg]
         provider = (settings.vision_provider or "auto").lower()
+        # Dedicated vision credentials take precedence: when the research
+        # gateway is repointed at a non-native provider (e.g. SiliconFlow),
+        # the native DeepSeek vision model stays reachable through its own
+        # key/base (EER_VISION_API_KEY / EER_VISION_API_BASE).
+        if provider in {"auto", "deepseek"} and settings.vision_api_key:
+            return {
+                "endpoint": settings.vision_api_base.rstrip("/"),
+                "key": settings.vision_api_key,
+                "model": settings.deepseek_vision_model or "deepseek-v4-flash-vision-exp",
+                "proxy": settings.outbound_proxy,
+            }
         if provider in {"auto", "deepseek"} and settings.deepseek_api_key:
             return {
                 "endpoint": settings.deepseek_api_base.rstrip("/"),

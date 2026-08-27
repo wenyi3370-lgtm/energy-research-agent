@@ -13,6 +13,11 @@ from .base import GatewayError, ModelRequest, ModelResponse, StructuredRequest
 
 T = TypeVar("T", bound=BaseModel)
 
+# Reasoning providers (SiliconFlow DeepSeek-V4 family) sometimes leak the
+# thinking chain into ``content`` as a literal ``...`` wrapper even
+# though ``reasoning_content`` carries it separately.
+_THINK_WRAPPER = re.compile(r"<think>[\s\S]*?</think>\n?", re.IGNORECASE)
+
 
 class LiteLLMModelGateway:
     """Provider-neutral gateway with bounded transient fallback.
@@ -62,17 +67,45 @@ class LiteLLMModelGateway:
         # prompt already mentions "JSON", which both providers require.
         if isinstance(request, StructuredRequest):
             kwargs["response_format"] = {"type": "json_object"}
-        response = litellm.completion(
-            model=f"{provider}/{model}",
-            messages=request.messages,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-            api_base=api_base,
-            api_key=api_key,
-            **kwargs,
-        )
+        # Reasoning models burn quota on chain-of-thought tokens the pipeline
+        # never reads and may leak the thinking wrapper into content; default
+        # to non-thinking mode (quality-neutral for extraction/distillation,
+        # ~60% cheaper on SiliconFlow V4-Flash). Opt back in via env.
+        if not self.settings.enable_thinking:
+            kwargs["enable_thinking"] = False
+        # A provider can accept a request and never answer (observed on
+        # SiliconFlow: one hung call stalled the whole mission for 20+ min).
+        # Enforce the configured per-call timeout and retry in-place before
+        # the provider fallback decides.
+        timeout = max(5, int(self.settings.model_timeout_seconds))
+        attempts = max(1, min(3, int(self.settings.model_max_attempts)))
+        kwargs["timeout"] = timeout
+        last_error: Exception | None = None
+        response = None
+        for _attempt in range(attempts):
+            try:
+                response = litellm.completion(
+                    model=f"{provider}/{model}",
+                    messages=request.messages,
+                    temperature=request.temperature,
+                    max_tokens=request.max_tokens,
+                    api_base=api_base,
+                    api_key=api_key,
+                    **kwargs,
+                )
+                break
+            except Exception as exc:
+                last_error = exc
+        if response is None:
+            raise GatewayError(
+                f"Provider {provider} failed after {attempts} attempt(s) "
+                f"({timeout}s timeout each): {type(last_error).__name__}: {last_error}"
+            )
         choices = getattr(response, "choices", None) or []
-        if not choices or not (choices[0].message.content or "").strip():
+        content = (choices[0].message.content or "") if choices else ""
+        if content:
+            content = _THINK_WRAPPER.sub("", content).strip()
+        if not choices or not content.strip():
             # 空完成（空 choices）必须转为 GatewayError，而不是让
             # choices[0] 抛 IndexError 炸掉整个 run；fallback 逻辑接管。
             raise GatewayError(f"Provider {provider} returned an empty completion")
@@ -80,7 +113,7 @@ class LiteLLMModelGateway:
         return ModelResponse(
             provider=provider,
             model=model,
-            content=choices[0].message.content or "",
+            content=content,
             usage=dict(response.usage or {}),
             latency_ms=elapsed,
             raw_id=getattr(response, "id", None),
@@ -111,7 +144,12 @@ class LiteLLMModelGateway:
             except ValidationError as first:
                 # LLMs sometimes emit partial dates ("2019-03") or
                 # protocol-less URLs ("www.catl.com"); normalize those and
-                # retry before giving up.
+                # retry before giving up. Reasoning models also emit numerics
+                # for string fields (founded_year: 2013), so stringify first.
+                try:
+                    return request.response_model.model_validate(_coerce_scalars(payload))
+                except ValidationError:
+                    pass
                 try:
                     return request.response_model.model_validate(_repair_payload(payload))
                 except ValidationError:
@@ -139,6 +177,20 @@ def _strip_code_fence(content: str) -> str:
     return "\n".join(lines).strip()
 
 
+def _coerce_scalars(value: Any) -> Any:
+    """Stringify int/float/bool leaves so numeric JSON values satisfy ``str``
+    schema fields (reasoning models often emit founded_year as 2013)."""
+    if isinstance(value, dict):
+        return {key: _coerce_scalars(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_coerce_scalars(item) for item in value]
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return value
+
+
 def _repair_payload(value: Any) -> Any:
     """Normalize common LLM output quirks before schema validation:
     partial dates ("2019-03" -> "2019-03-01") and protocol-less URLs
@@ -155,4 +207,3 @@ def _repair_payload(value: Any) -> Any:
         if value.startswith("www."):
             return "https://" + value
     return value
-

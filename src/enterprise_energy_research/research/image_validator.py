@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
+from urllib.parse import urlparse
 
 from enterprise_energy_research.domain.enums import VerificationStatus
 from enterprise_energy_research.domain.models import Entity, ImageEvidence, Source
@@ -68,9 +69,50 @@ class ImageValidator:
         images: list[ImageEvidence],
         entities: list[Entity],
         sources: list[Source],
+        claims: list | None = None,
     ) -> list[ImageEvidence]:
         entities_by_id = {entity.entity_id: entity for entity in entities}
         sources_by_id = {source.source_id: source for source in sources}
+        # The entity record is not always hydrated with its verified website
+        # (extraction may carry it only as a claim). Derive the official
+        # domain set per entity from VERIFIED official_website claims so
+        # official-site images can still earn the official_domain signal —
+        # evidence-bound, never invented.
+        official_domains_by_entity: dict[str, set[str]] = defaultdict(set)
+        for claim in claims or []:
+            if getattr(claim, "field_name", None) != "official_website":
+                continue
+            if getattr(claim, "verification_status", None) != VerificationStatus.VERIFIED:
+                continue
+            entity_id = getattr(claim, "entity_id", None)
+            if not entity_id or not getattr(claim, "value", None):
+                continue
+            host = (urlparse(str(claim.value)).netloc or "").lower().removeprefix("www.")
+            if host:
+                official_domains_by_entity[entity_id].add(host)
+        # Single-subject runs: images discovered before entity binding carry
+        # no entity_id; they may still inherit the canonical entity's name
+        # context and official domains — but only when exactly one entity
+        # exists, never guessed among multiple subjects.
+        # Subject of the investigation: the company entity backed by a
+        # VERIFIED official-website claim wins; recovery rounds can merge a
+        # duplicate "other"-typed record for the same name into the bundle,
+        # so never trust plain list length to identify the subject.
+        verified_site_entities = [
+            entity for entity in entities
+            if entity.entity_id in official_domains_by_entity
+            and (entity.entity_type or "").lower() == "company"
+        ]
+        company_entities = [
+            entity for entity in entities
+            if (entity.entity_type or "").lower() == "company"
+        ]
+        primary_entity = (
+            verified_site_entities[0] if verified_site_entities
+            else company_entities[0] if company_entities
+            else entities[0] if entities else None
+        )
+        canonical_entity = entities[0] if len(entities) == 1 else primary_entity
         phash_groups: dict[str, list[str]] = defaultdict(list)
         classified: list[ImageEvidence] = []
         for original_image in images:
@@ -81,22 +123,29 @@ class ImageValidator:
         for image in classified:
             source = sources_by_id.get(image.source_id)
             entity = entities_by_id.get(image.entity_id) if image.entity_id else None
+            # Context signals use the inherited canonical entity for
+            # unbound images; structural binding (target_entity_id) stays
+            # untouched and never claims an entity the image did not declare.
+            signal_entity = entity or canonical_entity
             context = " ".join(filter(None, [image.alt_text, image.surrounding_text, image.source_title])).lower()
             signals: list[str] = []
             semantic_score = 0.0
             if source and source.source_level.value == "SOURCE_A":
                 signals.append("source_a")
                 semantic_score += 0.2
-            if entity:
-                names = [entity.canonical_name, *entity.aliases]
+            if signal_entity:
+                names = [signal_entity.canonical_name, *signal_entity.aliases]
                 if any(name.lower() in context for name in names if name):
                     signals.append("entity_name_in_context")
                     semantic_score += 0.5
-                if entity.official_website and source:
-                    official = entity.official_website.host.lower().removeprefix("www.")
-                    if source.source_domain == official or source.source_domain.endswith("." + official):
-                        signals.append("official_domain")
-                        semantic_score += 0.3
+            if signal_entity and source:
+                official_hosts = set(official_domains_by_entity.get(signal_entity.entity_id, ()))
+                if signal_entity.official_website:
+                    official_hosts.add(signal_entity.official_website.host.lower().removeprefix("www."))
+                domain = (source.source_domain or "").lower().removeprefix("www.")
+                if domain and any(domain == host or domain.endswith("." + host) for host in official_hosts):
+                    signals.append("official_domain")
+                    semantic_score += 0.3
             dimensions_ok = min(image.width, image.height) >= self.minimum_dimension and image.width * image.height >= self.minimum_area
             format_ok = image.mime_type.lower() in {"image/png", "image/jpeg", "image/webp", "image/svg+xml"}
             duplicate_count = len(phash_groups[image.phash])
@@ -125,6 +174,38 @@ class ImageValidator:
                 target_entity_id = image.entity_id
             else:
                 target_entity_id = None
+            # Single-subject close: a VERIFIED image whose finer target record
+            # (product/factory) was never extracted stays bound to the
+            # subject entity instead of dangling — but only when the page
+            # was tied to that entity via official domain or name context.
+            # Never applied to REJECTED/REVIEW_REQUIRED images. Prefer the
+            # entity whose official domain actually matched the source page.
+            if (
+                target_entity_id is None
+                and status == VerificationStatus.VERIFIED
+                and primary_entity is not None
+                and {"official_domain", "entity_name_in_context"} & set(signals)
+            ):
+                bound_entity = primary_entity
+                source_domain = (
+                    (source.source_domain or "").lower().removeprefix("www.")
+                    if source else ""
+                )
+                if "official_domain" in signals and source_domain:
+                    for entity in entities:
+                        hosts = set(official_domains_by_entity.get(entity.entity_id, ()))
+                        if entity.official_website:
+                            hosts.add(
+                                entity.official_website.host.lower().removeprefix("www.")
+                            )
+                        if any(
+                            source_domain == host or source_domain.endswith("." + host)
+                            for host in hosts
+                        ):
+                            bound_entity = entity
+                            break
+                target_entity_id = bound_entity.entity_id
+                signals.append("target_bound_to_canonical_entity")
             priority = IMAGE_TYPE_PRIORITY.get(image.image_type, 3)
             verification_method = "none"
             visual_verified = False

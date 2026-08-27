@@ -5,10 +5,21 @@
 身份与证据冲突自动裁决 → 成果文件直达飞书群；每天自动推送
 **V2G & 储能行业情报日报**。
 
+> **一句话读懂（Energy Research Agent）**：本系统使用一个 Orchestrator 理解自然语言
+> 和规划研究任务，企业深度研究与海外能源市场研究作为两个受控专业能力执行研究；
+> 所有结果归一为统一 Evidence，经质量检查和 Recovery 后冻结，再生成统一的咨询级交付物。
+
 > Evidence-first：研究产出证据 → 校验冻结 → 发布器只消费冻结快照。
 > 发布器禁止联网、禁止补事实、禁止修改证据。
 
 ---
+
+## Agent 入口
+
+- 引导页 `http://localhost:8000/agent`：一句话需求 → 解析预览 → **统一研究任务审批** → 开始研究。
+- API：`POST /api/agent/parse`、`/api/agent/mission/{id}/approve|start|continue`、
+  `GET /api/agent/mission/{id}`（含 Agent Trace）、`GET /api/agent/health`。
+- 架构与基线：`docs/agent/REPOSITORY_INTEGRATION_BASELINE.md`、`docs/adr/ADR-AGENT-001..006.md`。
 
 ## 功能特性
 

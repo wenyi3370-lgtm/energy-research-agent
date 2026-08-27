@@ -1,0 +1,232 @@
+{
+  "$defs": {
+    "FailureClass": {
+      "enum": [
+        "MODEL_FAILURE",
+        "SKILL_FAILURE",
+        "ADAPTER_FAILURE",
+        "SOURCE_UNAVAILABLE",
+        "AUTH_REQUIRED",
+        "EVIDENCE_INSUFFICIENT",
+        "BUDGET_EXHAUSTED",
+        "RECOVERY_EXHAUSTED",
+        "VALIDATION_FAILED",
+        "ARTIFACT_FAILED"
+      ],
+      "title": "FailureClass",
+      "type": "string"
+    },
+    "SkillAttempt": {
+      "additionalProperties": false,
+      "description": "One executed strategy. ``executed`` is decided by code, not by the LLM (§24).",
+      "properties": {
+        "attempt_id": {
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "attempt_no": {
+          "minimum": 1,
+          "title": "Attempt No",
+          "type": "integer"
+        },
+        "executed": {
+          "default": false,
+          "description": "True only when a genuinely different recovery strategy ran (§24 rules)",
+          "title": "Executed",
+          "type": "boolean"
+        },
+        "strategy_summary": {
+          "default": "",
+          "title": "Strategy Summary",
+          "type": "string"
+        },
+        "queries": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Queries",
+          "type": "array"
+        },
+        "source_categories": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Categories",
+          "type": "array"
+        },
+        "failure_class": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FailureClass"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "diagnostics": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Diagnostics",
+          "type": "array"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        }
+      },
+      "required": [
+        "attempt_id",
+        "attempt_no"
+      ],
+      "title": "SkillAttempt",
+      "type": "object"
+    },
+    "SkillName": {
+      "enum": [
+        "ENTERPRISE_RESEARCH",
+        "OVERSEAS_MARKET_RESEARCH"
+      ],
+      "title": "SkillName",
+      "type": "string"
+    },
+    "SkillRunStatus": {
+      "enum": [
+        "OK",
+        "PARTIAL",
+        "BLOCKED",
+        "UNAVAILABLE",
+        "FAILED"
+      ],
+      "title": "SkillRunStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The only structured return the agent consumes from a skill (§16).",
+  "properties": {
+    "skill_run_id": {
+      "title": "Skill Run Id",
+      "type": "string"
+    },
+    "skill_name": {
+      "$ref": "#/$defs/SkillName"
+    },
+    "goal_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Goal Ids",
+      "type": "array"
+    },
+    "status": {
+      "$ref": "#/$defs/SkillRunStatus"
+    },
+    "evidence_exports": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Evidence Exports",
+      "type": "array"
+    },
+    "source_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Source Refs",
+      "type": "array"
+    },
+    "artifact_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Artifact Refs",
+      "type": "array"
+    },
+    "coverage_metrics": {
+      "additionalProperties": true,
+      "title": "Coverage Metrics",
+      "type": "object"
+    },
+    "quality_metrics": {
+      "additionalProperties": true,
+      "title": "Quality Metrics",
+      "type": "object"
+    },
+    "gaps": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Gaps",
+      "type": "array"
+    },
+    "attempts": {
+      "items": {
+        "$ref": "#/$defs/SkillAttempt"
+      },
+      "title": "Attempts",
+      "type": "array"
+    },
+    "diagnostics": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    },
+    "failure_class": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FailureClass"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "completed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completed At"
+    }
+  },
+  "required": [
+    "skill_run_id",
+    "skill_name",
+    "status"
+  ],
+  "title": "SkillRunResult",
+  "type": "object"
+}

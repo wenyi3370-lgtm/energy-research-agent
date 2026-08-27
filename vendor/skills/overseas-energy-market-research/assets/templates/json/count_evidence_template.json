@@ -1,0 +1,28 @@
+{
+  "task_id": "",
+  "unique_source_ids": [],
+  "record_refs": [],
+  "source_types": [],
+  "platforms": [],
+  "primary_source_ids": [],
+  "critical_claims": [
+    {
+      "claim_id": "",
+      "claim_text": "",
+      "claim_sha256": "",
+      "source_ids": [],
+      "evidence_bindings": [
+        {
+          "record_ref": "",
+          "evidence_fields": []
+        },
+        {
+          "record_ref": "",
+          "evidence_fields": []
+        }
+      ]
+    }
+  ],
+  "high_priority_remaining_ids": [],
+  "query_batches": []
+}

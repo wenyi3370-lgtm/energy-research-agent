@@ -1,0 +1,20 @@
+{
+  "embedded_method_id": "embedded-market-insight-five-views-v1",
+  "source_skill": {
+    "catalog_name": "market-insight-skill",
+    "source_folder": "market-insight",
+    "skill_md_sha256": "e101a1d9bf6fb709118ea90fda0a6b7971225ad3ba0a734f2aa7dc3656b6c48f",
+    "analytical_tools_sha256": "d359386531223a393fa2b754cceb0cba6ee29c9cb6d043120e71ad15112dea88"
+  },
+  "adaptation": {
+    "mode": "self-contained",
+    "external_skill_required": false,
+    "web_collection": "parent skill AnySearch/Kimi WebBridge task-routing contract",
+    "evidence_binding": "project CSV IDs through 【证据：ID】 anchors",
+    "report_contract": "references/market-insight-report-contract.md",
+    "method_reference": "references/market-insight-five-views.md",
+    "project_template": "assets/templates/markdown/market_insight_report_template.md",
+    "validator": "scripts/validate_market_insight.py"
+  },
+  "known_source_gap_fixed": "The source skill referenced a missing references/report_structure.md; the embedded report contract and template replace that missing dependency."
+}

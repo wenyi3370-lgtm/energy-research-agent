@@ -50,11 +50,13 @@ def _load_bundle(temp: str):
 class RiskHardeningTests(unittest.TestCase):
     def _fake_settings(self, *, deepseek_key=None, openai_key=None, provider="auto",
                        deepseek_base="https://api.deepseek.com",
-                       openai_base="https://api.openai.com/v1"):
+                       openai_base="https://api.openai.com/v1",
+                       vision_key=None, vision_base="https://api.deepseek.com"):
         return mock.Mock(
             deepseek_api_key=deepseek_key, openai_api_key=openai_key,
             vision_provider=provider, deepseek_api_base=deepseek_base,
             openai_api_base=openai_base,
+            vision_api_key=vision_key, vision_api_base=vision_base,
             deepseek_vision_model="deepseek-v4-flash-vision-exp",
             openai_vision_model="gpt-4o-mini",
         )
@@ -76,6 +78,20 @@ class RiskHardeningTests(unittest.TestCase):
             self.assertIsNotNone(verifier)
             self.assertEqual(verifier.endpoint, "https://gateway.example.com/v1")
             self.assertEqual(verifier.model, "gpt-4o-mini")
+
+    def test_vision_verifier_prefers_dedicated_vision_credentials(self) -> None:
+        # 研究网关指向第三方（如 SiliconFlow）时，视觉链仍走原生 DeepSeek
+        # 视觉模型专用凭据，不受研究网关改道影响。
+        with mock.patch("enterprise_energy_research.settings.Settings",
+                        return_value=self._fake_settings(
+                            deepseek_key="sk-siliconflow",
+                            deepseek_base="https://api.siliconflow.cn/v1",
+                            vision_key="sk-native-vision",
+                            vision_base="https://api.deepseek.com")):
+            verifier = default_vision_verifier()
+            self.assertIsNotNone(verifier)
+            self.assertEqual(verifier.endpoint, "https://api.deepseek.com")
+            self.assertEqual(verifier.model, "deepseek-v4-flash-vision-exp")
 
     def test_vision_verifier_absent_when_nothing_configured(self) -> None:
         with mock.patch("enterprise_energy_research.settings.Settings",

@@ -1,0 +1,346 @@
+policy_version: 8
+minimum_exact_models_per_market: 3
+
+source_independence:
+  minimum_independent_sources_per_critical_claim: 2
+  minimum_distinct_source_types_per_critical_claim: 2
+  require_distinct_publisher_groups: true
+  require_distinct_root_domains: true
+  require_distinct_canonical_sources: true
+  allowed_source_types:
+    - official_regulator
+    - grid_operator
+    - manufacturer_official
+    - industry_association
+    - academic_research
+    - market_research
+    - retailer_marketplace
+    - independent_media
+    - user_community
+    - local_internal
+  allowed_relation_types:
+    - original
+    - independent_analysis
+    - mirror
+    - syndicated
+    - reprint
+    - summary
+  derivative_relation_types:
+    - mirror
+    - syndicated
+    - reprint
+    - summary
+
+market_gap_exception:
+  required_rounds: ["1", "2", "3"]
+  required_issue_type: market_evidence_gap
+  require_zero_remaining_high_priority: true
+  approval_status: approved
+  minimum_attempted_sources_per_round: 1
+  minimum_queries_per_round: 1
+  minimum_failure_reasons_per_round: 1
+  minimum_raw_capture_refs_per_round: 1
+  required_gap_fields:
+    - reason
+    - decision_impact
+    - resolution_path
+    - owner
+    - status
+    - source_context
+
+platform_limit_exception:
+  required_goal_family: reviews_and_user_voice
+  required_round: "2"
+  required_rounds: ["1", "2", "3"]
+  minimum_platform_entries: 2
+  minimum_attempt_methods_per_platform: 2
+  minimum_raw_capture_refs_per_platform: 1
+  minimum_source_ids_per_platform: 1
+  require_collected_equals_accessible_max: true
+  require_zero_remaining_high_priority: true
+  approval_status: approved
+
+record_registry:
+  file_name: 15_Collection_Record_Registry.csv
+  hash_algorithm: sha256
+  allowed_novelty_types: [new_record, material_enrichment, supporting_only, duplicate]
+  countable_novelty_types: [new_record, material_enrichment]
+  countable_statuses: [verified, accepted]
+  require_unique_record_ref: true
+  require_unique_countable_content_hash: true
+  require_owner_scope_match: true
+  require_material_enrichment_for_reused_canonical_key: true
+  excluded_hash_fields:
+    - record_id
+    - task_id
+    - goal_family
+    - collection_goal
+    - round
+    - source_id
+    - source_ids
+    - source_url
+    - source_urls
+    - url
+    - access_date
+    - collection_date
+    - crawl_date
+    - created_date
+    - verification_status
+    - status
+    - notes
+    - raw_capture_path
+  excluded_hash_field_prefixes: [source_, citation_, audit_, raw_capture_]
+
+source_dimension_derivation:
+  platform_id_field: platform_id
+  platform_id_pattern: "^[a-z0-9][a-z0-9._-]{1,63}$"
+  require_web_platform_id_equals_root_domain: true
+  local_platform_id: local-internal
+  require_platform_id_for_counted_sources: true
+  require_declarations_match_derived: true
+  require_every_counted_source_linked_to_record: true
+  require_root_domain_platform_consistency: true
+  require_canonical_platform_consistency: true
+  review_goal_family: reviews_and_user_voice
+  review_record_platform_field: platform
+  require_review_record_platform_match: true
+
+primary_source_qualification:
+  allowed_reliability_tiers: [tier0, tier1, tier2, tier3]
+  allowed_tiers_by_source_type:
+    official_regulator: [tier1]
+    grid_operator: [tier1]
+    manufacturer_official: [tier1]
+    industry_association: [tier1, tier2]
+    academic_research: [tier2]
+    market_research: [tier2]
+    retailer_marketplace: [tier2]
+    independent_media: [tier3]
+    user_community: [tier3]
+    local_internal: [tier0]
+  countable_verification_statuses: [verified, accepted]
+  countable_relation_types: [original]
+  eligible_source_types_by_goal_family:
+    market_size_and_demand: [official_regulator, grid_operator, industry_association, academic_research, local_internal]
+    policy_tariff_and_grid: [official_regulator, grid_operator, industry_association, local_internal]
+    customer_segments_and_use_cases: [official_regulator, grid_operator, industry_association, academic_research, local_internal]
+    competitor_landscape: [manufacturer_official, official_regulator, industry_association, local_internal]
+    compliance_and_certification: [official_regulator, industry_association, manufacturer_official, local_internal]
+    channel_and_service: [manufacturer_official, retailer_marketplace, local_internal]
+    reviews_and_user_voice: [retailer_marketplace, user_community]
+    economics_and_model_inputs: [official_regulator, grid_operator, academic_research, local_internal]
+    identifier_verification: [manufacturer_official, retailer_marketplace, local_internal]
+    product_parameters: [manufacturer_official, local_internal]
+    technology_performance: [manufacturer_official, academic_research, local_internal]
+    pricing_and_promotion: [manufacturer_official, retailer_marketplace, local_internal]
+  require_declaration_match_derived: true
+  require_existing_local_file_for_tier0: true
+
+critical_claim_evidence:
+  claim_hash_algorithm: sha256
+  minimum_evidence_bindings_per_claim: 2
+  require_unique_claim_id: true
+  require_unique_claim_hash: true
+  require_binding_record_in_task_audit: true
+  require_binding_owned_by_task: true
+  require_binding_countable: true
+  require_nonempty_evidence_fields: true
+  require_claim_sources_equal_binding_sources: true
+  disallowed_evidence_fields:
+    - record_id
+    - task_id
+    - market
+    - exact_model
+    - goal_family
+    - collection_goal
+    - round
+    - platform
+    - source_id
+    - source_ids
+    - source_url
+    - source_urls
+    - url
+    - access_date
+    - collection_date
+    - crawl_date
+    - created_date
+    - verification_status
+    - status
+    - notes
+    - raw_capture_path
+
+market_goal_families:
+  - market_size_and_demand
+  - policy_tariff_and_grid
+  - customer_segments_and_use_cases
+  - competitor_landscape
+  - compliance_and_certification
+  - channel_and_service
+  - reviews_and_user_voice
+  - economics_and_model_inputs
+
+model_goal_families:
+  - identifier_verification
+  - product_parameters
+  - technology_performance
+  - pricing_and_promotion
+
+default_coverage_requirement: family_floor_and_all_high_priority
+completed_statuses: [completed, done, collected, verified, saturated]
+quantity_exception_types: [market_gap, platform_limit]
+
+r3_saturation:
+  minimum_critical_claims: 1
+  minimum_no_new_high_priority_batches: 2
+  require_zero_remaining_high_priority: true
+
+families:
+  market_size_and_demand:
+    coverage_requirement: family_floor_and_all_high_priority
+    rounds:
+      "1": {min_unique_sources: 8, min_records: 8, min_source_types: 4, min_platforms: 0, min_primary_sources: 0}
+      "2": {min_unique_sources: 5, min_records: 5, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+      "3": {min_unique_sources: 2, min_records: 2, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+  policy_tariff_and_grid:
+    coverage_requirement: all_applicable
+    rounds:
+      "1": {min_unique_sources: 6, min_records: 6, min_source_types: 3, min_platforms: 0, min_primary_sources: 1}
+      "2": {min_unique_sources: 6, min_records: 6, min_source_types: 0, min_platforms: 0, min_primary_sources: 1}
+      "3": {min_unique_sources: 2, min_records: 2, min_source_types: 0, min_platforms: 0, min_primary_sources: 1}
+  customer_segments_and_use_cases:
+    coverage_requirement: family_floor_and_all_high_priority
+    rounds:
+      "1": {min_unique_sources: 8, min_records: 8, min_source_types: 3, min_platforms: 0, min_primary_sources: 0}
+      "2": {min_unique_sources: 8, min_records: 15, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+      "3": {min_unique_sources: 2, min_records: 2, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+  competitor_landscape:
+    coverage_requirement: family_floor_and_all_high_priority
+    rounds:
+      "1": {min_unique_sources: 10, min_records: 8, min_source_types: 3, min_platforms: 0, min_primary_sources: 0}
+      "2": {min_unique_sources: 8, min_records: 5, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+      "3": {min_unique_sources: 2, min_records: 2, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+  compliance_and_certification:
+    coverage_requirement: all_applicable
+    rounds:
+      "1": {min_unique_sources: 5, min_records: 5, min_source_types: 2, min_platforms: 0, min_primary_sources: 1}
+      "2": {min_unique_sources: 5, min_records: 1, min_source_types: 0, min_platforms: 0, min_primary_sources: 1}
+      "3": {min_unique_sources: 2, min_records: 2, min_source_types: 0, min_platforms: 0, min_primary_sources: 1}
+  channel_and_service:
+    coverage_requirement: family_floor_and_all_high_priority
+    rounds:
+      "1": {min_unique_sources: 8, min_records: 8, min_source_types: 3, min_platforms: 0, min_primary_sources: 0}
+      "2": {min_unique_sources: 8, min_records: 10, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+      "3": {min_unique_sources: 2, min_records: 2, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+  reviews_and_user_voice:
+    coverage_requirement: all_visible_or_100
+    rounds:
+      "1": {min_unique_sources: 2, min_records: 2, min_source_types: 0, min_platforms: 2, min_primary_sources: 0}
+      "2": {min_unique_sources: 2, min_records: 100, min_source_types: 0, min_platforms: 2, min_primary_sources: 0}
+      "3": {min_unique_sources: 2, min_records: 2, min_source_types: 0, min_platforms: 2, min_primary_sources: 0}
+  economics_and_model_inputs:
+    coverage_requirement: all_model_inputs
+    rounds:
+      "1": {min_unique_sources: 6, min_records: 6, min_source_types: 3, min_platforms: 0, min_primary_sources: 0}
+      "2": {min_unique_sources: 6, min_records: 1, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+      "3": {min_unique_sources: 2, min_records: 2, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+  identifier_verification:
+    coverage_requirement: family_floor_and_all_high_priority
+    rounds:
+      "1": {min_unique_sources: 4, min_records: 6, min_source_types: 2, min_platforms: 0, min_primary_sources: 0}
+      "2": {min_unique_sources: 3, min_records: 3, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+      "3": {min_unique_sources: 2, min_records: 2, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+  product_parameters:
+    coverage_requirement: family_floor_and_all_high_priority
+    rounds:
+      "1": {min_unique_sources: 4, min_records: 4, min_source_types: 2, min_platforms: 0, min_primary_sources: 0}
+      "2": {min_unique_sources: 3, min_records: 20, min_source_types: 0, min_platforms: 0, min_primary_sources: 1}
+      "3": {min_unique_sources: 2, min_records: 2, min_source_types: 0, min_platforms: 0, min_primary_sources: 1}
+  technology_performance:
+    coverage_requirement: family_floor_and_all_high_priority
+    rounds:
+      "1": {min_unique_sources: 4, min_records: 4, min_source_types: 2, min_platforms: 0, min_primary_sources: 0}
+      "2": {min_unique_sources: 3, min_records: 8, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+      "3": {min_unique_sources: 2, min_records: 2, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+  pricing_and_promotion:
+    coverage_requirement: family_floor_and_all_high_priority
+    rounds:
+      "1": {min_unique_sources: 6, min_records: 8, min_source_types: 3, min_platforms: 0, min_primary_sources: 0}
+      "2": {min_unique_sources: 3, min_records: 4, min_source_types: 3, min_platforms: 0, min_primary_sources: 0}
+      "3": {min_unique_sources: 2, min_records: 2, min_source_types: 0, min_platforms: 0, min_primary_sources: 0}
+
+# ---------------------------------------------------------------------------
+# generator_overrides — project-specific settings consumed by
+# generate_collection_audits.py.  The values below are the DEFAULT (legacy
+# reference-project) behavior; a research project may override any key via
+# `upgrade_collection_policy.py --overrides <yaml>` (see SKILL.md "Generator
+# configuration" note and CHANGELOG v1.2.6).  Unknown keys are ignored.
+# ---------------------------------------------------------------------------
+generator_overrides:
+  # Registry row values written by the audit generator.
+  market: Spain
+  created_date: "2026-01-01"
+
+  # URL host -> source_id hints.  Only hosts that are unambiguous for the
+  # project should be listed; do NOT list global hosts (e.g. reddit.com,
+  # youtube.com) here unless the source_id is genuinely project-specific —
+  # otherwise reviews rows get mis-mapped and the registry platform check fails.
+  domain_to_source_id:
+    solar.huawei.com: S026
+    sfe-solar.com: S024
+    tienda-solar.es: S029
+    panpower.eu: S031
+    solartraders.com: S030
+    tesla.com: S027
+    energylibrary.tesla.com: S027
+    bydbatterybox.com: S024
+    atodosol.es: S037
+    amazon.es: S032
+    avebattery.com: S039
+    sud.es: S038
+    electrek.co: S025
+    energysage.com: S027
+    enphase.com: S024
+    anernstore.com: S028
+    euskadi.eus: S016
+    idae.es: S014
+    boe.es: S011
+    miteco.gob.es: S017
+    eurostat.eu: S010
+
+  # 06_Channel_Service.csv brand -> source_id fallback (used when the row has
+  # no URL hint).  channel_default_source_id applies to unmapped brands.
+  channel_brand_to_source_id:
+    Huawei: S026
+    Tesla: S037
+    BYD: S030
+    Enphase: S024
+    Sonnen: S024
+    Deye: S029
+  channel_default_source_id: S029
+
+  # parameter_name keywords that classify 04_Product_Parameters rows into the
+  # technology_performance family (everything else goes to product_parameters).
+  # Override per project when the product domain differs (e.g. V2G chargers).
+  tech_keywords:
+    - 循环
+    - 效率
+    - LFP
+    - 化学
+    - 倍率
+    - SOC
+    - 密度
+    - 热稳定
+    - 测试
+    - 功率比
+    - 启动
+    - 可用容量
+    - 往返
+    - 放电深度
+
+  # 08_Review_Coding.csv theme_id -> raw review_id inheritance map.
+  review_theme_to_record:
+    T001: RV001
+    T002: RV002
+    T003: RV003
+    T004: RV004
+    T005: RV006

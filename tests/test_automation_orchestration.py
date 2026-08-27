@@ -162,6 +162,38 @@ class OrchestratingExecutorTests(unittest.TestCase):
             self.assertIsNotNone(outcome2.freeze_id)
             self.assertGreater(len(outcome2.artifacts), 0)
 
+    def test_recovery_only_never_reruns_full_plan(self):
+        """§22: a recovery round executes only this round's targeted gap
+        queries; the full plan is never re-run, evidence accumulates."""
+        adapter = DictFixtureAdapter(load_batch("small_simple.json"))
+        seen_queries: list[str] = []
+        original_search = adapter.search
+
+        def recording(request: SearchRequest) -> SearchResultEnvelope:
+            seen_queries.append(str(request.query))
+            return original_search(request)
+
+        adapter.search = recording  # type: ignore[method-assign]
+        executor = OrchestratingExecutor(adapters={"anysearch": adapter})
+        full_request = make_request("TASK-FULL", "示例节能服务有限公司")
+        recovery_request = make_request("TASK-REC", "示例节能服务有限公司").model_copy(
+            update={"notes": "第1轮补采：示例节能服务有限公司 环评 建设项目\n第1轮补采：示例节能服务有限公司 投产 公告"}
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            executor.research_and_validate("RUN-FULL", full_request, Path(tmp))
+            full_count = len(seen_queries)
+            seen_queries.clear()
+            executor.research_and_validate(
+                "RUN-REC", recovery_request, Path(tmp), recovery_only=True,
+            )
+            recovery_count = len(seen_queries)
+        self.assertGreater(full_count, 50, "the full plan spans many queries")
+        self.assertLess(recovery_count, 15, "a recovery round must stay targeted")
+        self.assertTrue(
+            all("环评" in q or "投产" in q or "补采" in q for q in seen_queries),
+            "recovery queries must carry this round's gap strategy",
+        )
+
     def test_unavailable_adapter_fail_closed(self):
         executor = OrchestratingExecutor(
             adapters={"anysearch": DictFixtureAdapter(load_batch("small_simple.json"), available=False)}

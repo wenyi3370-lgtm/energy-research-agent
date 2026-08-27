@@ -1,0 +1,428 @@
+name: domestic_global_energy_market_research
+version: 1.6
+language_default: zh-CN
+allowed_web_tools:
+  - kimi-webbridge
+  - anysearch   # 2026-08-07 纳入；2026-08-10 起使用内嵌官方 CLI（scripts/anysearch/，零 diff）
+embedded_collection_tools:   # 2026-08-10 内嵌：不依赖外部 skill
+  - anysearch CLI 官方 3.0.1 零 diff 拷贝（scripts/anysearch/anysearch_cli.py）
+  - kimi-webbridge 客户端（scripts/_kimi_webbridge.py，payload 与官方 curl 逐字段一致）
+  - 统一入口 scripts/web_collection/cli.py（doctor 前置；自动写 13_Collection_Attempt_Journal.csv 与 raw_capture）
+global_gates:
+  - approved_outline_before_collection
+  - url_required_for_web_evidence
+  - exact_model_identifier_required
+  - raw_reviews_before_review_synthesis
+  - local_parameter_files_before_web_parameters
+  - estimates_labeled_and_formula_backed
+  - excel_sources_sheet_last
+  - source_route_selected_by_data_class
+  - amazon_de_asin_search_before_product_data
+  - source_exhaustion_before_market_gap_or_model_simulation
+  - word_table_caption_kept_with_following_table
+  - libreoffice_isolated_profile_valid_uri_and_timeout
+  - embedded_market_insight_evidence_binding
+  - single_owner_figure_routing_required
+  - every_chapter_must_have_chart
+  - charts_must_follow_paragraph_text
+  - no_duplicate_chapter_headings
+  - section_text_before_charts
+stages:
+  - id: 0
+    name: plan_and_human_approval
+    objective: Define the decision question, localized scope, detailed outline, fields, methods, sources, timeline, and acceptance criteria.
+    required_inputs:
+      - decision_question
+      - target_geography
+      - product_or_system_scope
+      - requested_deliverables
+      - local_parameter_file_path_or_confirmation_none
+    actions:
+      - initialize project files
+      - draft research_outline.md
+      - create 02_Web_Collection_Tasks.csv
+      - >-
+        map source routes by data class: Reddit/YouTube for social user voice;
+        official data plus World Bank/EnergyData.info/GlobalPetrolPrices for modeling inputs;
+        Amazon.de (ASIN first), MediaMarkt, Galaxus and local retailers for price/promotion;
+        official product/manual/support pages plus secondary device.report for specifications
+      - record explicit approval in 00_Research_Approval.csv
+    outputs:
+      - project_manifest.json
+      - research_outline.md
+      - 00_Research_Approval.csv
+      - 00_Source_Ledger.csv
+      - 02_Web_Collection_Tasks.csv
+      - 11_Evidence_Issues.csv
+      - 15_Collection_Record_Registry.csv
+    quality_gates:
+      - current outline_version has approval_status=approved
+      - >-
+        route each collection task to exactly one required tool: anysearch for search/batch_search
+        and static extraction, or kimi-webbridge for dynamic/authenticated/interactive browser work;
+        a project may use one or both tools, Kimi preflight runs only for Kimi-routed tasks,
+        and the ledger records the tool actually used; three-round fields remain unchanged
+      - every planned data class records source priority and fallback handling
+      - Amazon.de product-data tasks are preceded by an asin_search or asin_verify task for the same exact model
+      - run scripts/validate_stage_gate.py --stage 0
+    stop_conditions:
+      - no web collection before approval
+    next_stage: 1
+
+  - id: 1
+    name: market_policy_and_demand
+    objective: Collect market, policy, tariff, grid, demand, load, generation, affordability, and alternative-solution evidence.
+    allowed_tools:
+      - kimi-webbridge
+      - anysearch
+    actions:
+      - >-
+        MANDATORY saturated goal floor before crawling: verify the project_manifest quantity-policy version/SHA256
+        and load market/model goal families, minimum exact-model coverage, per-round quantity floors, completion
+        rules, exceptions, and R3 thresholds exclusively from the read-only project policy snapshot. The skill-level
+        assets/config/collection_quantity_policy.yaml is used only when initializing a new project or performing an
+        explicitly human-approved upgrade. Compute goal and task-row totals from the frozen project policy.
+        Quota scope comes from project_manifest.json target_markets/market_model_pairs.
+        Do not self-mark N/A, merge families, share rounds, or use task-table self-reported scope.
+      - >-
+        Apply the family-by-round quantity matrix in the verified project policy snapshot.
+        R1 validates unique-source and source-type/platform breadth; R2 validates structured-record depth and
+        complete applicable-item coverage; R3 validates all critical claims with policy-v2 independence across
+        publisher groups, URL-derived root domains, canonical/original chains, and controlled source types,
+        the policy-defined remaining-discovery and final-batch saturation thresholds.
+        Final actual counts must trace to source-ledger/output row IDs and cannot be self-reported.
+        Under frozen policy v5+, each counted record also resolves to one verified primary owner in
+        15_Collection_Record_Registry.csv; copied substantive content cannot count across rows/files/tasks,
+        and later-round canonical-key reuse counts only as validated material enrichment.
+      - >-
+        for modeling inputs, search user/internal and official national/operator data first, then World Bank,
+        https://energydata.info/dataset/, https://www.globalpetrolprices.com/, other official/research sources,
+        and traceable media; missing modeling inputs must be filled by calibrated, reproducible simulation
+      - >-
+        MANDATORY three-round collection (hard): every collection_goal in 02_Web_Collection_Tasks.csv must have
+        round 1 (coverage: breadth scan across official/research/retail/community channels, local+EN+CN synonyms),
+        round 2 (depth: precise field extraction, identifier verification, ≥2 price channels per model, full review corpus),
+        round 3 (triangulation: fill gaps from round 2, cross-verify every key conclusion with a second independent source,
+        unresolved market-evidence items to 11_Evidence_Issues.csv with data_domain=market). Never stop before three rounds.
+        Each round records saturation_evidence (channels covered, new findings, remaining gaps).
+    outputs:
+      - 01_Market_Scan.csv
+      - updated 00_Source_Ledger.csv
+    quality_gates:
+      - each number and policy claim has URL, date, geography, unit, and value_class
+      - modeling datasets record indicator/variable, vintage, unit, methodology, update date, URL, and transformation
+      - saturated goal count passes scripts/validate_collection_tasks.py and every scoped goal completed rounds 1/2/3
+      - policy-v5 counted records have unique primary owners, scope/source bindings, recomputed content hashes, and no cross-task duplication
+      - key market/policy conclusions verified by at least two independent sources (round 3)
+      - only market evidence gaps are logged in 11_Evidence_Issues.csv; missing modeling inputs are simulated and traceable
+      - >-
+        under frozen quantity-policy v3+, every market_gap quantity exception links completed R1/R2/R3 tasks and all
+        three count audits, supplies per-round query/source/failure/raw-capture evidence, leaves zero high-priority items,
+        completes impact/owner/resolution metadata, and carries named date-stamped human approval
+      - run scripts/validate_stage_gate.py --stage 1
+    next_stage: 2
+
+  - id: 2
+    name: competitor_and_identifier_framework
+    objective: Select competitors, exact models, player taxonomy, and comparison fields.
+    actions:
+      - >-
+        MANDATORY three-round collection (hard): round 1 breadth (discover all candidate competitors/models
+        across brand stores, marketplaces, reviews, news), round 2 depth (verify ASIN/SKU/model/regional variant,
+        build ≥15 comparison fields per model), round 3 triangulation (cross-verify identifiers and specs with
+        a second independent source; unresolved identifiers logged). Never stop before three rounds.
+    outputs:
+      - 02_Competitor_List.csv
+      - 03_Model_Identifier_Check.csv
+    quality_gates:
+      - core competitors and exact models are justified
+      - model-level evidence uses exact identifiers
+      - every competitor/model discovery goal completed all three rounds with saturation_evidence recorded
+      - exact identifiers cross-verified in round 3 where obtainable
+      - run scripts/validate_stage_gate.py --stage 2
+    next_stage: 3
+
+  - id: 3
+    name: product_technology_and_compliance
+    objective: Benchmark exact-model parameters, architecture, protocols, standards, certification, installation, and serviceability.
+    actions:
+      - check user-provided local parameter files first
+      - use exact regional official product pages, manuals, datasheets, support and certification pages
+      - use https://device.report/ only as secondary discovery/cross-check evidence and record official-source gaps or conflicts
+    outputs:
+      - 04_Product_Parameters.csv
+    quality_gates:
+      - local files checked first
+      - web parameters include a documented reason
+      - every specification is tied to an exact regional model and identifies official versus device.report evidence
+      - run scripts/validate_stage_gate.py --stage 3
+    next_stage: 4
+
+  - id: 4
+    name: price_channel_service_and_reviews
+    objective: Collect configuration-specific prices, channels, service, raw reviews, and coded themes.
+    allowed_tools:
+      - kimi-webbridge
+      - anysearch   # Amazon 交互仍走浏览器，搜索/提取可用 anysearch
+    actions:
+      - >-
+        for Amazon.de, execute asin_search/asin_verify first and write the exact-match ASIN before collecting
+        price, promotion, reviews, ranking, availability, channel, service, or parameters
+      - collect price and promotion data from Amazon.de, MediaMarkt, Galaxus, brand stores, and relevant local retailers
+      - include Reddit and YouTube, plus relevant local communities, when social-media user voice is in scope
+      - >-
+        MANDATORY three-round collection (hard): round 1 breadth (all channels and platforms, local+EN+CN
+        search synonyms), round 2 depth (≥2 channels per model, full review corpus with raw rows saved,
+        promotion/VAT/shipping/stock details), round 3 triangulation (cross-verify price anchors and review
+        themes with independent sources/platforms; unresolved market gaps to 11_Evidence_Issues.csv). Never stop
+        before three rounds; record saturation_evidence per round.
+    outputs:
+      - 05_Pricing_Channel.csv
+      - 06_Channel_Service.csv
+      - 07_Raw_Reviews.csv
+      - 08_Review_Coding.csv
+    quality_gates:
+      - each price/channel fact has URL, date, geography, and identifier
+      - Amazon.de price/promotion rows trace to an earlier exact-match ASIN task and identifier row
+      - promotions record conditions/dates, VAT, shipping, installation, stock, seller, and bundle
+      - Reddit/YouTube evidence retains the original URL, date, context, and exact-model linkage where claimed
+      - raw reviews precede coding
+      - every price/review goal completed all three rounds; price anchors cross-verified in round 3
+      - >-
+        review corpus covers the full accessible set; under frozen quantity-policy v4+, an R2 platform_limit
+        uses a project-local JSON that links R1/R2/R3, covers every audited platform, reconciles visible/raw/deduped/
+        accessible counts and record refs, preserves distinct raw captures and retrieval attempts, clears high-priority
+        discoveries, and records named date-stamped human approval
+      - run scripts/validate_stage_gate.py --stage 4
+    next_stage: 5
+
+  - id: 5
+    name: excel_evidence_workbook
+    objective: Build and audit the consulting-style evidence/model workbook with formulas and sources last.
+    actions:
+      - >-
+        use the embedded Excel pipeline (sync + consulting-report style, LIGHT theme default水蓝/jade墨玉绿)
+      - >-
+        run scripts/sync_csv_to_excel.py --project-dir <project> --output deliverables/市场调研数据与模型.xlsx
+        (data rows no header fill copy_fill=False; dimension compression delete_rows to avoid phantom rows)
+      - keep 11_Evidence_Issues.csv outside the final workbook (sync removes gap sheets)
+      - put 99_来源与口径 last
+      - >-
+        CSV行数校验步骤（2026-08-07教训固化，可机检）：每个证据CSV写入后立即csv.reader计数并断言
+        行数>表头数；sync_csv_to_excel运行后逐sheet核对max_row-1与源CSV一致，任何仅表头的sheet即写入失败，
+        必须回查CSV文件位置（谨防os.chdir把数据写到子目录）后重同步，禁止空表进入beautify/重算
+      - >-
+        CSV写入路径纪律（2026-08-07教训固化）：证据CSV生成脚本禁止os.chdir(脚本目录)——
+        实测曾把全部证据写入scripts_ext/子目录导致项目根CSV为模板空壳、工作簿/Word表格数据丢失；
+        脚本以项目根为工作目录（显式--project-dir或绝对路径写入），写入后立即csv.reader计数验证行数
+      - >-
+        CSV schema对齐纪律（2026-08-07教训固化）：01~14 CSV列名必须严格匹配对应验证器REQUIRED列
+        （validate_model_identifiers/validate_parameter_sources/validate_review_corpus含conflict_note、
+        web_source_reason、match_status、source_priority枚举），写入后立即跑验证器，避免交付前逐列返工
+      - >-
+        run scripts/recalculate_excel.py <project>/deliverables/<workbook>.xlsx, then run
+        scripts/validate_excel_delivery.py --project-dir <project> --mode final
+        (require formula cells for every modeled result, cached values reconciled to frozen results, and zero formula errors)
+        (Excel原生图表2026-08-06起废止：add_excel_native_charts.py停用、chart_layout_guard.py audit不再适用，
+        工作簿仅保留格式化数据表，图表需求由Word唯一责任Skill路由与PPT承担)
+    outputs:
+      - deliverables/市场调研数据与模型.xlsx
+    quality_gates:
+      - formulas, units, currencies, dates, sources, and sheet order pass; modeled results cannot be hard-coded
+      - light theme applied (no deep-navy dark headers)
+      - sheet dimensions match data rows (no phantom 200+ row sheets)
+      - validate_excel_delivery.py reports zero formula errors and formula/frozen-value reconciliation passes
+      - no 数据缺口 sheet; 99_来源与口径 is the last sheet
+      - run scripts/validate_stage_gate.py --stage 5  # 含 09/10 非空、Excel 公式与打印布局机械门禁
+    next_stage: 6
+
+  - id: 6
+    name: modeling_or_market_insight
+    objective: Run the economics/modeling branch (full modeling chain in intermediate/modeling/) or market-insight branch using audited evidence.
+    actions:
+      - >-
+        if analysis_branch == modeling: run the adapted modeling chain per intermediate/modeling/CLAUDE.md
+        (problem-parser(输入=research_outline.md问题树) → problem-classifier → related-paper-analyzer
+        → symbol-table-builder → model-assumptions-builder → method-selector [G2.5 human]
+        → data-auditor-cleaner → model-code-analyzer → code-generator → reviewer
+        → experiments round1 [G4.5 human] → final-method-explainer → robustness-checker
+        → embedded-modeling-figure-v1 → solution-package-builder → 3-auditor layer [G6])
+      - >-
+        enforce the 2 human gates: G2.5 (method_select) and G4.5
+        (result_verdict + stability_verdict + method_explanation) must be DECIDED with decided_by: human
+      - round1 always runs; round2 only when the G4.5 round_decision == iterate; return triggers method revision; max 3 rounds per Qx
+      - use the embedded-modeling-figure-v1 branch (core_claim human-confirmed before each final figure)
+      - >-
+        preserve modeling-input lineage from official/World Bank/EnergyData.info/GlobalPetrolPrices sources;
+        if no usable observation exists after the prescribed route, generate realistic simulated data calibrated
+        to analogous evidence and physical/business constraints; record fixed seed, code/data paths, validation,
+        and sensitivity in 14_Simulated_Modeling_Data.csv, with value_class=simulated in 12_Model_Assumptions.csv
+      - export SVG plus PNG at 300 dpi or higher and render-check each model figure
+      - >-
+        elif analysis_branch == market-insight: load references/market-insight-five-views.md and
+        references/market-insight-report-contract.md, fill
+        intermediate/market-insight/market_insight_report.md, bind material claims with
+        【证据：ID】 anchors, and keep the external market-insight Skill optional
+    outputs:
+      - intermediate/modeling/planning/progress_dashboard.md
+      - intermediate/modeling/methods/Qx/decisions/*_modeler_decision.md
+      - intermediate/modeling/results/Qx/reports/frozen_numbers.json
+      - 12_Model_Assumptions.csv
+      - 13_Model_Results.csv
+      - 14_Simulated_Modeling_Data.csv
+      - intermediate/market-insight/market_insight_report.md when analysis_branch == market-insight
+    quality_gates:
+      - human decision artifacts exist and are DECIDED with decided_by:human
+      - 12/13/14 CSV generated by scripts/create_modeling_artifacts.py and pass model_integrity
+      - model results trace to formulas, inputs, and evidence (frozen_at newer than referenced code mtime)
+      - sensitivity or robustness is documented where applicable
+      - figure claims are human-confirmed and plot data is traceable
+      - embedded market-insight report declares method_id embedded-market-insight-five-views-v1
+      - every market-insight evidence anchor resolves to a project CSV row ID
+      - run scripts/create_modeling_artifacts.py --project-dir <project> --dry-run
+      - run scripts/validate_market_insight.py --project-dir <project> --mode final when analysis_branch == market-insight
+      - run scripts/validate_stage_gate.py --stage 6
+    next_stage: 7
+
+  - id: 7
+    name: strategy_and_word_report
+    objective: Synthesize evidence, economics, business model, product definition, market entry, risks, roadmap, and actions.
+    actions:
+      - use the embedded Five Views market-insight branch or the modeling chain; do not require an external market-insight installation
+      - >-
+        run scripts/build_template_report.py --project-dir <project> --region <region> --category <category>
+        (brokerage template skeleton fill: cover placeholders + per-chapter table X-1 with real CSV data + charts)
+      - >-
+        Word rules (verified): Heading 1 is 22pt bold centered with explicit zero left/right/first-line
+        indents; tables centered 宋体小五9pt; deterministic three-line rules with
+        black #000000 top/bottom at 1.5 pt and dark-blue #1B365D header-bottom at 1 pt, plus
+        #D9E2EC header shading and white body cells; image paragraphs single spacing;
+        chart SVG text MUST remain editable and carry an installed CJK font family; chart palette uses the embedded white/deep-blue/cool-grey brokerage theme;
+        chart naming figN_*.png only (test_* must not stay in charts dir);
+        every table caption centered with keepNext/keepLines so it stays on the same page as the following table
+      - >-
+        Chart generation rules (hard): assign exactly one embedded figure owner; market-insight charts use
+        embedded-market-figure-v1, while modeling charts use embedded-modeling-figure-v1; both use the fixed Python backend;
+        never regenerate or restyle one owner's completed chart through the other; every chapter (H1 section)
+        must contain at least one formal chart (figN_*.png); charts must follow paragraph text -
+        insert order: analysis paragraph → inline reference ("见图N-x") → chart + caption + source note;
+        charts must NOT appear at chapter start, after blank paragraphs, or between two charts without text
+      - >-
+        Writing style (hard, investment-bank research standard, locked 2026-08-06): the report must read
+        like human-written IB research, not template output. Delete all template skeleton headings
+        ("本章关键问题：…？", "证据、分析与反证："); never start body paragraphs with labels
+        ("小结：", "数据引用：", "看宏观：" etc.) - rewrite as natural prose ("综上，…", "从宏观层面看，…");
+        never dump CSV rows into body text (field-joined rows like "BESS市场规模（2025）18亿美元Mark & Spark Solutions"
+        are blocking errors); no evidence IDs (S001/C001/R001), CSV filenames, or gap IDs (D003) in prose;
+        no markdown escape chars (\\- \\.) in body; source notes appear ONLY below charts/tables
+        (9pt gray, "数据来源：" + natural source description), never as standalone body paragraphs;
+        no duplicate paragraphs across chapters and no stacked duplicate source notes;
+        neutralize internal wording (columns "关键事项/来源编号", table titles "本章关键数据与来源",
+        chapter names "数据体系/数据缺口" instead of "证据…"); every figure/table must be referenced
+        in body text with correct format "（见图N-x）" (never "（见图图N-x）")
+      - >-
+        Mandatory post-processing (hard, blocking): after build_template_report.py, run
+        scripts/polish_word_ib_style.py <final.docx> (idempotent) which deletes template skeleton
+        headings and placeholder body text, deduplicates and normalizes source notes
+        (no CSV filenames / evidence IDs), neutralizes table headers ("关键事项/来源编号")
+        and table titles ("本章关键数据与来源"), distributes figures to their chapters with
+        human titles and correct IMG→caption→source order, and fixes in-text references
+        ("（见图N-x）/（见表N-x）"). For projects with different figure filenames, pass
+        --figure-map <json> ({fig_keyword: [chapter, title]}); unmapped figures warn and stay
+        in place (never guess distribution). Delivery without running polish is a failure.
+      - >-
+        Mandatory machine-check gate (hard, blocking): run
+        scripts/verify_word_ib_style.py <final.docx>; the PASS/FAIL report covers CSV-row dumps,
+        template placeholders, stacked source notes, source-note glue, figure order,
+        short paragraphs, skeleton headings, label-prefixed paragraphs, internal traces
+        (evidence IDs / CSV filenames / escape chars), reference integrity, "证据" wording,
+        per-chapter figure/table coverage, and duplicate chapters. Any FAIL blocks delivery.
+      - >-
+        Post-generation self-check (lessons learned 2026-08-06, blocking if violated):
+        scan for (1) CSV-row dumps, (2) template placeholders ("表X", "数据来源：；"),
+        (3) stacked duplicate source notes, (4) skeleton headings and label-prefixed paragraphs,
+        (5) evidence IDs / CSV filenames / escape chars in prose, (6) truncated paragraphs
+        (<15 chars, non-source-note), (7) figure captions below images (IMG→FIGCAP→source note order),
+        (8) missing figure/table references, (9) duplicate chapters; after structural edits always
+        re-fetch the paragraph list or match by content, never reuse stale indices; if LibreOffice
+        conversion crashes (rc 3221226505) do a python-docx round-trip save and retry
+      - use embedded-word-production-v1 for fused-template typesetting and structural QA
+      - >-
+        run scripts/libreoffice_render.py <final.docx> --output-dir <qa-dir> --render-pages --timeout-seconds 120;
+        require a non-empty PDF, all page PNGs, and no residual launched LibreOffice process
+      - >-
+        after actual all-page inspection, run scripts/register_word_delivery.py and then
+        scripts/validate_word_delivery.py --project-dir <project> --mode final
+    outputs:
+      - deliverables/市场深度调研与商业机会报告.docx
+      - 09_Integrated_Matrix.csv
+      - 10_SWOT_Opportunity.csv
+    quality_gates:
+      - recommendations cite evidence IDs
+      - Word follows exact typography and visual QA (see format-and-visual-style.md verified rules)
+      - no table caption is orphaned at a page bottom; every caption appears with the first row of its table
+      - validate_word_delivery passes the table-caption pagination contract
+      - every chapter (H1 section) contains at least one formal chart (figN_*.png)
+      - every chart immediately follows a paragraph of analytical text with an inline reference
+      - every formal chart records figure_pipeline_id=embedded-figure-production-v1 and one matching owner/class with backend=python; SVG + ≥300 dpi PNG outputs pass mechanical and explicit visual QA
+      - no duplicate chapter headings exist (template remnant chapters must be removed)
+      - every H1/H2 heading has at least one substantive text paragraph (≥50 chars) before any chart
+      - >-
+        writing style passes IB-research check: no skeleton headings, no label-prefixed paragraphs,
+        no CSV-row dumps, no evidence IDs/CSV filenames/escape chars in prose, no stacked source notes,
+        no duplicate paragraphs, every figure/table referenced in body, source notes only below charts
+      - >-
+        字数校验门（2026-08-07教训固化）：正文fill完成后、polish之前，必须统计报告总字符数
+        （fitz提取PDF文本或docx遍历段落），不足15,000必须扩充正文（每章4-6段、每段200-350字），
+        不得以段落数达标为由跳过；曾因每章仅2-3段导致全文约1.3万字符未达要求
+      - >-
+        模板每章空表处理纪律（2026-08-07教训固化）：fill后逐表检查数据行数，空表（含表题段）一律删除，
+        不得保留；推荐结构=每章1张实质小表（3-4行本章核心数字）+第十四章末尾1张报告关键数据与来源总表；
+        删除后同步清理正文悬空（见表X-x）引用
+      - >-
+        机械门禁执行（2026-08-07固化）：check_word_char_count.py <final.docx> 字数>=15,000(否则FAIL)；
+        verify_word_ib_style.py 第[11]项空表检查(数据行全空的表=FAIL)
+      - run scripts/validate_stage_gate.py --stage 7
+    next_stage: 8
+
+  - id: 8
+    name: ppt_and_final_handoff
+    objective: Produce and verify the executive presentation and final Word/Excel/PPT package.
+    actions:
+      - >-
+        使用正式内嵌演示管线 embedded-pptmaster-svg-v1：基于最终 Word/Excel 和已验收图表形成
+        10-18 页 answer-first 叙事。完成八项确认并终态化 EWO / fallback 图片后，由当前主代理在每页前
+        重新读取 spec_lock，逐页手写 SVG；禁止子代理或脚本批量生成页面。再按 validate → finalize →
+        native DrawingML export（转场、动画、讲稿、conversion trace）→ LibreOffice/PyMuPDF 逐页渲染 →
+        至少一次修复与全量重渲染 → validate/register high-fidelity 的顺序执行。Python 原生 renderer
+        仅作明确登记的 fallback，不得声称与正式路径等价。
+      - >-
+        封面双路径决策（2026-08-07固化）：路径A(默认首选)=深蓝科技风封面(§2,左文右图+AI生成的矢量插画风格PNG/JPEG/WebP位图主视觉)；
+        resolve_presentation_images.py直接调用EWO能力；余额不足(402/429 HABITAT_INSUFFICIENT_BALANCE)、
+        连通性、凭证、权限、超时或上游失败时自动降级路径B=浅色咨询排版封面。正文AI插图失败时改用
+        可编辑原生矢量示意。所有降级写入image_acquisition_manifest.json及ppt_production_manifest.json；
+        市场/模型数据图始终复用已验收图表，禁止AI生图替代。
+      - >-
+        render QA: scripts/libreoffice_render.py <final.pptx> --output-dir <qa-dir> --render-pages
+        --timeout-seconds 120 + pptx skill scripts/thumbnail.py (visual inspection per slide)
+      - render and inspect every slide
+      - >-
+        after embedded export and a real render-inspect-fix-rerender cycle, run
+        scripts/register_high_fidelity_ppt_delivery.py --project-dir <project> --pptx <final.pptx>
+        --qa-render-dir <qa-dir> --pages-inspected <slide-count> --confirm-all-pages-inspected
+        --visual-fix-cycle-count <n>=1 --visual-inspection-notes <actual-findings-and-fixes>
+      - run final evidence audit
+    outputs:
+      - deliverables/市场调研内部宣讲PPT.pptx
+      - evidence_audit.md
+      - deliverables/ppt_production_manifest.json
+    quality_gates:
+      - slide PDF and page PNGs render through the bounded isolated-profile LibreOffice converter and thumbnails generate without error
+      - no leftover placeholder text in slides
+      - final PPT manifest proves the embedded pipeline, matching hash, full-slide inspection, at least one fix cycle, and cover-prompt compliance
+      - >-
+        交付硬门槛（2026-08-07固化）：run_workflow --mode final --strict-final-files 是交付唯一放行凭证——
+        Stage gate 必须 OK(0 fail) 且 evidence audit 写出；任一 FAIL 即交付未完成，修复后重跑直至 OK；
+        禁止以历史运行/局部检查/人工确认替代；交付说明附最终审计摘要
+      - run scripts/run_workflow.py --check --audit --stages 0-8 --mode final --strict-final-files
+      - final docx xlsx pptx exist and pass QA

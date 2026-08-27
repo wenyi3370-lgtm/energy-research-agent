@@ -392,12 +392,14 @@ class P0VisualSystemTests(unittest.TestCase):
             products_chapter = narrative.chapter("products")
             factories_chapter = narrative.chapter("factories")
             executive = narrative.chapter("executive_summary")
-            self.assertLessEqual(len(products_chapter.image_ids), IMAGE_BUDGETS["products"])
+            # Verified product photos no longer lose to chapter pacing: the
+            # products budget widens so every linked product image enters
+            # inline, while factories/executive budgets still hold.
+            self.assertEqual(
+                set(products_chapter.image_ids), {f"IMG-{i:02d}" for i in range(12)}
+            )
             self.assertLessEqual(len(factories_chapter.image_ids), IMAGE_BUDGETS["factories"])
             self.assertLessEqual(len(executive.image_ids), IMAGE_BUDGETS["executive_summary"])
-            # priority ordering: highest priority product image selected first
-            selected = {image_id for image_id in products_chapter.image_ids}
-            self.assertTrue(selected.issubset({f"IMG-{i:02d}" for i in range(12)}))
 
     # ── TEST 19: QA stays out of user-facing reports ────────────────────────
     def test_19_no_qa_or_internal_text_in_user_reports(self) -> None:

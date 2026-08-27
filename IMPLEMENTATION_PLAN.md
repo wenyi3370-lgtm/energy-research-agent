@@ -2,6 +2,20 @@
 
 `pyproject.toml` is the single version source. Work is organized by quality gates rather than historical phase numbers.
 
+## AGENT — Energy Research Agent fusion (2026-08-25)
+
+- [x] Baseline audit: both repos pinned (enterprise `52d3d14`, overseas `ccc2a18` v1.2.9).
+- [x] Overseas skill vendored with commit pin + manifest hashing (24594 files verified).
+- [x] ResearchMission / ResearchGoal / dynamic custom goals / MissionParser / GoalPlanner.
+- [x] ResearchSkillRouter (LLM classification + code-side boundary enforcement).
+- [x] EnterpriseResearchSkill + OverseasMarketResearchAdapter (ResearchSkillPort).
+- [x] Orchestrator loop: execute → ingest → evaluate → recovery (executed-round accounting, config-driven cap) → synthesis.
+- [x] MarketEvidenceImporter: overseas ledger → unified EvidenceStore with subject isolation.
+- [x] CrossDomainSynthesisEngine with traceable findings.
+- [x] API + /agent portal + unified mission approval + agent trace store.
+- [x] Schemas: research-mission / research-goal / routing-decision / skill-run-result / goal-evaluation / recovery-plan.
+- [x] TEST-AGENT-01..15 + hybrid golden (19 offline tests).
+
 ## P0 — evidence correctness and saturation
 
 - AnySearch JSON and Markdown parsing paths are reachable and covered by regression tests.

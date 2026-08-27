@@ -1,0 +1,55 @@
+{
+  "$defs": {
+    "ResearchMode": {
+      "enum": [
+        "ENTERPRISE",
+        "MARKET",
+        "HYBRID"
+      ],
+      "title": "ResearchMode",
+      "type": "string"
+    },
+    "SkillName": {
+      "enum": [
+        "ENTERPRISE_RESEARCH",
+        "OVERSEAS_MARKET_RESEARCH"
+      ],
+      "title": "SkillName",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One goal -> one skill decision, always carrying an auditable reason (§34).",
+  "properties": {
+    "goal_id": {
+      "title": "Goal Id",
+      "type": "string"
+    },
+    "assigned_skill": {
+      "$ref": "#/$defs/SkillName"
+    },
+    "routing_reason": {
+      "minLength": 1,
+      "title": "Routing Reason",
+      "type": "string"
+    },
+    "confidence": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "mode": {
+      "$ref": "#/$defs/ResearchMode"
+    }
+  },
+  "required": [
+    "goal_id",
+    "assigned_skill",
+    "routing_reason",
+    "confidence",
+    "mode"
+  ],
+  "title": "RoutingDecision",
+  "type": "object"
+}

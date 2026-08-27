@@ -123,6 +123,8 @@ def _version() -> str:
 # editable 安装下 __file__ 即 /app/src 内的真实路径。
 _PORTAL_DIR = Path(__file__).with_name("portal")
 _PORTAL_HTML = (_PORTAL_DIR / "portal.html").read_text(encoding="utf-8")
+_AGENT_HTML = (_PORTAL_DIR / "agent.html").read_text(encoding="utf-8")
+_AGENT_DEBUG_HTML = (_PORTAL_DIR / "debug.html").read_text(encoding="utf-8")
 
 
 def _default_executor() -> ResearchExecutor:
@@ -315,6 +317,22 @@ def create_app(
         openapi_url="/openapi.json",
     )
     app.state.automation_db = db
+    # Energy Research Agent control layer (additive). When the layer cannot
+    # start the rest of the API still boots; /api/agent/health reports why.
+    app.state.agent_enabled = False
+    try:
+        from ...agent.api import build_agent_orchestrator, create_agent_router
+
+        agent_orchestrator = build_agent_orchestrator(resolved_executor, service.workdir)
+        app.state.agent_orchestrator = agent_orchestrator
+        app.include_router(
+            create_agent_router(agent_orchestrator, notifier=service.notifier),
+            prefix="/api/agent",
+            tags=["agent"],
+        )
+        app.state.agent_enabled = True
+    except Exception as exc:  # additive layer must never break the existing API
+        logger.warning("agent control layer unavailable: %s", exc)
     _register_error_handlers(app)
 
     def _intelligence_service():
@@ -467,6 +485,9 @@ def create_app(
                 }
                 current_store = store
                 attempt_history: list[dict] = []
+                persistent_gaps: dict[str, int] = {}
+                budget_seconds = max(0, int(payload.time_budget_minutes)) * 60
+                deadline = time.monotonic() + budget_seconds if budget_seconds else None
                 result = {}
                 for recovery_round in range(1, 11):
                     result = deep_retry(
@@ -493,10 +514,29 @@ def create_app(
                     })
                     if result.get("published"):
                         break
-                    if result.get("search_execution_status") in {"blocked", "discovery_failed"}:
-                        # Evidence-absence recovery is ten rounds; provider
-                        # outage/quota/auth failure is not. Stop immediately
-                        # without misreporting it as a public-data gap.
+                    if result.get("search_execution_status") in {"blocked", "failed"}:
+                        # Evidence-absence recovery is ten rounds; a provider
+                        # outage/quota/auth crash (execution_status=failed) is
+                        # not. Stop immediately without burning quota retrying
+                        # a broken provider or misreporting it as a data gap.
+                        break
+                    from enterprise_energy_research.automation.deep_research_control import (
+                        record_gap_round,
+                        stop_reason,
+                    )
+                    record_gap_round(persistent_gaps, result)
+                    reason = stop_reason(
+                        persistent_gaps, result,
+                        deadline=deadline, now=time.monotonic(),
+                    )
+                    if reason is not None:
+                        # Evidence-absent gaps and exhausted time budgets end
+                        # the loop with a diagnosable terminal status instead
+                        # of burning the remaining recovery rounds.
+                        result["status"] = reason
+                        result["converged_gaps"] = sorted(
+                            gap for gap, count in persistent_gaps.items() if count >= 3
+                        )
                         break
                     next_store = result.get("evidence_store")
                     if not next_store:
@@ -511,6 +551,23 @@ def create_app(
                 result["attempts"] = len(attempt_history)
                 result["attempt_history"] = attempt_history
                 result["requested_by"] = payload.requested_by
+                if not result.get("published") and payload.publish_conditional:
+                    # Evidence-absent or budget-exhausted termination: publish
+                    # a conditional report from the latest merged evidence
+                    # instead of leaving the run BLOCKED with no deliverables.
+                    last_store_path = result.get("evidence_store")
+                    try:
+                        if last_store_path and Path(last_store_path).is_file():
+                            from enterprise_energy_research.research.deep_retry import publish_conditionally
+                            result.update(publish_conditionally(
+                                EvidenceStore(last_store_path), run_id, run_dir,
+                                reason=result.get("status") or "recovery_loop_ended",
+                                blocking_gaps=result.get("converged_gaps") or [],
+                            ))
+                    except Exception as exc:  # noqa: BLE001
+                        result["conditional_publish_error"] = (
+                            f"{type(exc).__name__}: {str(exc)[:200]}"
+                        )
                 if payload.save_to_desktop and result.get("published"):
                     desktop_root = Path(os.environ.get("EER_DESKTOP_PATH", "/desktop"))
                     if desktop_root.is_dir():
@@ -908,10 +965,40 @@ def create_app(
         """小白引导页：填写参数 → 点「开始调查」→ 跟踪状态。"""
         return Response(content=_PORTAL_HTML, media_type="text/html; charset=utf-8")
 
+    @app.get("/agent", include_in_schema=False)
+    def agent_portal() -> Response:
+        """Agent 引导页：自然语言需求 → 统一研究任务审批 → 开始研究。"""
+        return Response(content=_AGENT_HTML, media_type="text/html; charset=utf-8")
+
+    @app.get("/agent/debug", include_in_schema=False)
+    def agent_debug_portal() -> Response:
+        """Agent 高级调试页：Goals/Routing/Recovery/Metrics/Trace（§50）。"""
+        return Response(content=_AGENT_DEBUG_HTML, media_type="text/html; charset=utf-8")
+
     @app.get("/assets/portal-logo.jpg", include_in_schema=False)
     def portal_logo() -> FileResponse:
         """门户页 logo（四川动力电池产业创新中心徽章，随源码打包进镜像）。"""
         return FileResponse(_PORTAL_DIR / "portal_logo.jpg")
+
+    @app.get("/assets/v2g-hero.jpg", include_in_schema=False)
+    def v2g_hero() -> FileResponse:
+        """Agent 引导页 V2G 双向充电桩主视觉（Wikimedia Commons 真实产品照片，CC BY-SA，随源码打包进镜像）。"""
+        return FileResponse(_PORTAL_DIR / "v2g_hero.jpg")
+
+    @app.get("/assets/battery-pack.jpg", include_in_schema=False)
+    def battery_pack() -> FileResponse:
+        """Agent 引导页企业调查轨道的动力电池包配图（Wikimedia Commons 真实照片，随源码打包进镜像）。"""
+        return FileResponse(_PORTAL_DIR / "battery-pack.jpg")
+
+    @app.get("/assets/market-port.jpg", include_in_schema=False)
+    def market_port() -> FileResponse:
+        """Agent 引导页海外市场调研轨道的贸易港口航拍配图（Wikimedia Commons 真实照片，随源码打包进镜像）。"""
+        return FileResponse(_PORTAL_DIR / "market-port.jpg")
+
+    @app.get("/assets/intel-bess.jpg", include_in_schema=False)
+    def intel_bess() -> FileResponse:
+        """Agent 引导页每日情报轨道的储能电站配图（Wikimedia Commons 真实照片，随源码打包进镜像）。"""
+        return FileResponse(_PORTAL_DIR / "intel-bess.jpg")
 
     @app.get("/health")
     def health() -> JSONResponse:
@@ -928,5 +1015,58 @@ def create_app(
             })
         except Exception:  # noqa: BLE001 - health must never raise
             return JSONResponse({"status": "error", "version": app.version}, status_code=503)
+
+    @app.on_event("startup")
+    def _intelligence_catch_up_watchdog() -> None:
+        """每日情报补跑巡检：覆盖两种丢刊事故。
+
+        n8n 每天只在 10:00 触发一次，而采集是进程内后台任务：
+        1) 容器重启直接杀死采集（08-25 事故）；
+        2) 采集异常死亡且容器未重启、无人再触发。
+        巡检线程每 10 分钟检查一次：过了 10:40（10 点触发 + 健康采集
+        时长 + 余量）当天仍未发布、也没有有效运行锁时，立即补跑。
+        日锁保证与任何触发互斥，同日最多一次执行；补跑本身也会
+        重新认领日锁，不会与 10 点正常执行叠加。
+        """
+        import threading
+
+        # 测试环境可关闭巡检（EER_INTELLIGENCE_CATCHUP=off），生产默认开启。
+        if os.environ.get("EER_INTELLIGENCE_CATCHUP", "on").strip().lower() != "on":
+            return
+        # 无 LLM 网关（合成模式/单测）时采集根本无法执行，巡检无意义。
+        if _intelligence_service().gateway is None:
+            return
+
+        def _patrol() -> None:
+            while True:
+                try:
+                    _maybe_catch_up()
+                except Exception:  # noqa: BLE001 - 巡检失败不能杀死线程
+                    logger.exception("daily intelligence catch-up patrol failed")
+                time.sleep(600)
+
+        def _maybe_catch_up() -> None:
+            intel = _intelligence_service()
+            from ..intelligence import current_intelligence_time
+
+            current_time = current_intelligence_time()
+            # 10:00 是 n8n 的正式发布点，一次健康采集约 15-30 分钟；
+            # 只有过了 10:40 当天仍未发布，才认为 10 点执行确实失败。
+            if current_time.hour < 10 or (current_time.hour == 10 and current_time.minute < 40):
+                return
+            if not intel.should_catch_up_today(current_time=current_time):
+                return
+            logger.info(
+                "daily intelligence catch-up triggered for %s",
+                current_time.date().isoformat(),
+            )
+            threading.Thread(
+                target=intel.run_daily,
+                kwargs={"current_time": current_time},
+                name="intelligence-catch-up",
+                daemon=True,
+            ).start()
+
+        threading.Thread(target=_patrol, name="intelligence-catch-up-watchdog", daemon=True).start()
 
     return app

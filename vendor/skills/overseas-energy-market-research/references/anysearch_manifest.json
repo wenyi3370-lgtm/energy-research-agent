@@ -1,0 +1,9 @@
+{
+  "name": "AnySearch",
+  "version": "3.0.1",
+  "embedded": true,
+  "copied_verbatim": true,
+  "cli_sha256": "912c8ea187c5cbdb7966a67ab1450523171ce99902de269f1a52a4520d9584e2",
+  "manifest_updated": "2026-08-11",
+  "note": "Self-contained regression compares the bundled CLI against THIS manifest; parity against the official AnySearch Skill is a separate integration test (SKIP when the official Skill is not installed)."
+}

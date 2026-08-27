@@ -602,6 +602,61 @@ class BriefingTests(unittest.TestCase):
             )
 
 
+class CatchUpProbeTests(unittest.TestCase):
+    """重启自愈探针：当日未发布且无有效锁 -> 允许补跑。"""
+
+    def _service(self, tmp):
+        return IntelligenceService(None, Path(tmp), adapters={}, gateway=object())
+
+    def test_catch_up_needed_when_day_unpublished_and_no_lock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            service = self._service(tmp)
+            now = datetime(2026, 8, 25, 11, 30, tzinfo=TZ)
+            self.assertTrue(service.should_catch_up_today(current_time=now))
+
+    def test_no_catch_up_after_publication(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            service = self._service(tmp)
+            now = datetime(2026, 8, 25, 11, 30, tzinfo=TZ)
+            brief_path = Path(tmp) / "intelligence" / "2026-08-25.json"
+            brief_path.parent.mkdir(parents=True, exist_ok=True)
+            brief_path.write_text("{}", encoding="utf-8")
+            self.assertFalse(service.should_catch_up_today(current_time=now))
+
+    def test_no_catch_up_while_valid_lock_held(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            service = self._service(tmp)
+            now = datetime(2026, 8, 25, 11, 30, tzinfo=TZ)
+            _claim, token = service.claim_daily(now.date(), current_time=now)
+            self.assertIsNotNone(token)
+            self.assertFalse(service.should_catch_up_today(current_time=now))
+            service._release_daily_lock(now.date(), token)
+
+    def test_catch_up_reclaims_stale_lock_left_by_crash(self):
+        import os
+        import time as _time
+
+        from enterprise_energy_research.automation.intelligence.service import (
+            DAILY_RUN_LOCK_STALE_SECONDS,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            service = self._service(tmp)
+            now = datetime(2026, 8, 25, 11, 30, tzinfo=TZ)
+            lock_path = service._daily_lock_path(now.date())
+            lock_path.write_text("{}", encoding="utf-8")
+            past = _time.time() - DAILY_RUN_LOCK_STALE_SECONDS - 60
+            os.utime(lock_path, (past, past))
+            self.assertTrue(service.should_catch_up_today(current_time=now))
+
+    def test_no_catch_up_while_paused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            service = self._service(tmp)
+            now = datetime(2026, 8, 25, 11, 30, tzinfo=TZ)
+            service.pause()
+            self.assertFalse(service.should_catch_up_today(current_time=now))
+
+
 class ServiceTests(unittest.TestCase):
     def test_daily_claim_is_atomic_across_concurrent_services(self):
         from enterprise_energy_research.automation.intelligence.service import (
@@ -640,6 +695,40 @@ class ServiceTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 service.run_daily(current_time=now)
             self.assertFalse(service.daily_state(current_time=now)["running"])
+
+    def test_publish_sends_brief_docx_file_to_feishu(self):
+        """发布时除了正文消息，还必须把 Word 成品作为文件消息送达飞书。"""
+        from enterprise_energy_research.automation.feishu.mock import MockFeishuAdapter
+
+        now = datetime(2026, 8, 24, 10, 0, tzinfo=TZ)
+        brief = DailyBrief(
+            brief_date=now.date(),
+            judgment="今日行业信号以高评分条目为主。",
+            updated_at=now,
+            window_start=now - timedelta(hours=72),
+            window_end=now,
+            report_cutoff_time=now,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            notifier = MockFeishuAdapter()
+            service = IntelligenceService(
+                None, Path(tmp), adapters={}, gateway=None,
+                notifier=notifier, receiver="oc_room",
+            )
+            service._publish(brief)
+
+            self.assertEqual(len(notifier.sent), 1)
+            self.assertIn("今日判断", notifier.sent[0].text)
+            self.assertEqual(len(notifier.sent_files), 1)
+            docx_path = Path(tmp) / "intelligence" / f"daily-brief-{now.date():%Y-%m-%d}.docx"
+            self.assertEqual(notifier.sent_files[0][0], str(docx_path))
+            self.assertEqual(notifier.sent_files[0][1], f"daily-brief-{now.date():%Y-%m-%d}.docx")
+            self.assertTrue(docx_path.is_file())
+            from docx import Document
+
+            paragraphs = [p.text for p in Document(str(docx_path)).paragraphs]
+            self.assertTrue(any("V2G" in text for text in paragraphs))
+            self.assertTrue(any("今日判断" in text for text in paragraphs))
 
     def test_run_daily_idempotent(self):
         class FakeGateway:

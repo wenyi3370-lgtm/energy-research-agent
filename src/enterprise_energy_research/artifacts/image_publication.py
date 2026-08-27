@@ -76,6 +76,7 @@ class PublicationImage(BaseModel):
     width: int = Field(gt=0)
     height: int = Field(gt=0)
     normalized_mime_type: str = "image/png"
+    target_entity_id: str | None = None
     target_entity_type: str | None = None
     visual_verified: bool = False
     verification_method: str = "none"
@@ -123,7 +124,14 @@ def _candidate_roots(output_root: Path, extra_roots: Iterable[Path] = ()) -> lis
     roots.extend(output_root.parents)
     expanded: list[Path] = []
     for root in roots:
-        expanded.extend([root, root / "evidence", root / "freeze", root / "raw"])
+        # The evidence archiver writes under <evidence_root>/assets/images and
+        # production runs use run_dir/outputs/01_evidence as that root, while
+        # artifacts publish from run_dir/outputs/artifacts — so the 01_evidence
+        # sibling must be reachable from the artifact tree as well.
+        expanded.extend([
+            root, root / "evidence", root / "freeze", root / "raw",
+            root / "01_evidence",
+        ])
     unique: list[Path] = []
     for root in expanded:
         resolved = root.resolve()
@@ -256,6 +264,7 @@ def prepare_publication_images(
                 phash=image.phash,
                 width=image.width,
                 height=image.height,
+                target_entity_id=image.target_entity_id,
                 target_entity_type=image.target_entity_type,
                 visual_verified=image.visual_verified,
                 verification_method=image.verification_method,

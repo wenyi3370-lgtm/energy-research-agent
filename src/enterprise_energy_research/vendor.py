@@ -11,6 +11,7 @@ EMBEDDED_SKILLS = (
     "frontend-design",
     "kimi-webbridge",
     "diagram-design",
+    "overseas-energy-market-research",
 )
 
 

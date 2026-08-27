@@ -1,5 +1,22 @@
 # Architecture
 
+## 0. P0 Architectural Invariant
+
+> **不要让代码继续假装会推理，也不要让 Agent 绕过工程规则；让 Agent 做研究决策，
+> 让两个成熟 Skill 做专业执行，让统一 Evidence 与 Workflow 控制真实性、质量和最终交付。**
+
+Concretely:
+
+- **LLM 负责不确定性**：理解、规划、判断、补救、综合（`src/enterprise_energy_research/agent/`）。
+- **代码负责确定性**：搜索执行、证据、预算、ID、审计、Schema、冻结、发布（既有
+  research/evidence/validation/artifacts/automation 平面）。
+- 推理可以动态；执行必须受控。所有 Agent 决策走 `ModelGateway.structured`
+  （Pydantic/JSON Schema），禁止正则解析自然语言决策。
+- **减少时间不得降低质量**：任何缩短研究/交付耗时的手段都不得削减证据量或质量门槛。
+  "证据够不够"由饱和策略与质量门槛判定，不由时间预算判定。允许的手段仅限并发抓取、
+  URL 去重、EvidenceDelta 饱和早停、避免重复工作；禁止缩小研究预算、跳过/降级门槛、
+  用 mock 冒充真实验收（细则见 `docs/agent/PERFORMANCE_POLICY.md`）。
+
 ## 1. Architectural thesis
 
 Implement a modular evidence pipeline, not an autonomous prompt loop:
@@ -23,6 +40,33 @@ The system has four planes:
 2. **Evidence plane**: normalized claims, sources, images, graph entities, conflicts and frozen snapshots.
 3. **Analysis plane**: industrial, energy and four cooperation engines reading only evidence.
 4. **Artifact plane**: adapter-backed publishers and validators reading only a frozen version.
+
+## 1.1 Agent control layer (Energy Research Agent)
+
+Above the deterministic planes sits one **Research Orchestrator Agent**
+(`src/enterprise_energy_research/agent/`, see ADR-AGENT-001..006):
+
+```text
+PREFLIGHT → MISSION_PARSE → GOAL_PLAN → ROUTING → APPROVAL → EXECUTE_SKILLS
+→ INGEST → GOAL_EVALUATION → (RECOVERY → EXECUTE_SKILLS)* → SYNTHESIS
+→ UNIFIED_VALIDATE → FREEZE → ARTIFACT_PLAN → PUBLISH → CROSS_VALIDATE → PACKAGE
+```
+
+- `ResearchMission`/`ResearchGoal` are first-class open-set objects; custom
+  goals never degrade to a weak OTHER bucket.
+- `ResearchSkillRouter` assigns each goal to ENTERPRISE_RESEARCH or
+  OVERSEAS_MARKET_RESEARCH (HYBRID missions use both) with an auditable
+  `routing_reason`; code enforces subject-boundary legality.
+- Skills implement `ResearchSkillPort` and return structured
+  `SkillRunResult`; the overseas capability pack is vendored with a pinned
+  commit (`vendor/skills/overseas-energy-market-research`, VENDOR_INFO.md).
+- `RecoveryPlanner` + `RecoveryLedger` enforce the §24 executed-round rule and
+  the config-driven cap (`config/agent.yaml`); exhaustion produces an
+  Auditable Evidence Limitation — never a silent "资料有限".
+- `MarketEvidenceImporter` maps overseas ledger rows into the unified
+  EvidenceStore with five-boundary subject isolation.
+- One human approval (`Unified Research Mission Approval`) gates execution;
+  the agent can never self-approve.
 
 ### Fifth-round publication control plane
 

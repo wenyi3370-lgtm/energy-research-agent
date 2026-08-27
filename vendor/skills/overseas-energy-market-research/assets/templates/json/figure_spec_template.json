@@ -1,0 +1,44 @@
+{
+  "figure_id": "[[figure_id]]",
+  "title": "[[figure_title]]",
+  "figure_class": "modeling",
+  "figure_type": "auto",
+  "visual_intent": "[[trend|ranking|composition|bridge|sensitivity|positioning|risk|coverage|funnel]]",
+  "archetype": "single-evidence-chart",
+  "role": "robustness",
+  "core_claim": "[[human_confirmed_core_claim]]",
+  "claim_confirmed": false,
+  "panel_map": {
+    "a": "[[unique_evidence_carried_by_panel_a]]"
+  },
+  "source_data": "14_Model_Validation.csv",
+  "data_provenance": "simulated",
+  "simulation": {
+    "method": "[[realistic_simulation_method]]",
+    "seed": 20260809,
+    "assumptions": ["[[assumption]]"],
+    "calibration_sources": ["[[source_id_or_path]]"]
+  },
+  "statistics": {
+    "metric_definition": "[[definition]]",
+    "variability_definition": "[[definition]]",
+    "baseline_definition": "[[definition]]"
+  },
+  "encoding": {
+    "relationship": "[[semantic_relationship_between_fields]]",
+    "x": "parameter_value",
+    "series": ["model_result"],
+    "series_labels": {"model_result": "Model result"},
+    "xlabel": "Parameter value",
+    "ylabel": "Model result"
+  },
+  "figsize": [6.1417, 4.2],
+  "dpi": 300,
+  "minimum_font_size_pt": 8,
+  "report_placement": {
+    "section_heading": "[[target_heading_1]]",
+    "caption": "[[figure_caption]]",
+    "source_note": "数据来源：[[source_id_or_file]]。"
+  },
+  "output_stem": "deliverables/charts/figN_[[figure_id]]"
+}

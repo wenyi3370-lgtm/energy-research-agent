@@ -13,11 +13,25 @@ class VendorEmbeddingTests(unittest.TestCase):
     def test_all_external_skills_are_embedded(self) -> None:
         self.assertEqual(
             set(EMBEDDED_SKILLS),
-            {"anysearch", "excel-master", "ppt-master", "frontend-design", "kimi-webbridge", "diagram-design"},
+            {"anysearch", "excel-master", "ppt-master", "frontend-design", "kimi-webbridge", "diagram-design", "overseas-energy-market-research"},
         )
         for name in EMBEDDED_SKILLS:
             with self.subTest(name=name):
                 self.assertTrue(embedded_skill_available(name))
+
+    def test_overseas_market_skill_core_resources_are_present(self) -> None:
+        root = embedded_skill_root("overseas-energy-market-research")
+        for relative in (
+            "SKILL.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "VENDOR_INFO.md",
+            "scripts/run_workflow.py", "scripts/init_research_project.py",
+            "scripts/validate_stage_gate.py", "scripts/web_collection/router.py",
+            "scripts/web_collection/journal.py", "scripts/collection_quantity_policy.py",
+            "assets/config/collection_quantity_policy.yaml",
+            "workflows/overseas_energy_research.workflow.yaml",
+            "agents/openai.yaml",
+        ):
+            with self.subTest(relative=relative):
+                self.assertTrue((root / relative).is_file())
 
     def test_publishers_prefer_embedded_skill_roots(self) -> None:
         excel = ExcelMasterFrozenPublisher()

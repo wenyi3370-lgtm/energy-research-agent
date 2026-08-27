@@ -1,0 +1,263 @@
+schema_version: 1
+objective: one_installable_skill_with_legacy_quality_parity
+quality_policy:
+  allow_quality_reduction: false
+  require_real_end_to_end_comparison: true
+  required_rounds: [R1, R2, R3]
+
+capabilities:
+  orchestration_and_stage_gates:
+    status: embedded
+    embedded_paths:
+      - workflows/overseas_energy_research.workflow.yaml
+      - scripts/run_workflow.py
+      - scripts/validate_stage_gate.py
+      - scripts/regression_test_workflow_runner.py
+    parity_contract:
+      - --all one-command pipeline: init -> check(0-4) -> collect -> modeling -> build-final-report -> audit
+      - --collect mechanical execution of 02_Web_Collection_Tasks.csv with auto-journaling
+      - --modeling scripted chain steps; human gates (G2.5/G4.5) reported as pending, never self-approved
+      - --dry-run preview without execution
+
+  market_insight_five_views:
+    status: embedded
+    legacy_external_skills: [market-insight]
+    embedded_paths:
+      - references/market-insight-five-views.md
+      - references/market-insight-report-contract.md
+      - scripts/validate_market_insight.py
+
+  excel_generation_recalculation_and_qa:
+    status: embedded
+    legacy_external_skills: [excel-master, xlsx]
+    embedded_paths:
+      - scripts/sync_csv_to_excel.py
+      - scripts/style_excel_consulting.py
+      - scripts/recalculate_excel.py
+      - scripts/validate_excel_delivery.py
+      - scripts/regression_test_excel_delivery.py
+    parity_contract:
+      - light default and jade consulting themes
+      - Arial 11, professional formats, formula/value color distinction
+      - horizontal-only table rules, filters, freeze panes, widths, print QA
+      - formulas and cell values preserved by the styling pass
+
+  office_pdf_page_rendering:
+    status: embedded
+    embedded_paths:
+      - scripts/libreoffice_render.py
+      - scripts/create_page_contact_sheet.py
+      - scripts/scan_office_placeholders.py
+    python_dependencies: [PyMuPDF]
+
+  web_collection:
+    status: embedded
+    legacy_external_skills: [anysearch, kimi-webbridge]
+    embedded_paths:
+      - scripts/anysearch/anysearch_cli.py
+      - scripts/anysearch/shared/constants.json
+      - scripts/anysearch/shared/doc_spec.md
+      - scripts/anysearch/README_embedded.md
+      - scripts/_kimi_webbridge.py
+      - scripts/web_collection/__init__.py
+      - scripts/web_collection/errors.py
+      - scripts/web_collection/journal.py
+      - scripts/web_collection/anysearch_backend.py
+      - scripts/web_collection/http_fetch.py
+      - scripts/web_collection/kimi_adapter.py
+      - scripts/web_collection/router.py
+      - scripts/web_collection/cli.py
+      - scripts/validate_collection_attempts.py
+      - scripts/regression_test_anysearch_embed.py
+      - scripts/regression_test_kimi_embed.py
+      - scripts/regression_test_web_collection.py
+      - references/kimi-webbridge-operations.md
+      - references/kimi-webbridge-client-contract.md
+      - references/kimi-webbridge-collection-playbooks.md
+    parity_contract:
+      - anysearch CLI is the official 3.0.1 source copied verbatim (zero diff, same hashes); full command surface preserved
+      - kimi-webbridge client payloads are field-for-field identical to the official curl examples; official SKILL.md and operations.md embedded verbatim
+      - one unified CLI (doctor/search/batch-search/extract/browse/auth-check/journal-summary) with attempt journal and raw captures
+      - R1/R2/R3 quantity floors and completion contracts enforced by the frozen policy validators
+      - anti-under-collection and anti-fake-completion gates in validate_collection_attempts.py
+      - offline regression tests for the anysearch command surface, kimi contract, and the end-to-end flow
+    runtime_external_components:
+      - anysearch API service at https://api.anysearch.com/mcp (optional API key: --api_key > .env > env var > anonymous)
+      - kimi-webbridge daemon at ~/.kimi-webbridge/bin/ plus the browser extension (like LibreOffice: external desktop runtime; auto-start and diagnostics embedded)
+    regression_tests:
+      - regression_test_anysearch_embed.py: PASS
+      - regression_test_kimi_embed.py: PASS
+      - regression_test_web_collection.py: PASS
+    live_smoke_2026_08_10:
+      - "anysearch real API search: PASS (real results returned, raw capture saved)"
+      - "kimi real daemon v1.11.3 + extension 1.11.5 navigate/snapshot: PASS"
+      - "kimi auth check on real pages: example.com logged_in, github.com/login logged_out -> PASS"
+      - "real-envelope {ok,data} discovered and unwrapped in kimi_adapter (documentation examples are top-level fields)"
+      - "tags closed after smoke"
+
+  mathematical_modeling:
+    status: embedded
+    legacy_external_skills:
+      - problem-parser
+      - problem-classifier
+      - related-paper-analyzer
+      - symbol-table-builder
+      - model-assumptions-builder
+      - method-selector
+      - decision-prompt-builder
+      - data-auditor-cleaner
+      - model-code-analyzer
+      - python-model-code-generator
+      - matlab-model-code-generator
+      - code-reviewer
+      - python-code-reviewer
+      - matlab-code-reviewer
+      - result-report-generator
+      - robustness-checker
+      - final-method-explainer
+      - figure-table-planner
+      - solution-package-builder
+      - consistency-auditor
+      - completeness-auditor
+      - quality-assurance-auditor
+      - modeler-decision-logger
+      - math-figure-generator
+    embedded_paths:
+      - references/modeling_chain/README_embedded.md
+      - references/modeling_chain/problem-parser.md
+      - references/modeling_chain/problem-classifier.md
+      - references/modeling_chain/related-paper-analyzer.md
+      - references/modeling_chain/symbol-table-builder.md
+      - references/modeling_chain/model-assumptions-builder.md
+      - references/modeling_chain/method-selector.md
+      - references/modeling_chain/decision-prompt-builder.md
+      - references/modeling_chain/data-auditor-cleaner.md
+      - references/modeling_chain/model-code-analyzer.md
+      - references/modeling_chain/python-model-code-generator.md
+      - references/modeling_chain/matlab-model-code-generator.md
+      - references/modeling_chain/code-reviewer.md
+      - references/modeling_chain/python-code-reviewer.md
+      - references/modeling_chain/matlab-code-reviewer.md
+      - references/modeling_chain/result-report-generator.md
+      - references/modeling_chain/robustness-checker.md
+      - references/modeling_chain/final-method-explainer.md
+      - references/modeling_chain/figure-table-planner.md
+      - references/modeling_chain/math-figure-generator.md
+      - references/modeling_chain/references/chart-patterns.md
+      - references/modeling_chain/references/color-systems.md
+      - references/modeling_chain/references/layout-guide.md
+      - references/modeling_chain/solution-package-builder.md
+      - references/modeling_chain/consistency-auditor.md
+      - references/modeling_chain/completeness-auditor.md
+      - references/modeling_chain/quality-assurance-auditor.md
+      - references/modeling_chain/modeler-decision-logger.md
+      - references/modeling-chain-adaptation.md
+      - scripts/create_modeling_artifacts.py
+      - scripts/validate_model_integrity.py
+      - scripts/validate_modeling_chain_gates.py
+      - scripts/regression_test_modeling_chain.py
+    parity_contract:
+      - 24 skill instruction docs embedded verbatim (MIT, zero diff from originals; math-figure-generator references included)
+      - G1/G2/G3/G6 mechanical gates scripted; G2.5/G4.5 human gates and G4 frozen freshness enforced
+      - human gates can never be self-approved by AI (decided_by=human required)
+      - market data gaps stay gaps; missing modeling inputs use reproducible simulated data (12/14, value_class=simulated)
+      - 12/13/14 CSVs written only by create_modeling_artifacts.py
+      - benchmark, sensitivity, robustness and error analysis not skippable
+    regression_tests:
+      - regression_test_modeling_chain.py: PASS (14/14)
+
+  word_production:
+    status: embedded
+    legacy_external_skills: [kami, docx]
+    embedded_paths:
+      - scripts/build_template_report.py
+      - scripts/polish_word_ib_style.py
+      - scripts/verify_word_ib_style.py
+      - scripts/validate_word_delivery.py
+      - scripts/libreoffice_render.py
+      - scripts/scan_office_placeholders.py
+      - scripts/register_word_delivery.py
+      - assets/templates/word/energy_market_research_report_template.docx
+    parity_contract:
+      - fused broker-template lineage and exact typography
+      - deterministic IB-style cleanup and structural gates
+      - three-line tables, inline figures, captions, source notes, and page fields
+      - exactly one unique caption immediately before each report table; duplicate or orphan captions fail final validation
+      - bounded full-page rendering and explicit all-page inspection registration
+
+  figure_production:
+    status: embedded
+    legacy_external_skills: [nature-figure, math-figure-generator]
+    embedded_paths:
+      - scripts/figure_production.py
+      - scripts/render_charts.py
+      - scripts/render_figure_from_spec.py
+      - scripts/build_text_only_demo_specs.py
+      - scripts/replace_word_figures.py
+      - scripts/chart_polish.py
+      - scripts/validate_figure_delivery.py
+      - scripts/register_figure_delivery.py
+      - scripts/insert_approved_figures.py
+      - scripts/regression_test_figure_delivery.py
+      - scripts/regression_test_text_only_visuals.py
+      - scripts/kami_broker_chart_theme.py
+      - references/chart-polish-and-variety.md
+      - references/text-only-chart-and-slide-design.md
+      - assets/templates/json/figure_spec_template.json
+    parity_contract:
+      - claim-first figure contract and one embedded owner per figure
+      - Python-only editable SVG plus 300-dpi PNG output
+      - source, generator, and output hashes in every theme manifest
+      - mechanical render checks plus explicit visual-inspection registration
+      - deterministic relationship-driven chart routing for text-only models; final 6+ figure sets cap bar-family share at 60% and require 3+ chart families
+      - every canonical chart type may appear at most twice in any final figure set; aliases are counted together
+      - deterministic text-only visual QA replaces unavailable multimodal inspection; visually similar single-axis comparison grammars are capped as one family
+      - market gaps remain gaps; missing modeling inputs use traceable realistic simulation
+
+  presentation_production:
+    status: embedded_full_parity
+    legacy_external_skills: [ppt-master, pptx, ewo-image-generate]
+    embedded_paths:
+      - scripts/high_fidelity_presentation.py
+      - scripts/project_manager.py
+      - scripts/svg_editor/server.py
+      - scripts/svg_quality_checker.py
+      - scripts/total_md_split.py
+      - scripts/finalize_svg.py
+      - scripts/svg_to_pptx.py
+      - scripts/pptx_animations.py
+      - scripts/validate_high_fidelity_ppt_delivery.py
+      - scripts/register_high_fidelity_ppt_delivery.py
+      - scripts/build_presentation_evidence_map.py
+      - scripts/validate_presentation_delivery.py
+      - scripts/presentation_production.py
+      - scripts/resolve_presentation_images.py
+      - scripts/build_executive_presentation.py
+      - scripts/validate_ppt_delivery.py
+      - scripts/register_ppt_delivery.py
+      - scripts/regression_test_ppt_delivery.py
+      - scripts/libreoffice_render.py
+      - scripts/create_page_contact_sheet.py
+      - references/text-only-chart-and-slide-design.md
+      - templates/design_spec_reference.md
+      - templates/spec_lock_reference.md
+      - templates/charts/
+      - templates/layouts/
+      - templates/decks/
+      - templates/brands/
+      - templates/icons/
+      - assets/templates/json/presentation_plan_template.json
+      - assets/templates/json/presentation_image_requests_template.json
+    parity_contract:
+      - eight bundled user confirmations before design_spec and spec_lock
+      - current main agent hand-writes SVG pages sequentially and rereads spec_lock before every page
+      - no sub-agent SVG generation and no script-batched page generation
+      - live SVG preview, annotations, quality checking, notes, post-processing, and native DrawingML export
+      - editable text and shapes plus transitions, semantic entrance animations, narration support, and conversion trace
+      - complete embedded chart, layout, deck, brand, and icon libraries
+      - answer-first titles, consulting layouts, source/update/limitation footers, and speaker notes
+      - approved report figures are reused; slide-only frameworks remain editable native vectors
+      - EWO produces cover and optional body raster illustrations when available
+      - insufficient balance or another normalized EWO failure triggers a light consulting cover and handwritten-SVG vector body fallback
+      - every slide is rendered with LibreOffice and PyMuPDF, inspected, fixed, rerendered, and registered by final hash
+      - Python-native build_executive_presentation renderer is fallback-only and cannot be claimed as equivalent

@@ -1199,6 +1199,7 @@ class AdaptiveResearchRunner:
         image_validator = ImageValidator()
         self.cumulative.images = image_validator.validate(
             self.cumulative.images, self.cumulative.entities, self.cumulative.sources,
+            self.cumulative.claims,
         )
         archive_result = ImageArchiveResult(images=self.cumulative.images)
         # Archiving depends on the IMAGES themselves, never on whether this
@@ -1493,7 +1494,7 @@ class AdaptiveResearchRunner:
             ))
         return gaps
 
-    def _freeze_and_publish(self, store: EvidenceStore, run_id: str, output_dir: Path) -> tuple[str | None, list[str]]:
+    def _freeze_and_publish(self, store: EvidenceStore, run_id: str, output_dir: Path, conditional: bool = False) -> tuple[str | None, list[str]]:
         from enterprise_energy_research.artifacts.publisher import ArtifactPublicationService
         from enterprise_energy_research.automation.executor import default_publishers
         run = store.get_run(run_id)
@@ -1518,7 +1519,21 @@ class AdaptiveResearchRunner:
             encoding="utf-8",
         )
         if eligibility.status != "PASS":
-            raise RuntimeError("formal publication eligibility blocked: " + "; ".join(eligibility.diagnostics))
+            if not conditional:
+                raise RuntimeError("formal publication eligibility blocked: " + "; ".join(eligibility.diagnostics))
+            # Conditional publication: evidence-absent gaps no longer keep a
+            # verified report hostage.  The blocking diagnostics are recorded
+            # in a machine-readable manifest and the run manifest carries
+            # publication_mode=conditional so every artifact renders a caveat
+            # banner; no fact outside the frozen evidence ever publishes.
+            (quality_dir / "conditional_publication.json").write_text(
+                json.dumps({
+                    "mode": "conditional",
+                    "eligibility_status": eligibility.status,
+                    "blocking_diagnostics": eligibility.diagnostics,
+                }, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
         publishers = self.publishers or default_publishers()
         results = ArtifactPublicationService(publishers).publish(bundle, manifest, output_dir / "artifacts")
         failed = [result for result in results if result.status == "failed"]

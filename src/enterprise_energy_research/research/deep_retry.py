@@ -15,14 +15,17 @@ import json
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+import shutil
 from pathlib import Path
 from typing import Any
+
+from pydantic import model_validator
 from urllib.parse import urlparse
 
 from enterprise_energy_research.adapters.base import SearchAdapter, SearchRequest
 from enterprise_energy_research.domain.enums import EnterpriseComplexity, SourceLevel, VerificationStatus
 from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import ExtractedEvidenceBatch, ResearchPlan, ResearchQuery, Source
+from enterprise_energy_research.domain.models import ExtractedEvidenceBatch, ImageEvidence, ResearchPlan, ResearchQuery, Source
 from enterprise_energy_research.evidence.store import EvidenceStore
 from enterprise_energy_research.research.claim_validator import ClaimValidator
 from enterprise_energy_research.research.data_coverage import ResearchDataCoverageValidator
@@ -39,6 +42,8 @@ from enterprise_energy_research.research.image_discovery import (
     KimiUsageTelemetry,
 )
 from enterprise_energy_research.research.image_validator import ImageValidator
+from enterprise_energy_research.agent.models import AgentStrictModel
+from enterprise_energy_research.gateway.base import GatewayError, StructuredRequest
 from enterprise_energy_research.research.normalizer import EvidenceNormalizer, NormalizedEvidence
 from enterprise_energy_research.research.planner import RECOVERY_STRATEGIES, ResearchPlanner
 from enterprise_energy_research.research.production_runner import AdaptiveResearchRunner, MergeEvidence
@@ -337,7 +342,7 @@ def recover_product_images(
     new_sources = image_round.sources
 
     validator = ImageValidator()
-    new_images = validator.validate(new_images, evidence.entities, [*evidence.sources, *new_sources])
+    new_images = validator.validate(new_images, evidence.entities, [*evidence.sources, *new_sources], evidence.claims)
     if new_images:
         archived = ImageAssetArchiver(fetcher=lambda url, referer: (fetcher(url, referer), None)).archive(new_images, output_dir)
         new_images = validator.visual_verify(archived.images, base_dir=output_dir)
@@ -479,6 +484,198 @@ def sanitize_referential_integrity(evidence: NormalizedEvidence) -> dict[str, in
     }
 
 
+
+def _asset_search_roots(output_dir: Path, store_path: Path) -> list[Path]:
+    """Candidate roots where a previous run archived its image bytes.
+
+    Production runs archive under ``run_dir/outputs/01_evidence`` while an
+    earlier deep-research round archives directly into its own output dir;
+    both layouts must be searchable from the stored evidence location.
+    """
+    bases: list[Path] = []
+    for anchor in (store_path.parent, output_dir):
+        bases.extend([anchor, anchor / "outputs" / "01_evidence", anchor / "01_evidence"])
+    unique: list[Path] = []
+    for base in bases:
+        resolved = base.resolve()
+        if resolved not in unique:
+            unique.append(resolved)
+    return unique
+
+
+def _materialize_source_image_assets(
+    evidence: NormalizedEvidence,
+    output_dir: Path,
+    store_path: Path,
+) -> dict[str, int]:
+    """Copy historical image bytes into ``output_dir`` and rebind their refs.
+
+    ``load_evidence`` restores image RECORDS from a previous run's store, but
+    the byte files remain under that run's own evidence assets dir (production
+    layout ``outputs/01_evidence/assets``).  Publication resolves
+    ``local_asset_ref`` only against the current publish tree, which never
+    includes a previous run's ``outputs/`` subtree — dangling refs drop every
+    carried-over verified image and the product-image gate blocks the round
+    (same failure class as the unified-publication merge bug).  Materializing
+    the bytes under the current output dir keeps the ref value unchanged and
+    makes the frozen snapshot self-contained.
+    """
+    target_root = (output_dir / "assets" / "images").resolve()
+    search_roots = [
+        root for root in _asset_search_roots(output_dir, store_path)
+        if root != target_root and root.is_dir()
+    ]
+    copied = resolved_already = unresolved = 0
+    updated: list[ImageEvidence] = []
+    for image in evidence.images:
+        reference = image.local_asset_ref
+        if not reference or Path(reference).is_absolute():
+            updated.append(image)
+            continue
+        if (output_dir / reference).is_file():
+            resolved_already += 1
+            updated.append(image)
+            continue
+        source = next(
+            (root / reference for root in search_roots if (root / reference).is_file()),
+            None,
+        )
+        if source is None:
+            unresolved += 1
+            updated.append(image)
+            continue
+        dest = output_dir / reference
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if not (dest.exists() and dest.stat().st_size == source.stat().st_size):
+                shutil.copyfile(source, dest)
+                copied += 1
+            resolved_already += 1
+        except OSError:
+            unresolved += 1
+        updated.append(image)
+    evidence.images = updated
+    return {"copied": copied, "resolved": resolved_already, "unresolved": unresolved}
+
+
+class _DeepRecoveryQueries(AgentStrictModel):
+    """LLM recovery-query answer schema for deep-research rounds.
+
+    Same tolerance pattern as ``agent/recovery.py::_LLMRecovery``: models
+    answer with natural field names (``queries`` / ``analysis``), and those
+    must map onto the strict schema instead of tripping ``extra_forbidden``
+    and silently degrading every round to the template engine.
+    """
+
+    analysis: str = ""
+    new_queries: list[str] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_common_llm_synonyms(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        aliases = {
+            "analysis": "analysis",
+            "reason": "analysis",
+            "failure_reason": "analysis",
+            "queries": "new_queries",
+            "new_queries": "new_queries",
+            "recovery_queries": "new_queries",
+            "search_queries": "new_queries",
+        }
+        mapped: dict[str, Any] = {}
+        for key, value in data.items():
+            target = aliases.get(key)
+            if target is not None and target not in mapped:
+                mapped[target] = value
+        if isinstance(mapped.get("new_queries"), str):
+            mapped["new_queries"] = [mapped["new_queries"]]
+        if not isinstance(mapped.get("new_queries"), list):
+            mapped["new_queries"] = []
+        queries = [
+            str(query).strip()
+            for query in (mapped.get("new_queries") or [])
+            if isinstance(query, str) and query.strip()
+        ]
+        mapped["new_queries"] = queries[:6]
+        mapped["analysis"] = str(mapped.get("analysis") or "")
+        return mapped
+
+
+def _llm_recovery_queries(
+    gateway: Any,
+    company: str,
+    requirements: str,
+    gaps: list[Any],
+    *,
+    previous_hints: list[str],
+    recovery_round: int,
+) -> list[str]:
+    """Generate this round's recovery queries with the LLM, ported from t1.
+
+    The template engine rotates a fixed keyword family and cannot see WHICH
+    fields are actually missing, so every round searches the same dead
+    patterns. Here the current coverage-audit gaps plus the user requirement
+    go to the gateway; the returned texts are executed VERBATIM by
+    ``ResearchPlanner.direct_recovery_queries`` (R4) and never re-templated.
+    Any failure degrades to the deterministic template queries — the LLM is
+    an enrichment, never a blocker.
+    """
+    if gateway is None or not gaps:
+        return []
+    gap_lines = "\n".join(
+        f"- {gap.gap_code}: {gap.description}"
+        + (f"（现状: {gap.found}）" if getattr(gap, "found", "") else "")
+        for gap in gaps[:6]
+    )
+    hint_lines = "; ".join(list(dict.fromkeys(h for h in previous_hints if h))[:6]) or "无"
+    requirement_text = " ".join((requirements or "").split())[:400] or "无明确需求"
+    request = StructuredRequest[_DeepRecoveryQueries](
+        purpose="deep_retry.recovery_queries",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "你是企业深度研究的补救查询规划器。上一轮搜索后仍有覆盖缺口，"
+                    "请为本轮生成【新的】检索查询。只输出 JSON，字段严格为 analysis / "
+                    "new_queries 两个，禁止输出任何其他字段。规则："
+                    "1) 每个 query 必须显式包含企业名称与缺失证据的语义；"
+                    "2) query 语言跟随研究主体：中国主体用中文，海外主体用英文或其所在国语言；"
+                    "3) 针对 coverage_gaps 逐项换用不同来源类别表述"
+                    "（环评/建设项目/投产公告/政府项目/招标/年报/子公司/地方工信/能源评价/"
+                    "行业数据库等），面向真实可搜到的公开来源；"
+                    "4) 禁止重复 previous_hints 已用过的关键词组合；"
+                    "5) new_queries 给 3-6 条自然语言查询，不要堆砌无关关键词。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"company={company}\n"
+                    f"requirement={requirement_text}\n"
+                    f"recovery_round={recovery_round}\n"
+                    f"coverage_gaps=\n{gap_lines}\n"
+                    f"previous_hints={hint_lines}"
+                ),
+            },
+        ],
+        response_model=_DeepRecoveryQueries,
+    )
+    try:
+        plan = gateway.structured(request)
+    except (GatewayError, ValueError):
+        return []
+    seen: set[str] = set()
+    texts: list[str] = []
+    for text in plan.new_queries:
+        key = " ".join(text.casefold().split())
+        if key and key not in seen:
+            seen.add(key)
+            texts.append(text)
+    return texts[:6]
+
+
 def deep_retry(
     evidence_store: EvidenceStore,
     output_dir: Path,
@@ -504,6 +701,12 @@ def deep_retry(
     canonical_entity_id = run_manifest.canonical_entity_id
 
     evidence = load_evidence(evidence_store, run_id)
+    # Carried-over image bytes live under the previous run's evidence assets
+    # dir, outside this publish tree; materialize them before any revalidation
+    # so visual verification and the product-image gate can resolve them.
+    asset_materialization = _materialize_source_image_assets(
+        evidence, output_dir, evidence_store.path,
+    )
     original_canonical = next(
         (entity for entity in evidence.entities if entity.entity_id == canonical_entity_id),
         evidence.entities[0] if evidence.entities else None,
@@ -537,6 +740,24 @@ def deep_retry(
             company, retry_gaps, retry_round=recovery_round,
         )[:8]
     )
+    # LLM recovery queries (ported from t1): the current gap list + user
+    # requirement go to the gateway and the returned texts are executed
+    # verbatim as R4 — the template engine alone re-searches the same
+    # dead keyword family every round. On any failure the deterministic
+    # template queries above remain the floor, never a blocker.
+    llm_recovery_texts = _llm_recovery_queries(
+        gateway, company, requirements, retry_gaps,
+        previous_hints=[gap.retry_hint for gap in retry_gaps],
+        recovery_round=recovery_round,
+    )
+    if llm_recovery_texts:
+        queries.extend(
+            planner.direct_recovery_queries(
+                company, llm_recovery_texts,
+                recovery_round=recovery_round,
+                entity_id=canonical_entity_id or "UNKNOWN",
+            )
+        )
 
     # Coverage gaps and formal-publication readiness are separate contracts.
     # The former can be green while the latter is still missing an entire
@@ -650,8 +871,22 @@ def deep_retry(
         query.canonical_company_aliases = verified_target_names
 
     diagnostics: list[str] = []
+    diagnostics.append(
+        "llm recovery queries: " + json.dumps(
+            {"count": len(llm_recovery_texts), "round": recovery_round},
+            ensure_ascii=False,
+        )
+        if llm_recovery_texts
+        else "llm recovery queries unavailable; deterministic template floor used"
+    )
+    if asset_materialization["copied"] or asset_materialization["resolved"]:
+        diagnostics.append(
+            "historical image assets materialized into publish tree: "
+            + json.dumps(asset_materialization, ensure_ascii=False, sort_keys=True)
+        )
     round_metrics: dict[str, Any] = {
         "query_count": len(queries),
+        "llm_recovery_query_count": len(llm_recovery_texts),
         "active_query_count": 0,
         "blocked_query_count": 0,
         "queried_topics": sorted({query.topic for query in queries}),
@@ -952,3 +1187,35 @@ def deep_retry(
         if result["status"] == "completed":
             result["status"] = "publication_blocked"
     return result
+
+
+def publish_conditionally(
+    store, run_id: str, output_dir: Path, *, reason: str,
+    blocking_gaps: list[str] | None = None,
+) -> dict:
+    """Publish a conditional report from the latest merged evidence store.
+
+    Reserved for deep-research terminations where the recovery loop proved
+    the missing evidence is absent from public channels (or the wall-clock
+    budget ran out).  The formal-publication gate itself stays intact for
+    every regular run; this path marks the run manifest so Word/HTML
+    publishers render a visible caveat banner.
+    """
+    manifest = store.get_run(run_id)
+    scope = dict(manifest.research_scope or {})
+    scope["publication_mode"] = "conditional"
+    scope["publication_mode_reason"] = reason
+    scope["blocking_gaps"] = list(blocking_gaps or [])
+    manifest.research_scope = scope
+    store.replace_run_manifest(manifest)
+    from enterprise_energy_research.research.production_runner import AdaptiveResearchRunner
+    runner = AdaptiveResearchRunner({}, store=store, enable_publication=False)
+    try:
+        freeze_id, _used = runner._freeze_and_publish(store, run_id, output_dir, conditional=True)
+        return {
+            "published": freeze_id is not None,
+            "freeze_id": freeze_id,
+            "publication_mode": "conditional",
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"published": False, "publish_error": f"{type(exc).__name__}: {str(exc)[:200]}"}

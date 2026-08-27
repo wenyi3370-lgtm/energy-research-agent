@@ -392,6 +392,50 @@ class ResearchPlanner:
                 ))
         return queries
 
+    def direct_recovery_queries(
+        self,
+        canonical_name: str,
+        recovery_texts: list[str],
+        *,
+        recovery_round: int = 1,
+        entity_id: str = "UNKNOWN",
+    ) -> list[ResearchQuery]:
+        """Execute agent-supplied recovery queries VERBATIM (§22).
+
+        Recovery queries are planned by the agent's LLM (or its deterministic
+        fallback) for exactly this round's gap. Re-routing them through the
+        keyword template engine regenerated the same dead searches every
+        round (observed live: 90 minutes of recovery rounds with zero new
+        evidence), so the exact text is searched as planned — only anchored
+        with the subject name when the planner omitted it.
+        """
+        queries: list[ResearchQuery] = []
+        for text in recovery_texts:
+            text = " ".join(str(text).split())
+            if not text:
+                continue
+            if canonical_name and canonical_name not in text:
+                text = f'"{canonical_name}" {text}'
+            families = [
+                family for family, _focus in self.requirement_intents(text)
+                if family != "custom_requirement"
+            ]
+            family = families[0] if families else "custom_requirement"
+            queries.append(ResearchQuery(
+                query_id=new_sortable_id("QRY-RECDIR"), entity_id=entity_id, topic=family,
+                query=text,
+                purpose=f"R4 recovery round {recovery_round}: agent query executed verbatim",
+                preferred_source_levels=[SourceLevel.SOURCE_A, SourceLevel.SOURCE_B],
+                adapter_preference=discovery_adapter_for(family),
+                max_results=10, requires_browser=family in BROWSER_DEPTH_TOPICS,
+                collection_round="R4", round_goal="coverage", high_priority=True,
+                trigger="coverage",
+                **route_for_topic(family).model_updates(),
+                canonical_company_name=canonical_name,
+                expected_fields=list(contract_for(family).expected_fields),
+            ))
+        return queries
+
     def targeted_plan(
         self,
         run_id: str,
@@ -401,9 +445,16 @@ class ResearchPlanner:
         entity_id: str = "UNKNOWN",
         max_queries: int = 120,
         max_pages: int = 60,
+        direct_recovery_texts: list[str] = (),
+        recovery_round: int = 0,
     ) -> ResearchPlan:
         """Build the isolated additive plan used by both portal paths."""
         queries = self.requirement_queries(canonical_name, requirements)
+        if direct_recovery_texts:
+            queries = queries + self.direct_recovery_queries(
+                canonical_name, list(direct_recovery_texts),
+                recovery_round=max(1, recovery_round), entity_id=entity_id,
+            )
         queries = [query.model_copy(update={"entity_id": entity_id}) for query in queries]
         effective_query_budget = max(max_queries, len(queries))
         return ResearchPlan(

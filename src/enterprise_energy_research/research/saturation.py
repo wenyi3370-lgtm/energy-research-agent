@@ -6,7 +6,9 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-RoundName = Literal["R1", "R2", "R3"]
+# R4 = agent/direct recovery rounds (verbatim LLM-directed queries); they are
+# audited like other rounds but carry no quantity floors in the policy file.
+RoundName = Literal["R1", "R2", "R3", "R4"]
 SaturationStatus = Literal["SATURATED", "PARTIAL", "BLOCKED"]
 
 

@@ -33,6 +33,7 @@ from enterprise_energy_research.analysis.financials import AnalysisResult, Finan
 from enterprise_energy_research.domain.enums import VerificationStatus
 from enterprise_energy_research.domain.models import (
     Claim,
+    CrossDomainFinding,
     FrozenResearchBundle,
     ImageEvidence,
     Product,
@@ -120,6 +121,7 @@ class StoryModule(BaseModel):
         "action_plan", "risks_evidence",
         "strategic_interpretation",
         "custom_research",
+        "cross_domain",
     ]
     title: str
     assertion_title: str
@@ -229,7 +231,14 @@ class NarrativeBuilder:
         self.opportunity_engine = OpportunityAssessmentEngine()
 
     # ── entry ──
-    def build(self, bundle: FrozenResearchBundle, synthesis: ResearchSynthesis | None = None) -> ResearchNarrative:
+    def build(
+        self,
+        bundle: FrozenResearchBundle,
+        synthesis: ResearchSynthesis | None = None,
+        cross_domain: list[CrossDomainFinding] | None = None,
+    ) -> ResearchNarrative:
+        if cross_domain is None:
+            cross_domain = list(bundle.cross_domain_findings or [])
         full_bundle = bundle
         entity = canonical_entity(full_bundle)
         if entity is None:
@@ -344,8 +353,64 @@ class NarrativeBuilder:
         # stitched output.  Keep the first editorial occurrence and remove
         # later exact copies across every visible paragraph collection.
         self._deduplicate_chapter_paragraphs(narrative)
+        if cross_domain:
+            narrative.chapters.append(self._cross_domain_module(bundle, cross_domain))
         narrative.counts = self._counts(bundle, narrative)
         return narrative
+
+    def _cross_domain_module(
+        self,
+        bundle: FrozenResearchBundle,
+        findings: list[CrossDomainFinding],
+    ) -> StoryModule:
+        """§38 chapters 16-19: enterprise-market fit, risks, entry, actions.
+
+        Every paragraph is derived from traceable findings carrying evidence
+        refs; nothing here invents facts beyond the frozen evidence.
+        """
+        all_refs = sorted({
+            ref for finding in findings
+            for ref in (
+                list(finding.enterprise_evidence_refs)
+                + list(finding.market_evidence_refs)
+                + list(finding.counter_evidence_refs)
+            )
+        })
+        fit = [f for f in findings if f.finding_type in {"MARKET_FIT", "PRODUCT_FIT", "CHANNEL_FIT"}]
+        risks = [f for f in findings if f.finding_type == "RISK"]
+        entry = [f for f in findings if f.finding_type in {"ENTRY_STRATEGY", "TIMING", "OPPORTUNITY", "COOPERATION_POTENTIAL"}]
+        analysis = [
+            f"{f.statement}（{f.finding_type}，置信度 {f.confidence:.0%}"
+            + (f"，条件：{'；'.join(f.conditions)}" if f.conditions else "")
+            + "）"
+            for f in fit + entry
+        ]
+        counter = [f.statement for f in findings if f.counter_evidence_refs] + [
+            f"反证：{finding.statement}" for finding in risks
+        ]
+        assumptions = sorted({a for f in findings for a in f.assumptions})
+        return StoryModule(
+            module_id="mod-cross-domain",
+            chapter_id="cross_domain",
+            kind="cross_domain",
+            title="企业—市场匹配与进入策略",
+            assertion_title=(
+                f"基于 {len(fit)} 项适配判断与 {len(entry)} 项进入建议形成结论"
+                if fit or entry else "跨域综合结论保持审慎"
+            ),
+            decision_question="目标市场对目标企业而言，适配度、风险与进入路径如何？",
+            executive_takeaway=(
+                "; ".join(f.statement for f in fit[:2])
+                if fit else "企业侧与市场侧证据均不足以形成适配结论，按 Auditable Limitation 处理。"
+            ),
+            analysis_paragraphs=analysis,
+            implications=[f.statement for f in entry],
+            recommendations=[f.statement for f in entry if f.finding_type == "ENTRY_STRATEGY"],
+            counter_evidence=counter,
+            limitations=assumptions or ["未获得反证之外的独立假设验证。"],
+            source_ids=all_refs,
+            claim_ids=all_refs,
+        )
 
     def _supplemental_modules(
         self,
@@ -1053,6 +1118,35 @@ class NarrativeBuilder:
             )
 
         assertion = finding.conclusion if finding is not None else f"公开资料识别生产基地 {analysis.factory_site_count or len(factories)} 处"
+        # Lineage: this chapter's facts come from the factory records and the
+        # claims stating their address/name facts.  Finding-level claims are
+        # inherited first; record-level lineage restores the real provenance
+        # when the finding carries none (nothing is invented here).
+        lineage_claim_ids = list(finding.supporting_claim_ids) if finding is not None else []
+        if not lineage_claim_ids:
+            lineage_claim_ids = list(dict.fromkeys(
+                claim_id for factory in factories
+                for claim_id in factory.supporting_claim_ids
+            ))
+        if not lineage_claim_ids:
+            factory_fields = {"address", "factory_city", "factory_province", "factory_name"}
+            factory_addresses = {factory.address.strip() for factory in factories if factory.address and factory.address.strip()}
+            lineage_claim_ids = [
+                claim.claim_id for claim in bundle.claims
+                if claim.field_name in factory_fields and claim.entity_id == entity.entity_id
+                and isinstance(claim.value, (str, int, float)) and str(claim.value).strip()
+                and (
+                    str(claim.value).strip() in factory_addresses
+                    or any(str(claim.value).strip() in address for address in factory_addresses)
+                )
+            ]
+        lineage_source_ids = list(finding.supporting_source_ids) if finding is not None else []
+        if not lineage_source_ids:
+            claims_by_id = {claim.claim_id: claim for claim in bundle.claims}
+            lineage_source_ids = list(dict.fromkeys(
+                claims_by_id[claim_id].source_id
+                for claim_id in lineage_claim_ids if claim_id in claims_by_id
+            ))
         module = StoryModule(
             module_id="mod-factories", chapter_id="factories", kind="factories",
             title="生产布局与产能组织", assertion_title=assertion,
@@ -1061,10 +1155,12 @@ class NarrativeBuilder:
             context_paragraphs=context,
             analysis_paragraphs=analysis_paragraphs,
             implications=[finding.business_implication] if finding is not None else [],
-            recommendations=[finding.recommendation] if finding is not None else [],
+            # A recommendation without any attached evidence lineage is never
+            # published (fail-closed); the gate checks exactly this.
+            recommendations=[finding.recommendation] if finding is not None and lineage_claim_ids else [],
             limitations=list(finding.limitations or [])[:1] if finding is not None else [],
-            source_ids=list(finding.supporting_source_ids) if finding is not None else [],
-            claim_ids=list(finding.supporting_claim_ids) if finding is not None else [],
+            source_ids=lineage_source_ids,
+            claim_ids=lineage_claim_ids,
             table_rows=core_rows,
         )
         for proposal in VisualOpportunityPlanner(bundle, analysis).factory_proposals():
@@ -1556,14 +1652,48 @@ class NarrativeBuilder:
         budget = IMAGE_BUDGETS.get(chapter, IMAGE_BUDGETS["default"])
         candidates = [image for image in publishable_images(bundle) if image.image_id not in (exclude or set())]
         if chapter == "products":
-            candidates = [image for image in candidates if image.product_id and image.product_id in (product_ids or set())]
+            linked = [
+                image for image in candidates
+                if image.product_id and image.product_id in (product_ids or set())
+            ]
+            # Official product photography bound to the subject entity but
+            # never linked to an individual product record still documents
+            # the product portfolio — it is verified entity evidence, not a
+            # contextual guess.  Use it only after product-linked images.
+            fallback = [
+                image for image in candidates
+                if image not in linked and not image.product_id
+                and image.target_entity_type == "product"
+                and entity_id is not None and image.target_entity_id == entity_id
+            ]
+            # Deep-research product photos are often archived under a
+            # product-level entity id (ENT-*) rather than a Product record
+            # id or the company entity id.  They are pixel-verified product
+            # photographs approved by the publication pipeline for this
+            # subject, so publish them in the portfolio instead of dropping
+            # them on a linkage miss — crawling them otherwise buys nothing.
+            unlinked = [
+                image for image in candidates
+                if image not in linked and image not in fallback
+                and not image.product_id and image.target_entity_type == "product"
+            ]
+            candidates = linked + fallback + unlinked
+            # A verified product photo never loses to chapter pacing: widen
+            # the budget so every candidate enters the products chapter.
+            budget = max(budget, len(candidates))
         elif chapter == "factories":
             candidates = [image for image in candidates if image.factory_id and image.factory_id in (factory_ids or set())]
         elif chapter in {"executive_summary", "entity_profile"}:
             candidates = [
                 image for image in candidates
                 if image.target_entity_type in {"logo", "headquarters", "office", "editorial"}
-                or (image.entity_id == entity_id and not image.product_id and not image.factory_id)
+                or (
+                    (image.entity_id == entity_id or image.target_entity_id == entity_id)
+                    and not image.product_id and not image.factory_id
+                    and image.target_entity_type not in {
+                        "product", "factory", "production_line", "workshop",
+                    }
+                )
             ]
         scored: list[tuple[int, ImageEvidence]] = []
         for image in candidates:

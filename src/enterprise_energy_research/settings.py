@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     deepseek_api_key: str | None = None
     openai_api_base: str | None = None
     openai_api_key: str | None = None
+    # Reasoning models (DeepSeek-V4 family on SiliconFlow) spend quota on
+    # chain-of-thought tokens the pipeline never reads; default off keeps
+    # extraction/distillation quality-neutral at ~60% lower cost.
+    enable_thinking: bool = False
     # Network controls for the provider-neutral HTTP gateway.  The proxy is
     # opt-in so a healthy direct route stays untouched; live acceptance may
     # explicitly point it at a local Clash/Mihomo listener (for example
@@ -44,6 +48,12 @@ class Settings(BaseSettings):
     vision_provider: str = "auto"  # auto | deepseek | openai
     deepseek_vision_model: str = "deepseek-v4-flash-vision-exp"
     openai_vision_model: str = "gpt-4o-mini"
+    # Dedicated vision credentials: when the research gateway points at a
+    # non-native provider (e.g. SiliconFlow), the native DeepSeek vision
+    # model stays reachable through its own key/base (defaults keep the
+    # legacy single-key setup working unchanged).
+    vision_api_key: str | None = None
+    vision_api_base: str = "https://api.deepseek.com"
     database_url: str | None = None
     fail_closed: bool = True
     output_root: Path = Field(default=Path("outputs"))
@@ -56,10 +66,12 @@ class Settings(BaseSettings):
             "fallback_model": self.fallback_model,
             "deepseek_api_base": self.deepseek_api_base,
             "openai_api_base": self.openai_api_base,
+            "enable_thinking": self.enable_thinking,
             "outbound_proxy": "configured" if self.outbound_proxy else None,
             "model_timeout_seconds": self.model_timeout_seconds,
             "model_max_attempts": self.model_max_attempts,
             "vision_provider": self.vision_provider,
+            "vision_api_base": self.vision_api_base,
             "deepseek_vision_model": self.deepseek_vision_model,
             "openai_vision_model": self.openai_vision_model,
             "database_url": "configured" if self.database_url else None,

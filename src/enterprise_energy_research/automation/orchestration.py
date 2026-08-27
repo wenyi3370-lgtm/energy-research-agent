@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import hashlib
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -70,6 +71,32 @@ from .executor import (
     risk_for,
 )
 from .observability import CountingGateway, GatewayUsage
+
+# Agent recovery rounds annotate their planned queries as note lines
+# "第N轮补采：{query}" (agent/api.py). Recovery mode must execute those
+# texts VERBATIM; feeding them back through the keyword template engine
+# regenerated the same dead searches every round.
+_RECOVERY_LINE = re.compile(r"^第(\d+)轮补采：(.+)$")
+
+
+def split_recovery_notes(notes: str) -> tuple[list[str], int]:
+    """Split recovery notes into (verbatim recovery query texts, max round).
+
+    Non-matching lines (original user requirements) are intentionally not
+    returned: during a recovery round the agent's planned queries are the
+    whole search contract, and re-searching the round-0 requirement text
+    only repeats already-covered ground.
+    """
+    texts: list[str] = []
+    max_round = 0
+    for line in (notes or "").splitlines():
+        match = _RECOVERY_LINE.match(line.strip())
+        if match:
+            max_round = max(max_round, int(match.group(1)))
+            if match.group(2).strip():
+                texts.append(match.group(2).strip())
+    return texts, max_round
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
@@ -153,8 +180,16 @@ class OrchestratingExecutor:
     # -- phase A: plan -> search -> extract -> ingest -> validate ------------
 
     def research_and_validate(
-        self, run_id: str, request: ResearchRequest, workdir: Path
+        self, run_id: str, request: ResearchRequest, workdir: Path,
+        *, recovery_only: bool = False,
     ) -> ExecutionOutcome:
+        """One research pass.
+
+        ``recovery_only=True`` executes only the round's targeted gap queries
+        (deep_retry style, §22): the full plan is never re-run during recovery
+        rounds, so evidence accumulates across rounds without re-collecting
+        already-covered families.
+        """
         run_dir = Path(workdir) / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
         settings = Settings(output_root=run_dir / "outputs")
@@ -193,29 +228,52 @@ class OrchestratingExecutor:
         ))
 
         entity_id = new_sortable_id("ENT")
-        plan = planner.build(
-            run_id=run_id,
-            entity_id=entity_id,
-            canonical_name=domain_request.raw_company_name,
-            complexity=EnterpriseComplexity.UNKNOWN,
-            budget={
-                key: value
-                for key, value in self.budgets.get("default", {}).items()
-                if isinstance(value, int)  # ResearchPlan.budget is dict[str, int]
-            },
-        )
-        envelopes = SearchExecutor(self.adapters).execute(plan)
-        # The one-sentence portal path is intentionally two-lane: the fixed
-        # full Goal-Family plan always runs with its original budget, then an
-        # isolated additive plan reinforces every intent in the user's full
-        # sentence.  The second lane cannot remove or consume a base query.
-        targeted = None
-        if requirements:
-            targeted = planner.targeted_plan(
-                run_id, domain_request.raw_company_name, requirements,
+        if recovery_only:
+            # §22 recovery mode: never re-run the full plan. Agent-planned
+            # recovery queries (第N轮补采：...) execute VERBATIM so an
+            # LLM-directed search text is never re-templated into the dead
+            # keyword combinations of the previous round.
+            direct_texts, recovery_round = split_recovery_notes(requirements)
+            if direct_texts:
+                plan = planner.targeted_plan(
+                    run_id, domain_request.raw_company_name, "",
+                    entity_id=entity_id,
+                    max_queries=max(1, len(direct_texts) * 3),
+                    direct_recovery_texts=direct_texts,
+                    recovery_round=recovery_round,
+                )
+            else:
+                plan = planner.targeted_plan(
+                    run_id, domain_request.raw_company_name, requirements,
+                    entity_id=entity_id,
+                    max_queries=max(1, len([line for line in requirements.splitlines() if line.strip()]) * 6),
+                )
+            envelopes = SearchExecutor(self.adapters).execute(plan)
+            targeted = None
+        else:
+            plan = planner.build(
+                run_id=run_id,
                 entity_id=entity_id,
+                canonical_name=domain_request.raw_company_name,
+                complexity=EnterpriseComplexity.UNKNOWN,
+                budget={
+                    key: value
+                    for key, value in self.budgets.get("default", {}).items()
+                    if isinstance(value, int)  # ResearchPlan.budget is dict[str, int]
+                },
             )
-            envelopes.extend(SearchExecutor(self.adapters).execute(targeted))
+            envelopes = SearchExecutor(self.adapters).execute(plan)
+            # The one-sentence portal path is intentionally two-lane: the fixed
+            # full Goal-Family plan always runs with its original budget, then an
+            # isolated additive plan reinforces every intent in the user's full
+            # sentence.  The second lane cannot remove or consume a base query.
+            targeted = None
+            if requirements:
+                targeted = planner.targeted_plan(
+                    run_id, domain_request.raw_company_name, requirements,
+                    entity_id=entity_id,
+                )
+                envelopes.extend(SearchExecutor(self.adapters).execute(targeted))
         envelopes = self._hydrate_fulltext_envelopes(envelopes)
         if targeted is not None:
             targeted_ids = {query.query_id for query in targeted.queries}
@@ -241,6 +299,9 @@ class OrchestratingExecutor:
             }
             store.replace_run_manifest(manifest.model_copy(update={"research_scope": scope}))
         batches, blocked = self._extract(envelopes)
+        image_batches, image_reasons = self._image_discovery_pass(envelopes, run_dir)
+        if image_batches:
+            batches.extend(image_batches)
         attempts = self._attempt_summaries(plan, envelopes)
         saturation = DataSaturationValidator(self.saturation_policy).assess(
             attempts,
@@ -268,6 +329,7 @@ class OrchestratingExecutor:
                 f"{len(self._extraction_failures)} page extraction(s) failed and were skipped: "
                 + "; ".join(self._extraction_failures[:3])
             )
+        reasons.extend(image_reasons)
 
         state = ResearchState(
             run_id=run_id,
@@ -365,6 +427,150 @@ class OrchestratingExecutor:
             failures.extend(extractor.last_failures)
         self._extraction_failures = failures
         return batches, blocked
+
+    # -- phase A2: Kimi WebBridge image discovery (P0-14/P0-16) --------------
+
+    def _image_discovery_pass(
+        self,
+        envelopes: list[SearchResultEnvelope],
+        run_dir: Path,
+    ) -> tuple[list[ExtractedEvidenceBatch], list[str]]:
+        """Open real product/factory pages with Kimi WebBridge and harvest images.
+
+        The portal pipeline used to never call :class:`KimiImageDiscovery`:
+        image collection only existed in the standalone production runner.
+        This pass reuses the SAME bounded handoff (discovery -> evidence
+        builder -> kernel ingest) so ``image_discovery_status`` is always
+        explainable (images == 0 must never be silent).
+        """
+        from ..research.image_discovery import (
+            ImageEvidenceBuilder,
+            KimiImageDiscovery,
+            KimiUsageTelemetry,
+        )
+        from ..research.source_grader import normalize_source_kind
+
+        telemetry = KimiUsageTelemetry()
+        reasons: list[str] = []
+
+        def finalize(status: str, note: str | None = None) -> tuple[list[ExtractedEvidenceBatch], list[str]]:
+            telemetry.image_discovery_status = status
+            if note:
+                telemetry.reason = note
+            quality_dir = run_dir / "outputs" / "02_research_quality"
+            quality_dir.mkdir(parents=True, exist_ok=True)
+            (quality_dir / "kimi_image_discovery.json").write_text(
+                json.dumps(telemetry.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            summary = (
+                f"image discovery: {telemetry.image_discovery_status}, "
+                f"candidates={telemetry.image_candidates_found}, "
+                f"verified={telemetry.image_candidates_verified}, "
+                f"download_failures={telemetry.image_download_failures}"
+            )
+            if telemetry.reason:
+                summary += f" ({telemetry.reason})"
+            reasons.append(summary)
+            return image_batches, reasons
+
+        image_batches: list[ExtractedEvidenceBatch] = []
+        kimi = self.adapters.get("kimi_webbridge")
+        if kimi is None:
+            return finalize("NOT_RUN", "kimi_webbridge adapter unavailable")
+
+        # Same page-selection contract as the production runner's _image_pass:
+        # only fulltext target pages of product/factory/image goals, never
+        # office/PDF downloads and never search snippets.
+        topic_kind = {
+            "image_evidence": "image",
+            "products": "product", "product_series": "product", "product_models": "product",
+            "factories": "factory", "production_lines": "factory",
+        }
+        skip_suffixes = (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx")
+        pages: list[dict] = []
+        seen_urls: set[str] = set()
+        for envelope in envelopes:
+            if envelope.status in ("blocked", "error"):
+                continue
+            kind = topic_kind.get(str(envelope.topic or ""))
+            if kind is None:
+                continue
+            for hit in envelope.hits:
+                url = str(hit.final_url or "").strip()
+                if not url or not hit.text or hit.metadata.get("snippet"):
+                    continue
+                if url.lower().split("?")[0].endswith(skip_suffixes):
+                    continue
+                normalized = url.rstrip("/").lower()
+                if normalized in seen_urls:
+                    continue
+                seen_urls.add(normalized)
+                pages.append({
+                    "url": url,
+                    "kind": kind,
+                    "source_kind": "official_company",
+                    "publisher": envelope.canonical_company_name,
+                })
+        if not pages:
+            return finalize("NOT_RUN", "no product/factory/image fulltext pages collected")
+
+        max_pages = max(1, int(os.environ.get("EER_IMAGE_DISCOVERY_PAGES", "8")))
+        candidates = KimiImageDiscovery(kimi, telemetry, max_pages=max_pages).discover(pages)
+        if telemetry.image_discovery_status == "BLOCKED":
+            return finalize("BLOCKED")
+
+        # Download + hash through the SAME fetcher the recovery path uses.
+        builder = ImageEvidenceBuilder(self._fetch_binary)
+        max_candidates = max(1, int(os.environ.get("EER_IMAGE_DISCOVERY_MAX_CANDIDATES", "24")))
+        attempted = candidates[:max_candidates]
+        allowed_image_types = {
+            "logo", "headquarters", "factory", "office", "production_line",
+            "product", "location", "certificate", "project", "other",
+        }
+        by_page: dict[str, list] = {}
+        for candidate in attempted:
+            if not str(candidate.url).startswith(("http://", "https://")):
+                # data:/blob: URLs cannot enter the evidence store (HttpUrl).
+                telemetry.image_download_failures += 1
+                continue
+            evidence = builder.build(candidate, source_id="pending")
+            if evidence is None:
+                telemetry.image_download_failures += 1
+                continue
+            telemetry.image_candidates_verified += 1
+            by_page.setdefault(candidate.page_url, []).append((candidate, evidence))
+        if not by_page:
+            return finalize(
+                "EMPTY" if not candidates else telemetry.image_discovery_status,
+                "no candidate image could be downloaded" if candidates else None,
+            )
+        for page_url, items in by_page.items():
+            images = []
+            for candidate, evidence in items:
+                images.append({
+                    "image_key": new_sortable_id("IMG"),
+                    "source_url": candidate.url,
+                    "image_type": candidate.image_type if candidate.image_type in allowed_image_types else "other",
+                    "width": evidence.width,
+                    "height": evidence.height,
+                    "mime_type": evidence.mime_type,
+                    "sha256": evidence.sha256,
+                    "phash": evidence.phash,
+                    "alt_text": candidate.alt,
+                    "surrounding_text": candidate.surrounding_text,
+                })
+            first = items[0][0]
+            image_batches.append(ExtractedEvidenceBatch(
+                source_url=page_url,
+                source_title=first.page_title,
+                publisher=first.publisher,
+                source_kind=normalize_source_kind(first.source_kind),
+                images=images,
+                extraction_method="deterministic",
+                retrieval_adapter="kimi_webbridge",
+            ))
+        return finalize("OK")
 
     def _hydrate_fulltext_envelopes(
         self,

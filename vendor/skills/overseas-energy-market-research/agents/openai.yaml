@@ -1,0 +1,4 @@
+interface:
+  display_name: "全球能源市场调研"
+  short_description: "适用于中国及全球任意地区的储能与V2G市场调研闭环"
+  default_prompt: "Use $overseas-energy-market-research with task-based collection routing, the bundled Five Views market-insight branch or modeling chain for analysis, single-owner figure routing, and embedded-word-production-v1 for fused-template Word production and QA."
