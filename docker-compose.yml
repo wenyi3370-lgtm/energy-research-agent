@@ -30,8 +30,9 @@ services:
       ERA_DESKTOP_PATH: /desktop
       # Run mode: synthetic (offline smoke test) | orchestrating (real Agent run)
       ERA_AUTOMATION_EXECUTOR: ${ERA_AUTOMATION_EXECUTOR:-orchestrating}
-      # New installations do not run scheduled intelligence unless enabled explicitly.
-      ERA_INTELLIGENCE_CATCHUP: ${ERA_INTELLIGENCE_CATCHUP:-off}
+      # T4 self-healing patrol is enabled by default so missed n8n publications
+      # are detected and caught up after the configured publication window.
+      ERA_INTELLIGENCE_CATCHUP: ${ERA_INTELLIGENCE_CATCHUP:-on}
       # LLM gateway for real extraction (至少配置一个 provider):
       ERA_DEEPSEEK_API_KEY: ${ERA_DEEPSEEK_API_KEY:-}
       ERA_DEEPSEEK_API_BASE: ${ERA_DEEPSEEK_API_BASE:-}

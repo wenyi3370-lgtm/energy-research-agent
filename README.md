@@ -145,6 +145,8 @@ n8n 不参与交互式 Agent 的基本运行。只有需要定时情报与故障
 docker compose --profile automation up -d --build
 ```
 
+T4 自愈巡检默认开启（`ERA_INTELLIGENCE_CATCHUP=on`）：当天定时情报在发布窗口后仍未成功时，API 会执行有上限的自动补跑。仅在计划维护期间才应在 `.env` 中显式设为 `off`。
+
 Docker 使用由 Compose 自动创建的项目级命名卷。导出文件默认写入仓库的 `outputs/`；可在 `.env` 中用 `ERA_EXPORT_PATH` 改为其他绝对路径。
 
 ### 方式二：本地 Python

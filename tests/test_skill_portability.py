@@ -74,6 +74,24 @@ class SkillPortabilityTests(unittest.TestCase):
         self.assertIn("docker compose up -d --build", readme)
         self.assertIn("~/.agents/skills/energy-research-agent", readme)
 
+    def test_intelligence_catchup_defaults_on_everywhere(self):
+        root = Path(__file__).resolve().parents[1]
+        compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
+        env_example = (root / ".env.example").read_text(encoding="utf-8")
+        app = (
+            root / "src/energy_research_agent/automation/api/app.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "ERA_INTELLIGENCE_CATCHUP: ${ERA_INTELLIGENCE_CATCHUP:-on}",
+            compose,
+        )
+        self.assertIn("ERA_INTELLIGENCE_CATCHUP=on", env_example)
+        self.assertIn(
+            'os.environ.get("ERA_INTELLIGENCE_CATCHUP", "on")',
+            app,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
