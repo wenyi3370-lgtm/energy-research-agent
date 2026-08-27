@@ -32,7 +32,7 @@ class ExcelMasterFrozenPublisher:
             return ArtifactResult(adapter=self.name, artifact_id=binding.artifact_id, artifact_type=binding.type, status="failed", diagnostics=["Excel 发布器收到非 Excel 绑定"])
         import pandas as pd
         module_path = self.skill_root / "scripts" / "make_excel.py"
-        spec = importlib.util.spec_from_file_location("eer_excel_master", module_path)
+        spec = importlib.util.spec_from_file_location("era_excel_master", module_path)
         if spec is None or spec.loader is None:
             raise RuntimeError("无法加载 Excel Master")
         module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)

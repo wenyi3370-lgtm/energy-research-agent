@@ -55,7 +55,7 @@ def convert(source: Path, destination: Path, fmt: str, soffice: Path) -> Path:
 
 
 def refresh_docx(path: Path, soffice: Path) -> None:
-    with tempfile.TemporaryDirectory(prefix="eer-lo-refresh-") as temp:
+    with tempfile.TemporaryDirectory(prefix="era-lo-refresh-") as temp:
         refreshed = convert(path, Path(temp), "docx", soffice)
         shutil.copy2(refreshed, path)
 

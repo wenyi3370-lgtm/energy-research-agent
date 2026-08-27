@@ -433,7 +433,7 @@ class FrozenWordPublisher:
         p_bdr.append(bottom)
         p_pr.append(p_bdr)
         rule.paragraph_format.space_after = Pt(30)
-        report_no = f"EER-{today:%Y%m%d}-{bundle.freeze.freeze_id[-6:]}"
+        report_no = f"ERA-{today:%Y%m%d}-{bundle.freeze.freeze_id[-6:]}"
         for label, value in (
             ("报告编号", report_no),
             ("数据版本", bundle.freeze.freeze_id),

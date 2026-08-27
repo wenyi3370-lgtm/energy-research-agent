@@ -125,7 +125,25 @@ class ConsultingNarrativeValidator:
         ]) if executive else "\n".join(narrative.executive_summary)
         executive_count = cjk_count(executive_text)
         threshold = evidence_adjusted_threshold(narrative)
-        self._check(checks, "executive_summary_length", executive_count >= min(800, max(500, threshold // 10)), f"执行摘要中文字符数 {executive_count}")
+        executive_threshold = min(800, max(500, threshold // 10))
+        executive_length_ok = executive_count >= executive_threshold
+        checks.append(ValidationCheck(
+            code="executive_summary_length",
+            status="PASS" if executive_length_ok or not enforce_length else "FAIL",
+            message=(
+                f"执行摘要中文字符数 {executive_count}，正式门槛 {executive_threshold}；"
+                + (
+                    "必须以证据、决策影响和行动条件完成深化，不得用模板套话补齐。"
+                    if enforce_length
+                    else "合成测试样本不执行正式字数门槛。"
+                )
+            ),
+            value={
+                "actual": executive_count,
+                "threshold": executive_threshold,
+                "enforced": enforce_length,
+            },
+        ))
         self._check(checks, "no_raw_internal_enum", not any(token in body for token in RAW_ENUMS), "正文不得出现内部枚举")
         self._check(checks, "no_raw_snake_case", not re.search(r"\b[a-z]+(?:_[a-z0-9]+)+\b", body), "正文不得出现 snake_case 字段")
         paragraphs = self._paragraphs(narrative)

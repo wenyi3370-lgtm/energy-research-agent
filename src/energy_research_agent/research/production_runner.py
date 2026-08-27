@@ -909,7 +909,7 @@ class AdaptiveResearchRunner:
             # Backward-compatible unit-test path. Production always supplies
             # a run-owned queue path above.
             import tempfile
-            queue_path = Path(tempfile.mkdtemp(prefix="eer-product-frontier-")) / "queue.sqlite3"
+            queue_path = Path(tempfile.mkdtemp(prefix="era-product-frontier-")) / "queue.sqlite3"
         queue = ProductDetailFrontier(queue_path)
         for envelope in candidate_pages:
             for hit in envelope.hits:

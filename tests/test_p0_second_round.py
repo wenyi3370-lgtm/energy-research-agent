@@ -240,6 +240,34 @@ class SecondRoundP0Tests(unittest.TestCase):
         rerun = BoundedBrowserWorkerPool(PersistentProductDetailQueue(path), lambda: _FakeBrowser(log), max_workers=2)
         self.assertEqual(rerun.run(), [])
 
+    def test_25_fixture_mode_skips_only_length_gates(self):
+        executive = self.narrative.chapter("executive_summary")
+        self.assertIsNotNone(executive)
+        short_executive = executive.model_copy(update={
+            "assertion_title": "摘要",
+            "executive_takeaway": "结论",
+            "context_paragraphs": [],
+            "analysis_paragraphs": [],
+            "implications": [],
+            "recommendations": [],
+            "counter_evidence": [],
+            "limitations": [],
+            "action_items": [],
+        })
+        short_narrative = self.narrative.model_copy(update={
+            "chapters": [
+                short_executive if chapter.chapter_id == "executive_summary" else chapter
+                for chapter in self.narrative.chapters
+            ],
+        })
+        formal = ConsultingNarrativeValidator().validate(short_narrative, enforce_length=True)
+        fixture = ConsultingNarrativeValidator().validate(short_narrative, enforce_length=False)
+        formal_check = next(item for item in formal.checks if item.code == "executive_summary_length")
+        fixture_check = next(item for item in fixture.checks if item.code == "executive_summary_length")
+        self.assertEqual(formal_check.status, "FAIL")
+        self.assertEqual(fixture_check.status, "PASS")
+        self.assertFalse(fixture_check.value["enforced"])
+
 
 if __name__ == "__main__":
     unittest.main()
