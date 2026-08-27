@@ -5,13 +5,13 @@ import json
 import tempfile
 from pathlib import Path
 
-from enterprise_energy_research.domain.enums import (
+from energy_research_agent.domain.enums import (
     EnterpriseComplexity,
     RunStatus,
     SourceLevel,
     VerificationStatus,
 )
-from enterprise_energy_research.domain.models import (
+from energy_research_agent.domain.models import (
     Claim,
     DataFreeze,
     Entity,
@@ -20,12 +20,12 @@ from enterprise_energy_research.domain.models import (
     RunManifest,
     Source,
 )
-from enterprise_energy_research.research.deep_retry import revalidate_product_state
-from enterprise_energy_research.research.normalizer import NormalizedEvidence
-from enterprise_energy_research.validation.formal_publication import (
+from energy_research_agent.research.deep_retry import revalidate_product_state
+from energy_research_agent.research.normalizer import NormalizedEvidence
+from energy_research_agent.validation.formal_publication import (
     ProductPublicationIntegrityValidator,
 )
-from enterprise_energy_research.automation.orchestration import OrchestratingExecutor
+from energy_research_agent.automation.orchestration import OrchestratingExecutor
 
 
 def _bundle(*, product_status: VerificationStatus | None, with_claim: bool = False) -> FrozenResearchBundle:

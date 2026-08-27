@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from enterprise_energy_research.adapters.anysearch import AnySearchCliAdapter
+from energy_research_agent.adapters.anysearch import AnySearchCliAdapter
 
 
 class AnySearchOutputParserRegressionTests(unittest.TestCase):

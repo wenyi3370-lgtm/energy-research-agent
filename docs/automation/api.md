@@ -1,4 +1,4 @@
-# Automation API 参考（Phase 2 + 扩展）
+# Agent Automation API 参考
 
 Base URL：`http://research-api:8000`（dev: `http://localhost:8000`）。OpenAPI：`/docs`。
 
@@ -37,5 +37,5 @@ FAILED 只能经 RETRYING 恢复；PUBLISHED / REJECTED 为终态（`automation/
 
 ## 环境变量
 
-`EER_AUTOMATION_DATABASE_URL`、`EER_AUTOMATION_WORKDIR`、
-`EER_FEISHU_APP_ID` / `EER_FEISHU_APP_SECRET` / `EER_FEISHU_DEFAULT_RECEIVER`（Phase 7 通知）。
+`ERA_AUTOMATION_DATABASE_URL`、`ERA_AUTOMATION_WORKDIR`、
+`ERA_FEISHU_APP_ID` / `ERA_FEISHU_APP_SECRET` / `ERA_FEISHU_DEFAULT_RECEIVER`（Phase 7 通知）。

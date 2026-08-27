@@ -1,187 +1,184 @@
 ---
 name: energy-research-agent
-description: Energy Research Agent (新能源产业研究 Agent). One orchestrator understands natural-language research requests, decomposes goals, routes to the enterprise deep-research skill or the overseas energy market research capability pack, recovers evidence gaps with audited rounds, and synthesizes cross-domain findings into unified frozen evidence and consulting-grade Word/Excel/HTML/PPT deliverables. Evidence-first: publishers consume only the frozen snapshot, never the network.
+description: Energy Research Agent for evidence-first enterprise, battery, energy-storage, V2G, new-energy and overseas-market research. Use this skill whenever a user asks to investigate a company or energy market, compare products or competitors, verify business evidence, identify cooperation opportunities, continue an existing research mission, or produce a decision-grade Word/Excel/HTML/PPT research package. The Agent parses natural language into governed goals, routes controlled research capabilities, recovers evidence gaps, preserves conflicts and source lineage, freezes validated evidence, and blocks unsupported publication.
 ---
 
 # Energy Research Agent
 
-Build every run around one rule: research produces evidence, validation freezes data, and publishers consume only the frozen snapshot. Never let an artifact publisher browse, infer new facts, or silently repair missing data.
+Operate as one governed research orchestrator. Understand and plan with the model; execute, audit, validate, freeze and publish through deterministic code and controlled adapters.
 
-## Agent layer (Energy Research Agent)
+## Core rule
 
-Natural-language requests are handled by one orchestrator (`src/enterprise_energy_research/agent/`):
+Research creates evidence. Validation freezes evidence. Publishers consume only the frozen snapshot.
 
-- parse → ResearchMission (raw request preserved verbatim) → ResearchGoal plan
-  (enterprise core plan is never shrunk by user-specific asks) → skill routing
-  (ENTERPRISE_RESEARCH / OVERSEAS_MARKET_RESEARCH, HYBRID uses both).
-- execution stays inside this skill's deterministic pipeline; the orchestrator
-  only consumes SkillRunResult and the unified EvidenceStore.
-- recovery: different strategy per round, executed-round accounting, cap from
-  `config/agent.yaml` (default 10); exhaustion produces an Auditable Evidence
-  Limitation, never a silent "资料有限".
-- one human approval (unified mission approval) gates every mission; the agent
-  cannot self-approve. Overseas runs additionally require the skill's own
-  `00_Research_Approval.csv`.
+Never let a publisher browse, invent facts, repair missing evidence, change entity ownership or overwrite conflicts. If a release gate fails, keep the evidence and diagnostics and return a blocked result.
 
-## Decision-intelligence contract (P0)
+## Accept the request
 
-The management deliverable is an Enterprise Decision Intelligence System, not an evidence-collection status report. The mandatory chain is `Evidence -> ResearchAnalysis -> StrategicInterpretation -> CooperationHypothesis -> DecisionSynthesis -> PublicationNarrative -> Word/HTML`.
+1. Accept a company, market or energy-industry question in natural language. Keep the complete original request.
+2. Resolve the canonical legal entity before broad company research. Stop for identity ambiguity that cannot be resolved safely.
+3. Create a `ResearchMission` and open-set `ResearchGoal` plan. User-specific requirements add Goals; they never remove required core coverage.
+4. Route each Goal to the enterprise research capability, overseas market capability or both. Record the route and reason.
+5. Show the mission, Goals and routes for one human approval. The Agent cannot self-approve.
 
-- Every run carries a versioned `ClientProfile`. The default configuration is `config/client_profiles/sichuan_power_battery_innovation_center.yaml`; Python code must never invent client capabilities. `UNKNOWN_CLIENT_CAPABILITY` and `ASSUMED_CLIENT_CAPABILITY` cannot support a high-confidence recommendation.
-- `OpportunityRegistry` discovers candidates only. A formal opportunity must pass Need, Why Now, client capability match, value-creation logic, target department, evidence, counterevidence and disconfirming-condition gates. Product, factory, customer or storage-product signals alone remain potential hypotheses or are rejected.
-- Strategic conclusions require `InterpretationLineage`. Competition appears only with same-scope comparables, customers are graded by relationship proof, risks come from enterprise evidence, and DataGap never becomes EnterpriseRisk.
-- The executive summary answers exactly five questions: enterprise essence, strategic change, implication for the client, risk/counterevidence, and action/resource decision. Data collection, cleaning and report production are not business outcomes.
-- Full gaps stay in appendices. Only deduplicated unknowns that can change a decision may appear briefly in the body.
-- Formal publishers run `DecisionIntelligenceValidator`: process-language ratio <5%, gap narrative <10% (large listed enterprises <5%), enterprise-specific target >70%, strategic trajectory when historical evidence exists, competition gate, cooperation-hypothesis contract, generic-template rejection and management-usefulness gate.
-- Internal reasoning fields are not publication language. Word/HTML must state company facts, the recommended contact, the concrete task and the conditions for proceeding in ordinary business Chinese. Do not publish framework recitals such as “目标问题—合作时点—委托方能力—价值机制—反证条件”, “每一步允许证伪”, “不以工作量证明机会成立”, or “这些事实回答企业靠什么经营”.
+## Codex execution contract
 
-## Start a run
+The Skill instructions and deterministic runtime are both required for a real run. Resolve this file's directory as the Skill root, install the runtime once with `uv sync --all-extras`, install the local browser with `uv run playwright install chromium`, load `.env`, and start the API with:
 
-1. Accept a company name plus optional scope constraints. Do not require step-by-step user operation during the normal path.
-2. Read [ARCHITECTURE.md](ARCHITECTURE.md), [WORKFLOW.md](WORKFLOW.md), [DATA_SCHEMA.md](DATA_SCHEMA.md), [SOURCE_POLICY.md](SOURCE_POLICY.md), [ARTIFACT_SPEC.md](ARTIFACT_SPEC.md), and [VALIDATION_SPEC.md](VALIDATION_SPEC.md) before implementation or execution.
-3. Read [references/reference-findings.md](references/reference-findings.md) before producing Word or HTML. Preserve the reference report's structural logic and the SEVC/company-style header system.
-4. Read [references/embedded-skills.md](references/embedded-skills.md) before invoking research or artifact adapters. Treat the bundled upstream instructions and quality gates as authoritative for their capability domain.
-5. Use [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) to determine the current delivery phase. Do not cross a phase gate without the required validation evidence.
-6. Read [references/migrated-quality-gates.md](references/migrated-quality-gates.md) before live collection or formal Word/PPT publication. Its three-round saturation, report-depth and visual-registration rules are release gates.
-7. Read [docs/archive/office-visual-production.md](docs/archive/office-visual-production.md) before any formal Word/PPT build. Its typography, three-line tables, chart variety, per-slide contract, geometry checks and render artifacts are blocking requirements.
-8. Read [references/fifth-round-quality-contract.md](references/fifth-round-quality-contract.md) before live research or formal release. It supersedes the archived v0.9 length-first contract. Read [references/reference_visual_benchmark.md](references/reference_visual_benchmark.md) before Word or unified HTML layout work.
+```bash
+uv run energy-research-agent serve --host 127.0.0.1 --port 8000
+```
 
-## Enforce the workflow contract
+Use `GET http://127.0.0.1:8000/api/agent/health` before a mission. If the API is unavailable, explain the missing runtime or configuration instead of simulating research. The OpenAPI contract is at `/docs`.
 
-- Resolve the canonical legal entity before broad research. Stop for ambiguity that cannot be resolved safely.
-- Route company complexity as `GROUP_LARGE`, `ENTERPRISE_NORMAL`, `SMALL_SIMPLE`, or `UNKNOWN` using configuration, never legal SME classifications.
-- Route all web research exclusively through `KimiWebBridgeAdapter` or `AnySearchAdapter`. Do not invoke Web-Rooter, web-access, a built-in web search provider, or any parallel search path.
-- Treat product research as catalog enumeration, not keyword sampling. Discover official product centers for the parent and operating subsidiaries, enumerate every visible category/series/detail page, then expand families into models, parameters, applications and images.
-- Decompose the request into the configured Goal Families. Complete R1 official-source coverage, R2 Evidence-Gap-driven depth and R3 conflict/critical-claim triangulation for every scoped goal. Evaluate the final two batches per goal, not globally. Meeting a search-count floor is never saturation.
-- Retain an attempt journal and raw capture reference for every collection action. Budget exhaustion cannot be called complete, and a public-evidence-gap exception requires all three attempted rounds plus named approval and decision-impact fields.
-- For AnySearch business research, call `get_sub_domains --domain business` before vertical queries. Use Kimi WebBridge to inspect dynamic navigation, pagination, tabs and detail pages that search results cannot enumerate reliably.
-- AnySearch availability is decided only after every bundled runtime has been attempted in deterministic order: Python, Node.js, PowerShell and Bash when present. If one runtime fails at the transport layer, record redacted system-proxy diagnostics and continue to the next bundled runtime. Anonymous access is supported, so a missing API key alone is not an outage. Never recover by switching to an unapproved search provider.
-- The preferred AnySearch Python CLI must honor a working proxy, but on `requests.ProxyError` retry the same AnySearch endpoint once with process-local environment-proxy discovery disabled. Never change the user's global proxy settings; retain the bundled runtime fallback if the direct retry also fails.
-- Record a verified `product_catalog_scope` claim with official product-center URLs, enumeration time/method and declared catalog items. Until every declared item maps to a product record, label coverage `PARTIAL`; never call a sampled list complete.
-- Keep product family, series and model as distinct levels. One family such as “人造石墨” cannot substitute for multiple disclosed grades. Capture per-model parameter name, value, unit and source when published.
-- Use a provider-neutral `ModelGateway`; configure DeepSeek as primary and OpenAI as fallback without storing secrets.
-- Assign stable IDs to runs, entities, subsidiaries, factories, products, claims, sources, images, and charts.
-- Record source context and image provenance before analysis.
-- Treat image discovery, verification, binary acquisition and artifact readiness as four separate states. A URL, hash or dimension record without a successfully decoded local binary and `local_asset_ref` is not a completed image acquisition.
-- Separate `EVIDENCE_SUPPORTED`, `ANALYTICAL_INFERENCE`, and `TO_BE_CONFIRMED` content.
-- Preserve conflicts as first-class records. Never average, select, or overwrite conflicting values silently.
-- Freeze validated facts and create `artifact_manifest.json` before any publisher runs.
-- Invoke the embedded Excel Master, PPT Master, frontend-design, diagram-design, Kimi WebBridge, and AnySearch resources only through their adapters. Prefer `vendor/skills/` and never silently switch to an unrelated implementation.
-- Generate the product dashboard only when verified physical-product evidence exists.
-- Before publishing a formal product dashboard, download each displayed product image from its exact verified `source_url`, enforce size/content-type limits, verify SHA-256, MIME type and decoded dimensions, archive it under the run evidence directory, and embed the local binary into the standalone HTML. Formal product-image coverage must be 100%; remote-only images and placeholders block delivery.
-- Fail closed for unresolved company identity, missing core evidence, unverified required images, broken key URLs, or cross-artifact inconsistency.
+For every user mission:
 
-## Respect the frozen-data boundary
+1. `POST /api/agent/parse` with `{"raw_request":"<complete user request>","track":"enterprise|market"}`.
+2. Present the returned Mission, Goals, routes and diagnostics to the user. Do not approve in the same turn.
+3. If the user edits the framework, `POST /api/agent/mission/{id}/goals` with `{"goals":[{"goal_id":"<existing or empty>","goal_name":"...","goal_description":"..."}]}`, then present the new preview.
+4. Wait for explicit user approval. Only then `POST /api/agent/mission/{id}/approve` with `{"approve":true,"message":"<user approval>"}`. This endpoint records approval and starts the run. A rejection uses `approve:false`.
+5. Poll `GET /api/agent/mission/{id}` at a reasonable interval. Report genuine status, gaps and failures; use returned artifact paths for completed deliverables.
+6. “Continue” means `POST /api/agent/mission/{id}/continue` with `{"raw_request":"<additional requirement>"}`. It creates a revised preview, so repeat the human-approval gate before execution.
+7. “Deep research” is only for a mission that already has results. Call `POST /api/agent/mission/{id}/deep-research` with `{"raw_request":"<targeted reinforcement, or empty>"}`, then poll the same mission.
+8. `POST /api/agent/mission/{id}/stop` stops an active mission. Never invent a successful result when the runtime reports blocked, partial or exhausted.
 
-Version comes only from `pyproject.toml`. The v0.9 baseline includes typed evidence schemas, append-only storage, immutable freezes, ambiguity/conflict/gap gates, Goal-Family research, catalog enumeration, approved Kimi WebBridge/AnySearch adapters, three image manifests, one cross-artifact visual manifest, deterministic diagram-design visualization (VisualSpec → Visual Router → DiagramDesignAdapter), frozen-bundle publishers, visual QA and deterministic release packaging. PPT Master still receives a deterministic 17-slide frozen brief and remains blocked until its confirmation, SVG, preview and export gates complete. Use `PYTHONPATH=src python -m unittest discover -s tests -v` for recorded-fixture regression and `python scripts/run_recorded_research_eval.py` for L2 eval. Fixtures never justify real-company claims.
+Do not place credentials in commands, chat messages or artifacts. Keep them in the untracked `.env` or the machine's secret manager.
 
-## Content pipeline contract (v0.9.1 remediation)
+## Run the Agent loop
 
-- Research content, not research metadata, is the body of every formal report: CompanyProfile/GroupProfile built from verified claims replace `entity_type`/`verification_status` dumps (research/profile.py).
-- Every goal family has a `GoalExtractionContract` (expected fields + business question); the full ResearchGoal (topic/purpose/round/trigger/gap/conflict targets) travels into the EvidenceExtractor prompt (research/contracts.py).
-- Raw field names canonicalize through `CanonicalFieldRegistry` and are preserved as `raw_field_name` (research/field_registry.py).
-- Official-page identity evidence becomes provenance-bound identity Claims before validation, so a resolved company is never left UNVERIFIED (research/identity_evidence.py).
-- Kimi WebBridge opens REAL target pages (AnySearch discovers, Kimi navigates + DOM-inspects); image discovery reads `<img>/<picture>/srcset/lazy/background` and binds product/factory images (research/image_discovery.py). Adapter routing is not usage: `kimi_telemetry.json` records availability, pages, DOM inspections and image-pipeline counters.
-- The adaptive production runner executes R1 -> Gap -> R2 -> Conflict -> R3 with real EvidenceDelta saturation, precise gap reasons, chapter/placeholder/readiness gates, claim-bound synthesis, high-value claim utilization and the goal pipeline trace (research/production_runner.py). Live acceptance: `PYTHONPATH=src python scripts/run_live_acceptance.py --company 宁德时代` and read `acceptance_summary.json` (sections A-L).
+Use the governed state flow:
 
-## Publish a run
+```text
+PREFLIGHT → MISSION_PARSE → GOAL_PLAN → ROUTING → APPROVAL
+→ EXECUTE → INGEST → GOAL_EVALUATION
+→ (RECOVERY → EXECUTE → INGEST → GOAL_EVALUATION)*
+→ SYNTHESIS → UNIFIED_VALIDATE → FREEZE
+→ ARTIFACT_PLAN → PUBLISH → CROSS_VALIDATE → PACKAGE
+```
 
-Use `outputs/{canonical_company}/{run_id}/` and preserve the directory contract in [ARTIFACT_SPEC.md](ARTIFACT_SPEC.md). A successful run must end as `PASS` or `PASS_WITH_WARNINGS`; a blocked run must retain evidence, diagnostics, and missing-data reasons instead of publishing misleading final artifacts.
+- Make model decisions through the provider-neutral `ModelGateway` with structured schemas.
+- Keep execution inside bounded code paths. The orchestrator consumes structured `SkillRunResult` and the unified `EvidenceStore`.
+- Assign stable IDs to missions, goals, runs, entities, products, factories, claims, sources, images, charts and artifacts.
+- Persist status, attempts, costs, routes, recovery rounds and Trace events.
+- Check cancellation between bounded steps and retain partial evidence when stopped.
 
-Product coverage may be `COMPLETE` only when the official catalog scope is verified, all declared categories/series/detail pages have been visited, every catalog item has a matching verified record, and disclosed model/parameter detail has been captured. Otherwise emit product-coverage gaps and use “本次公开资料识别” language.
+## Use controlled research capabilities
 
-For HTML, publish only `enterprise_research_dashboard.html`: a navy-navigation/light-analysis management dashboard that also contains the searchable, filterable, zoomable, four-item product comparison database. Keep all runtime code, data and publication images inline; remote dependencies are forbidden. A verified remote image that has not been archived is a gap, not a placeholder. For Excel, route through `ExcelMasterFrozenPublisher`; for Word, retain real TOC/PAGE fields and render-inspect every delivered document.
+Network acquisition is allowed only through:
 
-Unless the user explicitly requests a concise report, Word is a 15,000–30,000 Chinese-character, 30+ rendered-page decision report. A fixture-style document is a draft. Use A4, 12 pt 宋体/Times New Roman正文、22 pt固定行距、22/14/12 pt标题层级、三线表，以及“分析→正文引用→图表→题注→数据来源”的顺序。Generate `visual_manifest.json` before layout. Report structure is driven by research conclusions and decision questions — chapters appear only when evidence passes their gate; never replace missing data with a process, relationship, hierarchy, decision-tree or decorative framework. Every figure is a VisualSpec (business thesis + semantic pattern + evidence data) routed by the Visual Router to a diagram-design visual type, with anti-chart-abuse rules (no fake time series → line, no fake scores → radar, no fake x/y → quadrant/scatter, no fake flows → Sankey); insufficient data degrades to table/KPI/prose, never to an implied chart. Each accepted figure produces one offline standalone HTML, one editable SVG and one high-resolution PNG rasterized from the SAME HTML. HTML inlines the same SVG; Word embeds the same-source PNG. Text-only models select only the semantic pattern/visual type; Python owns all geometry, typography, palette and export behavior. Generate discovery, evidence and publication image manifests independently; only pixel-verified, entity-bound local binaries with matching SHA-256, MIME, dimensions and original page may publish (editorial images excepted). Word and unified HTML consume the same ResearchNarrative and visual meaning. Missing manifests, sources, rendered QA or cross-artifact consistency evidence blocks formal release.
+- `AnySearchAdapter` for broad search and content discovery;
+- `KimiWebBridgeAdapter` for dynamic navigation, pagination, tabs, browser-only pages and DOM/image inspection.
 
-## Research-first content pipeline (P0 third round)
+Do not silently switch to another search provider. Try every available bundled AnySearch runtime before declaring it unavailable. Treat snippets and frontier entries as discovery state, not Claims.
 
-- The chain is `Evidence -> PublicationRelevanceFilter -> ResearchAnalysis -> DecisionSynthesis -> PublicationNarrative -> Word/HTML`. Decision analysis is one layer in the report's second half, never its skeleton.
-- `research/research_analysis.py` (ResearchAnalysisEngine) answers the objective questions first: business scale and trend (YoY/CAGR/margin from real multi-year series), product families and key parameters, manufacturing geography, and the strict split between a company's OWN energy data and its energy PRODUCT capability. Missing data produces nothing — no padded prose.
-- `research/publication_relevance.py` (PublicationRelevanceFilter) scores every verified claim (semantic relevance, metric completeness, source quality, period/scope completeness, visualization and decision value) and its Junk/Fragment Guard keeps phone numbers, marketing counters, isolated `+`/percent values and page-UI numbers OUT of the body — they stay in the internal evidence store with reasons.
-- `research/data_coverage.py` (ResearchDataCoverageValidator) states the per-company-type data contract (listed companies: ≥3 comparable years of revenue/profit, margins, R&D, segments, market position, product parameters, factory list, product images) and drives the R4 targeted-retry round (annual reports, exchange filings, official product pages) instead of prose fill-in.
-- Formal HTML is an Enterprise Research Dashboard: one judgement, 3–6 KPIs, 1–3 visuals and three insights per chapter, with detail collapsed by default. Hero KPIs are capped at six.
-- `PublicationBoilerplateFilter` runs on publication DTOs. The fifth-round HTML zero-tolerance phrases must remain absent from the full offline artifact, including embedded JSON.
-- When at least five verified products exist, Word and HTML require at least five distinct pixel-verified official product images; no placeholder product cards are allowed.
-- After every normal, deep-research or publication-recovery evidence merge, recompute product verification status unconditionally after referential-integrity cleanup. Reliable textual product evidence and image readiness are separate states: missing/failed images may block visual-card publication and trigger recovery, but may never demote or hide an A/B-supported product record. If verified product facts or A/B-backed product objects exist while the frozen bundle contains zero `VERIFIED` products, formal publication and Feishu delivery are blocked for internal repair.
-- Error-level publisher QA is fail-closed: a Word/HTML result marked `failed` blocks the production run from reporting completion.
-- `artifacts/visual_opportunity.py` (VisualOpportunityPlanner) proposes figures from the structured research dataset BEFORE narrative assembly; the Visual Router still owns the final visual type. No data -> no proposal -> QA records `missing_high_value_research_data`.
-- `research/product_images.py` (ProductImageResolver) binds verified product photos to products only by exact product identity (`product.image_id` or `image.product_id == product.product_id`, with `target_entity_id` equal to that product ID). Name/category/random fallbacks are forbidden. Word shows 4–8 key products with photo+name+parameters; the full matrix is an appendix.
-- The executive summary is data-first (what the company is, key financial facts, industry/technology capability, cooperation basis, opportunities/limits, final recommendation; 800–1500 CJK chars). Word TOC entries are one LEFT-aligned paragraph each with a real right dot-leader tab (TOC 1/2/3 styles, never Normal/JUSTIFY); "So What：" labels never render.
-- QA additions (`validation/publication_quality.py`): PublicationBoilerplateValidator (the self-referential phrase list must be zero), ParagraphSimilarityValidator (skeleton similarity > 0.80 -> boilerplate_duplicate), ResearchValueValidator (boilerplate_sentence_ratio < 15%, enterprise-specific ratio > 60%, meaningful_visual_count target, visual-density warning), ProductImageCoverageValidator. Regression contract: tests/test_p0_third_round.py (TEST 1–25).
+Invoke the bundled Excel Master, PPT Master, frontend-design, diagram-design and overseas energy market capability only through their adapters. Resolve trusted snapshots from `vendor/skills/` and verify `vendor/manifest.json` before release.
 
-## Image & financial hardening lessons (P0 third round, regressions enforced)
+Machine services remain external: Kimi daemon/extension, authenticated browser state, Office renderers, browser runtimes and secrets. Detect their availability and explain a missing dependency; never impersonate them.
 
-These pitfalls each cost a full debug cycle in production; the fixes below are in code AND pinned by `tests/test_p0_third_round.py` (`test_lesson_*`) — do not regress them:
+## Build complete research coverage
 
-- **Image discovery silently EMPTY** — root cause was the Kimi WebBridge extension's host browser (Edge) running with NO window: `navigate` fails `extension_error: No current window` even though `health()` says available. Preflight: if `list_tabs` succeeds but `navigate_to` raises "No current window", open the extension host's browser window (find it via the extension id directory under Chrome/Edge `User Data/*/Extensions/<id>`). The discovery telemetry now embeds this actionable hint (`image_discovery.py`), and `recover_product_images` skips gracefully.
-- **PDF/office URLs are not pages** — never push `.pdf/.docx/...` hits into browser discovery; filter them (`production_runner._image_pass`, `deep_retry` NON_PAGE_SUFFIXES).
-- **Product photos only from official domains** — search-result/news pages can never bind product evidence; `recover_product_images` restricts discovery to entity websites + resolver-graded official sources, plus optional official catalog pages (`/ess/`, `/solution/...` for CATL).
-- **Archive path must match publication resolution** — the archiver writes `<run_dir>/assets/images/...`; publication resolves from artifact parents + run dir. Archiving anywhere else (e.g. `01_evidence/`) yields "no resolvable local_asset_ref" at publish time.
-- **Vision verdict parsing** — models answer `3) 1.0` without the word 置信度; the old parser scored every image 0. `vision.parse_vision_text` parses the FIRST class token + trailing score and is unit-tested.
-- **Financial series verification** — `ClaimValidator` groups conflicts by (entity, field, as_of, scope, **period**): cross-year revenue values are different facts, never one conflict group (period-aware grouping is tested).
-- **Multi-year data lives in official bulletin pages** — news articles grade SOURCE_D and never verify. The 新浪 `vCB_AllBulletinDetail` 公告页 (or 巨潮/cninfo filings) carries the 3-year 主要会计数据 table; the extractor's PERIOD RULE turns each row into one periodized claim.
-- **No future periods in annual series** — `ResearchAnalysisEngine._series` drops claims whose period_end is in the future and text-year claims for the current year without explicit full-year periods (mislabeled H1 figures).
-- **Unit normalization** — 千元/万元/亿元 scale to 元 inside `_series`; 11-digit integers are never phone numbers (`PHONE_RE` requires separators).
-- **Continue deep research** — `POST /api/v1/research/{run_id}/deep-research` runs `research/deep_retry.py`: user requirement clauses → `planner.requirement_queries` (longest-keyword topic routing) + coverage-gap queries + official-image recovery → revalidate → new freeze → republish Word/HTML/Excel. The portal button ③「继续深度研究」drives it.
+- Research every scoped Goal through official/primary coverage, original-page depth and independent triangulation or counterevidence.
+- Use the shared recall path: `Seed → Query Expansion → Source Lane → Entity/Event Mining → Dynamic Frontier → Convergence → Verification`.
+- A completed command is not completed research. Record honest convergence states and budget exhaustion.
+- For products, enumerate official catalogs, categories, series, detail pages, models, parameters, applications and images. Sampling cannot be labeled complete.
+- Keep product family, series and model separate. Preserve parameter name, value, unit, period, scope and source.
+- Carry the canonical company name in every enterprise query. Contextual entities may not satisfy target-company coverage.
+- Controlled group members may contribute products or factories only through verified ownership edges.
+- Separate company energy consumption from the company's energy-product capabilities.
 
-## Portable fifth-round incident fixes
+## Preserve evidence integrity
 
-These fixes are part of the Skill source and regression suite, not local-run patches:
+- Store source URL, retrieval time, adapter, content hash, raw capture reference and attempt journal.
+- Normalize Claims without losing raw field names or quoted evidence.
+- Keep `EVIDENCE_SUPPORTED`, `ANALYTICAL_INFERENCE`, `RECOMMENDATION` and `TO_BE_CONFIRMED` distinct.
+- Group conflicts by entity, field, period, scope and unit. Never average or overwrite inconsistent values silently.
+- Grade sources and verify full text before a Claim can support publication.
+- Treat Data Gaps as missing information, not enterprise risks.
+- Image discovery, source verification, binary acquisition, entity binding and publication readiness are separate states.
+- Publish an image only when its local binary, SHA-256, MIME type, dimensions, source page and exact entity/product binding all verify.
 
-- Direct outbound access is the default. `EER_OUTBOUND_PROXY` is an opt-in process-local fallback (for example `http://127.0.0.1:7897`); Kimi loopback control always bypasses outbound proxies. Model, browser and image calls have bounded timeouts and attempts.
-- Image discovery de-duplicates URLs, caps pages/candidates, reserves product diversity and uses bounded concurrent download/vision workers. The resolved canonical entity ID is passed explicitly; list position must never choose image ownership.
-- Official page hostnames are normalized with URL parsing. Product images require exact product-ID binding plus pixel verification. Shared catalog pages carry no page-level product ID; their images bind only when the image card/DOM context names one verified product.
-- The normal production path and `research/deep_retry.py` reuse the same image handoff. One-off recovery scripts may orchestrate a run but must not contain a looser second binding implementation.
-- Every Word paragraph containing an inline image overrides the fixed body leading with automatic single-line spacing. Portrait tables compact prose-heavy schemas to at most four columns; full ledgers remain in appendices.
-- A formal Word handoff must contain a real TOC field **and** materialized visible Heading 1/2 entries. An empty cached TOC field is a missing directory, even when `updateFields` is present; final render QA also requires page numbers.
-- A year embedded in a report title, project name or target statement is never a quantitative energy value. Enterprise own-energy KPIs require a numeric value plus a field-compatible physical or monetary unit. A title such as “2023年度碳排放核算报告” proves only that the disclosure exists; it must not render as “综合能源消费量 2023” or create an energy chart.
-- The energy chapter must state the decision supported by the available dataset. When single-base electricity, load, tariff, distribution and site-condition inputs are incomplete, the conclusion is limited to whether one base should enter data verification; capacity design, economics and quotation remain out of scope.
-- Release on another computer requires `python scripts/vendor_skills.py verify`, the full pytest suite, a source scan with no machine-specific absolute paths, and rendered Word inspection. See `references/fifth-round-quality-contract.md`.
+## Recover evidence gaps
 
-## Decision synthesis and consulting narrative contract (P0)
+- Evaluate Goals individually after execution.
+- Create a different, evidence-gap-specific strategy for each recovery round.
+- Count only rounds that actually executed the exact Goal/topic.
+- Enforce the configured cap in `config/agent.yaml`.
+- Re-ingest and re-evaluate after every round.
+- When the cap is exhausted, create an auditable evidence limitation with attempts, missing outputs and decision impact. Do not hide the gap with generic prose or evidence from another entity.
+- “Continue” adds new Goals to the mission. “Deep research” starts from the latest cumulative evidence and performs targeted reinforcement plus current coverage-gap recovery.
 
-- Apply Pyramid Principle, Conclusion First and SCQA. Every substantive module follows `Facts → Interpretation → So What → Recommendation → Action`; the objective is to answer a management decision, not to display the database.
-- Convert frozen evidence into typed `DecisionFinding` records before writing prose. Keep `FACT`, `CALCULATION`, `ANALYTICAL_INFERENCE`, `RECOMMENDATION` and `TO_BE_CONFIRMED` distinct and retain claim/source lineage, calculation inputs, limitations and counter-evidence.
-- Convert candidate `Solution` records into canonical, deduplicated `OpportunityAssessment` records before publication. Every opportunity must state why it matters, where to enter, what value we provide, prerequisites, owner, 30/60/90-day actions and a Go / No-Go gate.
-- Write assertion titles: an H2 states the conclusion, while `decision_question` remains an internal control field. Never publish `决策问题：`, `thesis`, `content[]`, raw enums, snake_case keys or source-level codes.
-- Contextualize every number with period, unit, scope and decision meaning. Never publish an isolated number, raw database-sized currency value, field dump, source dump, internal status, generic AI template sentence or duplicate conclusion.
-- Enforce semantic domains. Manufacturing output or battery production capacity never becomes electricity consumption; product capability never becomes energy-project value; missing data never becomes an inferred fact.
-- Select information by asking “它回答哪个管理问题？” Move complete factory/product/source ledgers to appendices or interactive attachments when they do not change the decision.
-- `ResearchNarrative.appendices.source_ledger` is the single source owner. Word shows it only in Appendix B; HTML shows it only once at the page end.
-- Run `ConsultingNarrativeValidator`, `VisualSemanticValidator`, `PublicationVisibleTextValidator`, `SourceOwnershipValidator`, `TOCValidator`, `WordLengthValidator` and `BrowserExecutionValidator`. A formal thin-evidence report must still contain at least 3,500 Chinese characters; full-evidence reports use the higher evidence-adjusted threshold. Length may be satisfied only with target-bound facts, period/scope comparison, source-quality analysis, business implications, counter-evidence and executable recommendations. Insufficient evidence produces `insufficient analytical evidence`, never padded prose.
-- The Product Detail Frontier normalizes and deduplicates URLs, persists queue/checkpoint state, uses at most four browser workers and closes each page in that task's `finally` block. Crawlers discover, retrieve, parse and save evidence only; they never write decisions or recommendations.
+## Produce decision intelligence
 
-## Embedded capability policy
+Use this chain:
 
-- `vendor/skills/excel-master/`: preserve its DataFrame-to-XLSX engine, type inference, themes, chart layout guard, and delivery checklist.
-- `vendor/skills/ppt-master/`: preserve its serial pipeline, Eight Confirmations hard stop, strategist/executor specifications, SVG quality checker, finalizer, PPTX exporter, templates, icons, and workflows. Never batch-generate SVG pages or bypass its blocking confirmation.
-- `vendor/skills/frontend-design/`: preserve its complete aesthetic instructions and license, but subordinate generic visual preferences to verified enterprise branding and the supplied SEVC header reference.
-- `vendor/skills/diagram-design/`: the consulting visualization engine (MIT, third-party notices under `third_party/diagram-design/`). All figures are rendered through `artifacts/diagram_design_adapter.py`, which follows the skill's style guide (semantic tokens, 4px grid, orthogonal connectors, role/aria contract) with the enterprise consulting profile (white paper, near-black ink, navy `#1B365D` accent, CJK fonts) and its export procedure (first-SVG extraction; PNG rasterized from the same HTML). Diagram types are chosen ONLY by the Visual Router's semantic-pattern rules.
-- `vendor/skills/kimi-webbridge/`: preserve its session/tab discipline, health-first rule, operations guide, snapshot-first interaction, and real-browser daemon boundary. The browser extension and daemon remain runtime services and are not impersonated by bundled files.
-- `vendor/skills/anysearch/`: preserve its four CLI runtimes, shared contract, domain-directory-first routing, extraction support, license, notices, and fail-closed behavior. Try every available bundled runtime before declaring an outage; transport/proxy failure in one runtime must trigger the next runtime and a redacted diagnostic. Do not bundle populated `.env` files or machine-specific `runtime.conf`; never replace it with an unapproved search backend.
-- Verify `vendor/manifest.json` before release. A missing or hash-mismatched embedded file is a release blocker.
+```text
+Evidence → ResearchAnalysis → StrategicInterpretation
+→ CooperationHypothesis → DecisionSynthesis → ResearchNarrative
+```
 
-## Search Recall and Coverage contract
+- Load the versioned `ClientProfile`; never invent client capabilities.
+- Turn opportunity candidates into formal opportunities only when Need, Why Now, client capability match, value logic, target department, evidence, counterevidence and disconfirming conditions pass.
+- Express conclusions with facts, interpretation, implication, recommendation, action, owner and Go / No-Go condition.
+- Keep calculations, inferences and recommendations traceable to supporting Claims.
+- Use conclusion-first, enterprise-specific business language. Do not expose raw schemas, internal enums, process status or generic AI filler in formal prose.
+- The executive summary answers: what the target is, what changed, what it means for the client, what could invalidate the view, and what action/resource decision follows.
 
-- Use the shared `research/recall/` package for both enterprise research and daily intelligence; select behavior through `RecallProfile`, not scattered daily conditionals.
-- Follow `Seed → Query Expansion → Source Lane → Entity/Event Mining → Dynamic Frontier → Convergence → Verification`.
-- Load topic aliases/intents from `config/intelligence_search_topics.yaml` and authority patrol from `config/intelligence_source_roster.yaml`; keep both finite and budget-bound.
-- Daily result slots must remain at or below 168. Reserve RECOVERY, UPDATE, FRONTIER and SOURCE_PATROL before broad PRIMARY depth; defer P2/P3 first.
-- Enterprise recall uses an additive page budget isolated from the established R1 evidence budget. It must never crowd out product, factory, capacity, production-line, financial or other existing Goal Families.
-- Daily publication is exactly-once per report date: atomically claim the date before background collection, reject concurrent/already-published triggers, release the owned lock on failure, and keep the portal button disabled while running or after publication.
-- Daily P0/P1 may expand one hop; P2/P3 do not. Enterprise P0/P1 may expand only to its configured depth. Run Anomaly Hunter only for a critical gap.
-- A snippet or `FrontierEntry` is discovery state, never a Claim. Only hydrated content that passes the existing normalizer, source policy and verifier may enter formal evidence.
-- Record every query, URL disposition, source-lane attempt, funnel stage and honest convergence status. `collection_status=OK` never means `coverage_complete`.
-- Preserve daily freshness: recent reposts and historical-event redisclosures may be NEW; unknown publication time is retained LOW and ordered after known time; explicit pages older than 72 hours are OLD; confidence stays internal; score is not a publication floor.
+## Freeze and publish
 
-## Natural-language direction and entity-scope contract
+1. Run identity, evidence, source, conflict, image, data-coverage and decision-intelligence validators.
+2. Create an immutable freeze and `artifact_manifest.json`.
+3. Generate one shared `ResearchNarrative` and visual plan.
+4. Publish from the freeze:
+   - Word: decision-grade report with real headings, TOC fields, page numbers, source ownership and render inspection;
+   - Excel: structured evidence and analysis workbook through Excel Master;
+   - HTML: offline single-file research dashboard with inline data, visuals and verified images;
+   - PPT: frozen brief through PPT Master, subject to confirmation, SVG, preview and export gates.
+5. Run cross-artifact value, source, image, visual-semantic and rendered-output checks.
+6. Return `PASS`, `PASS_WITH_WARNINGS` or a blocked result. Never report completion when a publisher returns an error.
 
-- The portal's one-sentence initial request always runs the fixed full Goal-Family plan first, then runs an isolated additive reinforcement plan derived from every intent in the complete sentence. Reinforcement has its own query/page allowance and may not remove, reorder or consume the base plan.
-- Every known or open-ended supplemental requirement is a first-class research chapter, not a lightweight appendix. Each route must run the same `R1 primary/official coverage -> R2 original-page/full-text depth -> R3 independent triangulation/counterevidence` collection stack, hydrate target pages, extract through the same contracts, validate sources and preserve claim lineage. A single search snippet, an unhydrated result page or a generic gap sentence never completes a supplemental chapter.
-- If a supplemental route lacks publishable evidence, keep it internal and run up to ten additional audited recovery rounds with distinct source strategies. Exhaustion is evaluated per exact requirement and per routed topic. Blocked adapters, failed searches and rounds that never actually executed that topic do not count. Only after ten executed recovery rounds may the formal chapter state that public evidence could not be found; facts from another topic or entity may never be used to hide that gap.
-- “Continue deep research” is a different path: parse the complete requirement into every matched Goal Family and perform only cumulative targeted reinforcement plus current coverage-gap recovery. Parsing must not depend on commas, semicolons, line breaks or any other delimiter; conjunction-heavy and delimiter-free sentences retain the full original text in every targeted query.
-- Every enterprise query carries the canonical company name as its explicit subject. Frontier queries also carry the canonical company plus the discovered related entity/event. Search and extraction may retain customers, suppliers, competitors and adjacent new-energy companies as separate contextual entities, but may never assign their facts to the target enterprise.
-- Formal target-level financial, operating and KPI analysis consumes only claims whose `entity_id` is the canonical entity. Verified controlled group members may contribute their own products and factories only through verified ownership/group edges. Unrelated-entity facts remain internal evidence and cannot satisfy target coverage gates.
-- Every formal publication entry point, including deep retry and recovery scripts, reuses the same identity, entity-scope, coverage, readiness, freeze and publisher-QA gates. The latest `evidence_fixed*.sqlite3` is the cumulative starting point; coverage is recomputed after the retry. Unverified identity, mismatched identity/official-domain evidence or any unresolved high-severity coverage gap blocks publication and Feishu delivery.
-- Executive copy is data-first and enterprise-specific. A thin blocked draft may be short, but it is not a formal deliverable. Formal Word/HTML must meet the applicable length gate through professional consulting and market-research analysis grounded in the canonical enterprise; generic prose added only to reach the target is itself a release blocker. The phrases rejected by `AI_TONE_PHRASES` and the fifth-round zero-tolerance list remain release blockers across visible text and embedded HTML JSON.
+Visuals must start from a business thesis and verified data. Route semantic patterns through the Visual Router and diagram-design. No data means table, KPI or prose—not a fabricated chart. Word and HTML must reuse the same visual meaning and source data.
+
+## Output contract
+
+Write each run under:
+
+```text
+outputs/{canonical_company}/{run_id}/
+```
+
+Retain structured evidence, sources, conflicts, gaps, images, freeze hashes, manifests, QA reports, artifacts and package metadata. A blocked run keeps diagnostics and partial evidence instead of publishing a misleading final package.
+
+## Read supporting specifications when needed
+
+Before implementation or execution, read the documents relevant to the requested phase:
+
+- [ARCHITECTURE.md](ARCHITECTURE.md): system and Agent boundaries;
+- [WORKFLOW.md](WORKFLOW.md): state flow, retries and phase gates;
+- [DATA_SCHEMA.md](DATA_SCHEMA.md): Mission, Goal, Evidence and artifact schemas;
+- [SOURCE_POLICY.md](SOURCE_POLICY.md): source grading and evidence policy;
+- [ARTIFACT_SPEC.md](ARTIFACT_SPEC.md): run-directory and deliverable contract;
+- [VALIDATION_SPEC.md](VALIDATION_SPEC.md): release gates;
+- [config/agent.yaml](config/agent.yaml): loop, recovery, approval and publication policy;
+- [references/embedded-skills.md](references/embedded-skills.md): adapter and bundled-capability boundaries;
+- [references/reference-findings.md](references/reference-findings.md): report information architecture and visual reference;
+- [docs/agent/PERFORMANCE_POLICY.md](docs/agent/PERFORMANCE_POLICY.md): allowed performance optimizations.
+
+Read the bundled capability's own `SKILL.md` before invoking its adapter. Do not load unrelated reference trees.
+
+## Portability and release checks
+
+- Use the `energy_research_agent` Python namespace and `ERA_` environment variables only.
+- Resolve repository resources relative to the installed Skill root or `ERA_SKILL_ROOT`; never write a user-specific absolute path.
+- Keep `.env`, credentials, browser state, databases, outputs and caches out of the archive.
+- Make direct outbound access the default. Use `ERA_OUTBOUND_PROXY` only as an explicit process-local option.
+- Verify on another checkout or temporary directory before release.
+
+Run:
+
+```bash
+python scripts/vendor_skills.py verify
+python -m pytest -q
+python scripts/package_skill.py dist/energy-research-agent.zip
+```
+
+Fixtures and synthetic runs verify behavior only; they never justify real-company claims.

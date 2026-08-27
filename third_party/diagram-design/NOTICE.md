@@ -19,10 +19,3 @@
   snapshot of the upstream skill at install time.
 - **Third-party components inside diagram-design**: see
   `vendor/skills/diagram-design/THIRD_PARTY_LICENSES.md`.
-
-## Lieflat Charts (removed)
-
-- The previous visualization stack (`lieflat-charts`, PolyForm
-  Noncommercial licensed) has been **removed from the runtime** in this
-  release and is no longer vendored.  Any historical migration notes live
-  in `docs/archive/` only and do not participate in the runtime.

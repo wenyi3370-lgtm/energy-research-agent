@@ -1,6 +1,6 @@
 # Energy Research Agent — control-plane configuration (§53).
 # All knobs that govern agent behavior live here; nothing agentic is hardcoded
-# into prompts. Loaded by enterprise_energy_research.agent.policies.
+# into prompts. Loaded by energy_research_agent.agent.policies.
 schema_version: "1.0"
 
 agent:

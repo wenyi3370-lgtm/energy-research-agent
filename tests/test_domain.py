@@ -5,9 +5,9 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from enterprise_energy_research.domain.enums import ProductDashboardDecision, StatementType
-from enterprise_energy_research.domain.ids import RunSequence
-from enterprise_energy_research.domain.models import ProductDetection, Solution
+from energy_research_agent.domain.enums import ProductDashboardDecision, StatementType
+from energy_research_agent.domain.ids import RunSequence
+from energy_research_agent.domain.models import ProductDetection, Solution
 
 
 class DomainTests(unittest.TestCase):

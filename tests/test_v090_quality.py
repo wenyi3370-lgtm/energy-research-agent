@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.domain.models import ImageEvidence
-from enterprise_energy_research.research.image_semantics import ImageSemanticRouter
-from enterprise_energy_research.validation.visual_qa import inspect_html_visual
+from energy_research_agent.domain.models import ImageEvidence
+from energy_research_agent.research.image_semantics import ImageSemanticRouter
+from energy_research_agent.validation.visual_qa import inspect_html_visual
 
 
 class V090QualityTests(unittest.TestCase):

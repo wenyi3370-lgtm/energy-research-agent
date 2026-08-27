@@ -1,7 +1,7 @@
 # Energy Research Agent v0.9.0 — full stack
 #   research-api  : FastAPI application service
 #   postgres      : automation control-plane database
-#   n8n           : daily intelligence + failure watchdog; research starts only in local portal
+#   n8n           : optional scheduled intelligence/failure watchdog (profile: automation)
 services:
   postgres:
     image: postgres:16-alpine
@@ -22,58 +22,57 @@ services:
     build: .
     restart: unless-stopped
     environment:
-      EER_AUTOMATION_DATABASE_URL: postgresql+psycopg://research:${POSTGRES_PASSWORD}@postgres:5432/research
-      EER_AUTOMATION_WORKDIR: /data/automation_work
-      # The local portal must execute the currently mounted skill source, not
-      # a stale /app/src copy left from the previous image build.
+      ERA_AUTOMATION_DATABASE_URL: postgresql+psycopg://research:${POSTGRES_PASSWORD}@postgres:5432/research
+      ERA_AUTOMATION_WORKDIR: /data/automation_work
+      # Execute the mounted Agent source so local edits are visible after restart.
       PYTHONPATH: /skill/src
-      ENTERPRISE_ENERGY_SKILL_ROOT: /skill
-      # 宿主机仓库挂载点：继续深度研究可在 /skill/build/live_acceptance 下
-      # 定位历史 live 调查的证据库与产物。
-      EER_SKILL_ROOT: /skill
-      # 宿主机桌面挂载点：save_to_desktop 时把 Word/HTML/Excel 复制到这里。
-      EER_DESKTOP_PATH: /desktop
-      # Run mode: synthetic (default, zero-config) | orchestrating (real research)
-      EER_AUTOMATION_EXECUTOR: orchestrating
-      # 每日情报补跑巡检（10:40 后当天未发布且无运行锁则自动补跑）；
-      # 置为 off 可关闭（调试用），缺省即开启。
-      EER_INTELLIGENCE_CATCHUP: on
+      ERA_SKILL_ROOT: /skill
+      ERA_DESKTOP_PATH: /desktop
+      # Run mode: synthetic (offline smoke test) | orchestrating (real Agent run)
+      ERA_AUTOMATION_EXECUTOR: ${ERA_AUTOMATION_EXECUTOR:-orchestrating}
+      # New installations do not run scheduled intelligence unless enabled explicitly.
+      ERA_INTELLIGENCE_CATCHUP: ${ERA_INTELLIGENCE_CATCHUP:-off}
       # LLM gateway for real extraction (至少配置一个 provider):
-      EER_DEEPSEEK_API_KEY: ${EER_DEEPSEEK_API_KEY:-}
-      EER_DEEPSEEK_API_BASE: ${EER_DEEPSEEK_API_BASE:-}
-      EER_PRIMARY_MODEL: ${EER_PRIMARY_MODEL:-}
+      ERA_DEEPSEEK_API_KEY: ${ERA_DEEPSEEK_API_KEY:-}
+      ERA_DEEPSEEK_API_BASE: ${ERA_DEEPSEEK_API_BASE:-}
+      ERA_PRIMARY_MODEL: ${ERA_PRIMARY_MODEL:-}
+      ERA_OPENAI_API_KEY: ${ERA_OPENAI_API_KEY:-}
+      ERA_OPENAI_API_BASE: ${ERA_OPENAI_API_BASE:-}
+      ERA_FALLBACK_MODEL: ${ERA_FALLBACK_MODEL:-}
+      ERA_OUTBOUND_PROXY: ${ERA_OUTBOUND_PROXY:-}
       # Vision pixel verification stays on the native DeepSeek vision model
       # (dedicated credentials; research gateway may point elsewhere).
-      EER_VISION_API_KEY: ${EER_VISION_API_KEY:-}
-      EER_VISION_API_BASE: ${EER_VISION_API_BASE:-}
-      # Runtime-only account rotation; passed to AnySearch as --api_key and
-      # never baked into the image or committed configuration.
-      # 2026-08-26: 邮箱账号 2504575390@qq.com 注册的 key（.env），独立配额。
-      EER_ANYSEARCH_API_KEY: ${EER_ANYSEARCH_API_KEY:-}
-      # EER_OPENAI_API_KEY: ""
-      # Kimi WebBridge browser session (daemon runs on host, port 10086):
-      EER_KIMI_WEB_SESSION: default
-      # 容器内经 host.docker.internal 访问宿主机 daemon（浏览器扩展已连接）
-      EER_KIMI_WEB_DAEMON_URL: http://host.docker.internal:10086
+      ERA_VISION_API_KEY: ${ERA_VISION_API_KEY:-}
+      ERA_VISION_API_BASE: ${ERA_VISION_API_BASE:-}
+      ERA_ANYSEARCH_API_KEY: ${ERA_ANYSEARCH_API_KEY:-}
+      # ERA_OPENAI_API_KEY: ""
+      # Kimi WebBridge browser session (daemon runs on host, port 10086).
+      # Do not reuse the local ERA_KIMI_WEB_DAEMON_URL here: 127.0.0.1 inside
+      # a container is the container itself. Override the Docker-specific value
+      # only when the daemon is reachable at another container-visible URL.
+      ERA_KIMI_WEB_SESSION: ${ERA_KIMI_WEB_SESSION:-default}
+      ERA_KIMI_WEB_DAEMON_URL: ${ERA_DOCKER_KIMI_WEB_DAEMON_URL:-http://host.docker.internal:10086}
       # Optional Feishu notifications:
-      EER_FEISHU_APP_ID: ${EER_FEISHU_APP_ID:-}
-      EER_FEISHU_APP_SECRET: ${EER_FEISHU_APP_SECRET:-}
+      ERA_FEISHU_APP_ID: ${ERA_FEISHU_APP_ID:-}
+      ERA_FEISHU_APP_SECRET: ${ERA_FEISHU_APP_SECRET:-}
       # 接收人：飞书邮箱 / open_id / chat_id（未配置则通知 fail-closed，可后续补）
-      EER_FEISHU_DEFAULT_RECEIVER: ${EER_FEISHU_DEFAULT_RECEIVER:-}
+      ERA_FEISHU_DEFAULT_RECEIVER: ${ERA_FEISHU_DEFAULT_RECEIVER:-}
     depends_on:
       postgres:
         condition: service_healthy
     ports:
       - "8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - research-data:/data/automation_work
       # 宿主机仓库（源码只读 + live 调查产物可写）
       - type: bind
         source: .
         target: /skill
-      # 宿主机桌面：deep-research 的「保存到桌面」
+      # Cross-platform export path; override ERA_EXPORT_PATH in .env when needed.
       - type: bind
-        source: ${EER_DESKTOP_PATH:-~/Desktop}
+        source: ${ERA_EXPORT_PATH:-./outputs}
         target: /desktop
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -82,7 +81,7 @@ services:
       retries: 5
 
   n8n:
-    # Must match the migration level of the persisted n8n-data volume.
+    profiles: ["automation"]
     image: n8nio/n8n:2.35.4
     restart: unless-stopped
     environment:
@@ -98,13 +97,6 @@ services:
       - research-api
 
 volumes:
-  # 历史数据卷继续使用旧固定名，避免品牌改名导致现有数据库与 n8n 数据丢失。
   pgdata:
-    external: true
-    name: enterprise-energy-research_pgdata
   research-data:
-    external: true
-    name: enterprise-energy-research_research-data
   n8n-data:
-    external: true
-    name: enterprise-energy-research_n8n-data

@@ -9,7 +9,7 @@
 
 | 手段 | 机制 | 说明 |
 |---|---|---|
-| 并发抓取 | `EER_FULLTEXT_WORKERS`（默认 6，可调大） | 同样的页面集，更少墙钟时间 |
+| 并发抓取 | `ERA_FULLTEXT_WORKERS`（默认 6，可调大） | 同样的页面集，更少墙钟时间 |
 | URL 去重 | `hydrate_target_pages` 按 URL 去重，一次抓取多目标复用 | 覆盖不变 |
 | 饱和早停 | `EvidenceDeltaSaturation`（最小静默轮 2） | "证据够"由边际产出阈值判定，天然质量感知 |
 | 避免重复工作 | §24 恢复轮禁止重复 query；已满足 Goal 不重跑（§12 continuation） | 覆盖不变 |

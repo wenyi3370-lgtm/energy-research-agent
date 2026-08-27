@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import unittest
 
-from enterprise_energy_research.automation.contracts import DeepResearchPayload
-from enterprise_energy_research.automation.deep_research_control import (
+from energy_research_agent.automation.contracts import DeepResearchPayload
+from energy_research_agent.automation.deep_research_control import (
     record_gap_round,
     stop_reason,
 )

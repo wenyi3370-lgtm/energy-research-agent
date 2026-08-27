@@ -2,7 +2,7 @@
 
 ## 工作流文件
 
-`enterprise-research-workflow.json` —— 端到端自动化工作流：
+`energy-research-agent-workflow.json` —— 端到端自动化工作流：
 
 ```
 Feishu Form Webhook → Map Form to Task → Submit Research Task (POST /api/v1/triggers/feishu)

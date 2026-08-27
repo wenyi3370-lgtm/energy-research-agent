@@ -20,10 +20,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-from enterprise_energy_research.automation.contracts import ResearchRequest
-from enterprise_energy_research.automation.db import AutomationDatabase
-from enterprise_energy_research.automation.executor import SyntheticKernelExecutor
-from enterprise_energy_research.automation.service import ResearchService
+from energy_research_agent.automation.contracts import ResearchRequest
+from energy_research_agent.automation.db import AutomationDatabase
+from energy_research_agent.automation.executor import SyntheticKernelExecutor
+from energy_research_agent.automation.service import ResearchService
 
 ROOT = Path(__file__).resolve().parents[1]
 

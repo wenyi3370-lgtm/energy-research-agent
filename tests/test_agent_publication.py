@@ -8,8 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.agent.evals import compute_agent_metrics
-from enterprise_energy_research.agent.models import (
+from energy_research_agent.agent.evals import compute_agent_metrics
+from energy_research_agent.agent.models import (
     AgentCostRecord,
     ApprovalStatus,
     CrossDomainFinding,
@@ -25,25 +25,25 @@ from enterprise_energy_research.agent.models import (
     SkillRunStatus,
     SubjectType,
 )
-from enterprise_energy_research.agent.publication import merge_evidence, publish_unified
-from enterprise_energy_research.artifacts.narrative import NarrativeBuilder, StoryModule
-from enterprise_energy_research.cli import synthetic_run
-from enterprise_energy_research.domain.enums import (
+from energy_research_agent.agent.publication import merge_evidence, publish_unified
+from energy_research_agent.artifacts.narrative import NarrativeBuilder, StoryModule
+from energy_research_agent.cli import synthetic_run
+from energy_research_agent.domain.enums import (
     ArtifactType,
     EnterpriseComplexity,
     RunStatus,
     SourceLevel,
     VerificationStatus,
 )
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.evidence.store import EvidenceStore
-from enterprise_energy_research.domain.models import Entity, Source, Claim, RunManifest, utc_now
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.evidence.store import EvidenceStore
+from energy_research_agent.domain.models import Entity, Source, Claim, RunManifest, utc_now
 
 
 def _excel_only_publishers() -> dict:
     """Unit tests exercise the unified plumbing with the Excel publisher only;
     Word/HTML render-QA gates (body length etc.) stay active in production."""
-    from enterprise_energy_research.artifacts.excel import ExcelMasterFrozenPublisher
+    from energy_research_agent.artifacts.excel import ExcelMasterFrozenPublisher
 
     return {ArtifactType.EXCEL: ExcelMasterFrozenPublisher()}
 
@@ -177,7 +177,7 @@ class TestUnifiedPublication(unittest.TestCase):
             self.assertIn("/deliverables/市场调研数据与模型.xlsx", manifest_payload.get("sub_artifact_refs", []))
             # §38: findings injected into the frozen bundle flow into the
             # narrative's enterprise-market chapter (what publishers render).
-            bundle = __import__("enterprise_energy_research.evidence.freeze", fromlist=["FreezeService"]).FreezeService(unified).load_bundle(published["freeze_id"])
+            bundle = __import__("energy_research_agent.evidence.freeze", fromlist=["FreezeService"]).FreezeService(unified).load_bundle(published["freeze_id"])
             bundle.cross_domain_findings = [_finding("示例公司进入西班牙户储市场适配度中等")]
             narrative = NarrativeBuilder().build(bundle)
             self.assertTrue(
@@ -418,7 +418,7 @@ class TestAgentMetrics(unittest.TestCase):
     """§59: metrics computed at completion."""
 
     def test_metrics_computed_from_outcome(self):
-        from enterprise_energy_research.agent.orchestrator import AgentOutcome
+        from energy_research_agent.agent.orchestrator import AgentOutcome
 
         mission = ResearchMission(mission_id=new_sortable_id("MISSION"), raw_request="x", mode=ResearchMode.HYBRID)
         goals = [

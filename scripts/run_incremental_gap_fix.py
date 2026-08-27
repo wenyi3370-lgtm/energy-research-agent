@@ -18,14 +18,14 @@ import argparse
 import json
 from pathlib import Path
 
-from enterprise_energy_research.adapters.anysearch import AnySearchCliAdapter
-from enterprise_energy_research.adapters.kimi_webbridge import KimiWebBridgeSearchAdapter
-from enterprise_energy_research.domain.enums import EnterpriseComplexity, RunStatus
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import ResearchPlan, RunManifest
-from enterprise_energy_research.evidence.store import EvidenceStore
-from enterprise_energy_research.research.production_runner import AdaptiveResearchRunner, MergeEvidence
-from enterprise_energy_research.research.normalizer import NormalizedEvidence
+from energy_research_agent.adapters.anysearch import AnySearchCliAdapter
+from energy_research_agent.adapters.kimi_webbridge import KimiWebBridgeSearchAdapter
+from energy_research_agent.domain.enums import EnterpriseComplexity, RunStatus
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import ResearchPlan, RunManifest
+from energy_research_agent.evidence.store import EvidenceStore
+from energy_research_agent.research.production_runner import AdaptiveResearchRunner, MergeEvidence
+from energy_research_agent.research.normalizer import NormalizedEvidence
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -86,9 +86,9 @@ def main() -> int:
         if "already exists" not in str(exc):
             raise
         print(f"[incremental] reusing existing fix run {run_id}")
-    from enterprise_energy_research.gateway.http_json_gateway import HttpJsonModelGateway
-    from enterprise_energy_research.settings import Settings
-    from enterprise_energy_research.research.image_archiver import ImageAssetArchiver
+    from energy_research_agent.gateway.http_json_gateway import HttpJsonModelGateway
+    from energy_research_agent.settings import Settings
+    from energy_research_agent.research.image_archiver import ImageAssetArchiver
     import os
 
     env_path = ROOT / ".env"
@@ -118,12 +118,12 @@ def main() -> int:
     # Existing evidence first (stable IDs), then one gap-fix round.
     runner.cumulative = load_existing(store, run_id)
 
-    planner = __import__("enterprise_energy_research.research.planner", fromlist=["ResearchPlanner"]).ResearchPlanner()
+    planner = __import__("energy_research_agent.research.planner", fromlist=["ResearchPlanner"]).ResearchPlanner()
     if args.coverage:
         # R4: build TARGETED queries from the data-coverage audit (P0 third
         # round): year-specific annual-report searches for missing financial
         # series, official product pages for missing product images.
-        from enterprise_energy_research.research.data_coverage import ResearchDataCoverageValidator
+        from energy_research_agent.research.data_coverage import ResearchDataCoverageValidator
         audit = ResearchDataCoverageValidator().audit(
             entity_name=args.company,
             claims=runner.cumulative.claims,
@@ -161,8 +161,8 @@ def main() -> int:
         completion_contract=topics,
         canonical_company_name=args.company,
     )
-    from enterprise_energy_research.research.executor import SearchExecutor
-    from enterprise_energy_research.research.image_discovery import KimiUsageTelemetry
+    from energy_research_agent.research.executor import SearchExecutor
+    from energy_research_agent.research.image_discovery import KimiUsageTelemetry
     telemetry = KimiUsageTelemetry()
     envelopes = SearchExecutor(runner.adapters).execute(mini)
     envelopes = runner._fulltext_pass(envelopes, fix_queries)
@@ -175,14 +175,14 @@ def main() -> int:
         for _, extracted, _failures in pool.map(runner._extract_one, envelopes):
             batches.extend(extracted)
 
-    from enterprise_energy_research.research.identity_evidence import IdentityEvidenceSynthesizer
-    from enterprise_energy_research.research.resolver import CompanyResolver
-    from enterprise_energy_research.research.claim_validator import ClaimValidator
-    from enterprise_energy_research.research.entity_mapper import EntityMapper
-    from enterprise_energy_research.research.image_validator import ImageValidator
-    from enterprise_energy_research.research.product_detector import ProductDetector
-    from enterprise_energy_research.analysis.energy import EnergyAnalyst
-    from enterprise_energy_research.analysis.solutions import SolutionEngine
+    from energy_research_agent.research.identity_evidence import IdentityEvidenceSynthesizer
+    from energy_research_agent.research.resolver import CompanyResolver
+    from energy_research_agent.research.claim_validator import ClaimValidator
+    from energy_research_agent.research.entity_mapper import EntityMapper
+    from energy_research_agent.research.image_validator import ImageValidator
+    from energy_research_agent.research.product_detector import ProductDetector
+    from energy_research_agent.analysis.energy import EnergyAnalyst
+    from energy_research_agent.analysis.solutions import SolutionEngine
 
     resolution = CompanyResolver().resolve(args.company, batches)
     official_domains = {
@@ -199,7 +199,7 @@ def main() -> int:
             upgraded.append(batch)
     batches = upgraded
 
-    from enterprise_energy_research.research.normalizer import EvidenceNormalizer
+    from energy_research_agent.research.normalizer import EvidenceNormalizer
     try:
         round_evidence = EvidenceNormalizer().normalize(batches, official_domains=official_domains)
     except ValueError as exc:
@@ -239,7 +239,7 @@ def main() -> int:
     )
     runner.cumulative.gaps.extend(energy_gaps)
 
-    from enterprise_energy_research.research.ingestor import EvidenceIngestor
+    from energy_research_agent.research.ingestor import EvidenceIngestor
     # Each gap-fix round is a NEW evidence version (previous rounds are
     # frozen); reusing version 1 would hit the immutability guard.
     con = fix_store.connect()
@@ -253,7 +253,7 @@ def main() -> int:
     manifest.complexity = run_manifest.complexity
     fix_store.replace_run_manifest(manifest)
 
-    from enterprise_energy_research.research.content_contract import CoreResearchReadinessGate
+    from energy_research_agent.research.content_contract import CoreResearchReadinessGate
     readiness = CoreResearchReadinessGate().assess(
         entities=runner.cumulative.entities, claims=runner.cumulative.claims,
         edges=runner.cumulative.edges, factories=runner.cumulative.factories,
@@ -268,9 +268,9 @@ def main() -> int:
     )
     # Publish when the gates pass (freeze -> existing Word/HTML publishers).
     if readiness["status"] == "PASS":
-        from enterprise_energy_research.graph.phase3_runner import Phase3Runner
-        from enterprise_energy_research.graph.state import ResearchState
-        from enterprise_energy_research.research.content_contract import PlaceholderContentGate, chapter_substantive_facts, CHAPTER_CONTRACTS
+        from energy_research_agent.graph.phase3_runner import Phase3Runner
+        from energy_research_agent.graph.state import ResearchState
+        from energy_research_agent.research.content_contract import PlaceholderContentGate, chapter_substantive_facts, CHAPTER_CONTRACTS
         body_paragraphs: list[str] = []
         for key, contract in CHAPTER_CONTRACTS.items():
             facts = chapter_substantive_facts(

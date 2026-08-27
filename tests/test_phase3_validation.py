@@ -9,13 +9,13 @@ from pathlib import Path
 
 from PIL import Image
 
-from enterprise_energy_research.domain.enums import SourceLevel, VerificationStatus
-from enterprise_energy_research.domain.models import Claim, Entity, ImageEvidence, Product, ProductParameter, Source
-from enterprise_energy_research.research.claim_validator import ClaimValidator
-from enterprise_energy_research.research.image_validator import ImageValidator
-from enterprise_energy_research.research.image_archiver import ImageAssetArchiver
-from enterprise_energy_research.research.product_detector import ProductDetector
-from enterprise_energy_research.research.source_grader import SourceGrader
+from energy_research_agent.domain.enums import SourceLevel, VerificationStatus
+from energy_research_agent.domain.models import Claim, Entity, ImageEvidence, Product, ProductParameter, Source
+from energy_research_agent.research.claim_validator import ClaimValidator
+from energy_research_agent.research.image_validator import ImageValidator
+from energy_research_agent.research.image_archiver import ImageAssetArchiver
+from energy_research_agent.research.product_detector import ProductDetector
+from energy_research_agent.research.source_grader import SourceGrader
 
 
 class Phase3ValidationTests(unittest.TestCase):

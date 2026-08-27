@@ -10,9 +10,9 @@
 ## 配置（.env / 环境变量）
 
 ```
-EER_FEISHU_APP_ID=cli_xxx
-EER_FEISHU_APP_SECRET=xxx
-EER_FEISHU_DEFAULT_RECEIVER=analyst@company.com   # email / open_id / chat_id
+ERA_FEISHU_APP_ID=cli_xxx
+ERA_FEISHU_APP_SECRET=xxx
+ERA_FEISHU_DEFAULT_RECEIVER=analyst@company.com   # email / open_id / chat_id
 ```
 
 未配置 → `available()==False` → 通知 no-op 并在事件日志显式记录（fail-closed，不静默丢弃）。

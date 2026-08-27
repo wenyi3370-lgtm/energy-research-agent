@@ -9,12 +9,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.domain.enums import VerificationStatus
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import Claim, Product
-from enterprise_energy_research.research.catalog import CatalogInventory, CatalogItem, CatalogTraverser
-from enterprise_energy_research.research.claim_utilization import ClaimUtilizationAuditor, high_value_claim_ids
-from enterprise_energy_research.research.synthesis import ResearchSynthesizer, SynthesisFinding
+from energy_research_agent.domain.enums import VerificationStatus
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import Claim, Product
+from energy_research_agent.research.catalog import CatalogInventory, CatalogItem, CatalogTraverser
+from energy_research_agent.research.claim_utilization import ClaimUtilizationAuditor, high_value_claim_ids
+from energy_research_agent.research.synthesis import ResearchSynthesizer, SynthesisFinding
 
 
 def verified_claim(field: str, value, entity_id: str, source_id: str) -> Claim:
@@ -68,7 +68,7 @@ class SynthesisTests(unittest.TestCase):
             verified_claim("canonical_company_name", "ACME科技有限公司", entity_id, source_id),
             verified_claim("core_business", "储能系统研发制造", entity_id, source_id),
         ]
-        from enterprise_energy_research.domain.models import Entity
+        from energy_research_agent.domain.models import Entity
         entity = Entity(entity_id=entity_id, canonical_name="ACME科技有限公司")
         synthesis = ResearchSynthesizer().synthesize(
             run_id="RUN-1", entity=entity, entities=[entity], claims=claims,
@@ -81,7 +81,7 @@ class SynthesisTests(unittest.TestCase):
             self.assertTrue(finding.supporting_source_ids)
 
     def test_synthesis_summaries_have_substance(self) -> None:
-        from enterprise_energy_research.domain.models import Entity
+        from energy_research_agent.domain.models import Entity
         source_id, entity_id = "S1", "E1"
         claims = [
             verified_claim("canonical_company_name", "ACME科技有限公司", entity_id, source_id),
@@ -134,14 +134,14 @@ class ClaimUtilizationTests(unittest.TestCase):
 
 class VerifiedClaimReachesPublisherTests(unittest.TestCase):
     def test_verified_claim_reaches_publisher(self) -> None:
-        from enterprise_energy_research.artifacts.word import FrozenWordPublisher
-        from enterprise_energy_research.domain.enums import ArtifactType, RunStatus
-        from enterprise_energy_research.domain.models import ExtractedEvidenceBatch, RunManifest
-        from enterprise_energy_research.evidence.freeze import FreezeService
-        from enterprise_energy_research.evidence.store import EvidenceStore
-        from enterprise_energy_research.graph.phase3_runner import Phase3Runner
-        from enterprise_energy_research.graph.state import ResearchState
-        from enterprise_energy_research.settings import load_yaml
+        from energy_research_agent.artifacts.word import FrozenWordPublisher
+        from energy_research_agent.domain.enums import ArtifactType, RunStatus
+        from energy_research_agent.domain.models import ExtractedEvidenceBatch, RunManifest
+        from energy_research_agent.evidence.freeze import FreezeService
+        from energy_research_agent.evidence.store import EvidenceStore
+        from energy_research_agent.graph.phase3_runner import Phase3Runner
+        from energy_research_agent.graph.state import ResearchState
+        from energy_research_agent.settings import load_yaml
         import json
         ROOT = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as temp:

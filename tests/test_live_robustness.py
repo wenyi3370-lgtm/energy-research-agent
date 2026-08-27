@@ -13,17 +13,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.adapters.base import AdapterHealth, SearchHit, SearchRequest, SearchResultEnvelope
-from enterprise_energy_research.domain.enums import EnterpriseComplexity, SourceLevel, VerificationStatus
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import (
+from energy_research_agent.adapters.base import AdapterHealth, SearchHit, SearchRequest, SearchResultEnvelope
+from energy_research_agent.domain.enums import EnterpriseComplexity, SourceLevel, VerificationStatus
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import (
     Claim, Entity, ExtractedEvidenceBatch, ResearchQuery, Source,
 )
-from enterprise_energy_research.research.claim_validator import ClaimValidator
-from enterprise_energy_research.research.extractor import EvidenceExtractor
-from enterprise_energy_research.research.normalizer import EvidenceNormalizer, NormalizedEvidence
-from enterprise_energy_research.research.production_runner import AdaptiveResearchRunner, MergeEvidence
-from enterprise_energy_research.research.source_grader import SourceGrader
+from energy_research_agent.research.claim_validator import ClaimValidator
+from energy_research_agent.research.extractor import EvidenceExtractor
+from energy_research_agent.research.normalizer import EvidenceNormalizer, NormalizedEvidence
+from energy_research_agent.research.production_runner import AdaptiveResearchRunner, MergeEvidence
+from energy_research_agent.research.source_grader import SourceGrader
 
 
 def batch_dict(source_url: str, *, claims=None, entities=None) -> ExtractedEvidenceBatch:
@@ -107,7 +107,7 @@ class RobustnessTests(unittest.TestCase):
 
         # The extractor would need a gateway; here we only assert the flag
         # rule exists in the code path via the sanitize + flag assignment.
-        from enterprise_energy_research.research.extractor import EvidenceExtractor as Extractor
+        from energy_research_agent.research.extractor import EvidenceExtractor as Extractor
         source = Extractor(None)
         self.assertTrue(hasattr(source, "_sanitize_batch"))
 
@@ -134,7 +134,7 @@ class RobustnessTests(unittest.TestCase):
     # ---- 3. chrome-error pages are not sources ----------------------------
 
     def test_chrome_error_page_is_not_a_source(self) -> None:
-        from enterprise_energy_research.adapters.kimi_webbridge import KimiWebBridgeSearchAdapter
+        from energy_research_agent.adapters.kimi_webbridge import KimiWebBridgeSearchAdapter
 
         class _ErrorDaemon:
             def __init__(self) -> None:
@@ -207,7 +207,7 @@ class RobustnessTests(unittest.TestCase):
             content_type="text/html",
         )
         round_evidence.sources.append(round_source)
-        from enterprise_energy_research.domain.models import Product
+        from energy_research_agent.domain.models import Product
         product = Product(
             product_id="PROD-1", entity_id="E1", name="储能柜",
             source_ids=["SOURCE-S001"],
@@ -223,15 +223,15 @@ class RobustnessTests(unittest.TestCase):
     def test_enterprise_html_does_not_require_product_images(self) -> None:
         import json
 
-        from enterprise_energy_research.domain.enums import ArtifactType, RunStatus
-        from enterprise_energy_research.domain.models import RunManifest
-        from enterprise_energy_research.evidence.freeze import FreezeService
-        from enterprise_energy_research.evidence.store import EvidenceStore
-        from enterprise_energy_research.graph.phase3_runner import Phase3Runner
-        from enterprise_energy_research.graph.state import ResearchState
-        from enterprise_energy_research.research.image_archiver import ImageAssetArchiver
-        from enterprise_energy_research.settings import load_yaml
-        from enterprise_energy_research.artifacts.html import FrozenHtmlPublisher
+        from energy_research_agent.domain.enums import ArtifactType, RunStatus
+        from energy_research_agent.domain.models import RunManifest
+        from energy_research_agent.evidence.freeze import FreezeService
+        from energy_research_agent.evidence.store import EvidenceStore
+        from energy_research_agent.graph.phase3_runner import Phase3Runner
+        from energy_research_agent.graph.state import ResearchState
+        from energy_research_agent.research.image_archiver import ImageAssetArchiver
+        from energy_research_agent.settings import load_yaml
+        from energy_research_agent.artifacts.html import FrozenHtmlPublisher
 
         ROOT = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as temp:
@@ -267,7 +267,7 @@ class RobustnessTests(unittest.TestCase):
     # ---- 7. planner only_topics -------------------------------------------
 
     def test_planner_only_topics(self) -> None:
-        from enterprise_energy_research.research.planner import ResearchPlanner
+        from energy_research_agent.research.planner import ResearchPlanner
         plan = ResearchPlanner().build(
             "RUN-1", "E1", "ACME", EnterpriseComplexity.ENTERPRISE_NORMAL,
             {"max_queries": 12, "max_pages": 40},
@@ -280,10 +280,10 @@ class RobustnessTests(unittest.TestCase):
     # ---- 8. product image context binding ---------------------------------
 
     def test_product_image_binds_by_context(self) -> None:
-        from enterprise_energy_research.research.image_discovery import ImageCandidate
+        from energy_research_agent.research.image_discovery import ImageCandidate
         runner = AdaptiveResearchRunner({"anysearch": None})
         evidence = NormalizedEvidence()
-        from enterprise_energy_research.domain.models import Product
+        from energy_research_agent.domain.models import Product
         evidence.products.append(Product(
             product_id="PROD-1", entity_id="E1", name="麒麟电池",
             verification_status=VerificationStatus.VERIFIED, source_ids=["S1"],
@@ -294,7 +294,7 @@ class RobustnessTests(unittest.TestCase):
             image_type="product", page_url="https://www.acme-corp.com/products/kirin",
             alt="麒麟电池产品图", surrounding_text="麒麟电池",
         )
-        from enterprise_energy_research.research.image_discovery import ImageEvidenceBuilder
+        from energy_research_agent.research.image_discovery import ImageEvidenceBuilder
         builder = ImageEvidenceBuilder(fetcher=lambda url, referer: b"")
         # binding is done by _attach_discovered_images; here we verify the
         # match rule used there via the same known_products logic.

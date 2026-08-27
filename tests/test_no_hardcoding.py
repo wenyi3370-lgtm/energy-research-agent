@@ -32,13 +32,13 @@ class NoHardcodingTests(unittest.TestCase):
     def test_industry_parameters_not_hardcoded_in_publishers(self) -> None:
         """D50-style explanations must not live unconditionally in publishers."""
         for name in ("word.py", "html.py", "excel.py"):
-            path = SRC / "enterprise_energy_research" / "artifacts" / name
+            path = SRC / "energy_research_agent" / "artifacts" / name
             text = path.read_text(encoding="utf-8", errors="replace")
             for token in INDUSTRY_PARAM_TOKENS:
                 self.assertNotIn(token, text, f"{name} hardcodes industry parameter {token}")
 
     def test_parameter_registry_is_industry_keyed(self) -> None:
-        from enterprise_energy_research.research.parameter_registry import ParameterInterpretationRegistry
+        from energy_research_agent.research.parameter_registry import ParameterInterpretationRegistry
         registry = ParameterInterpretationRegistry()
         self.assertIsNotNone(registry.interpretation("battery_material", None, "D50"))
         # Other industries receive no battery-material commentary.

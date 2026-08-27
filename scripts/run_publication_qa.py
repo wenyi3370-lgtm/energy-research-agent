@@ -13,10 +13,10 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-from enterprise_energy_research.validation.consulting_narrative import (
+from energy_research_agent.validation.consulting_narrative import (
     PublicationVisibleTextValidator, TOCValidator,
 )
-from enterprise_energy_research.validation.visual_qa import inspect_word_render
+from energy_research_agent.validation.visual_qa import inspect_word_render
 
 
 NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -366,7 +366,7 @@ def render_pdf_and_png(docx: Path, output: Path, soffice: Path) -> tuple[Path, l
 
 
 def fallback_word_render_validation(pdf_path: Path):
-    from enterprise_energy_research.validation.visual_qa import WordVisualValidation
+    from energy_research_agent.validation.visual_qa import WordVisualValidation
 
     completed = subprocess.run(["pdftotext", "-layout", str(pdf_path), "-"], capture_output=True, timeout=120)
     pages = completed.stdout.decode("utf-8", errors="ignore").split("\f")

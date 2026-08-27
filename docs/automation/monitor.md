@@ -23,7 +23,7 @@
 重启不丢、不重复触发。以下代码仅用于开发测试，不应接入生产定时器：
 
 ```python
-from enterprise_energy_research.automation.monitor import MonitorRunner, load_watchlist
+from energy_research_agent.automation.monitor import MonitorRunner, load_watchlist
 runner = MonitorRunner(service, load_watchlist(Path("config/watchlist.yaml")))
 for result in runner.run_due(datetime.now()):
     print(result.run_id, result.status)

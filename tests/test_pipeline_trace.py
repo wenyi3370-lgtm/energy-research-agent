@@ -9,14 +9,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.adapters.base import SearchHit, SearchResultEnvelope
-from enterprise_energy_research.domain.enums import EnterpriseComplexity
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import DataGap
-from enterprise_energy_research.research.pipeline_trace import (
+from energy_research_agent.adapters.base import SearchHit, SearchResultEnvelope
+from energy_research_agent.domain.enums import EnterpriseComplexity
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import DataGap
+from energy_research_agent.research.pipeline_trace import (
     GapReasonClassifier, GoalPipelineTrace,
 )
-from enterprise_energy_research.research.planner import ResearchPlanner
+from energy_research_agent.research.planner import ResearchPlanner
 
 
 def envelope(topic: str, hits: int = 0, text_hits: int = 0):

@@ -20,10 +20,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from enterprise_energy_research.automation.api.app import _default_executor
-from enterprise_energy_research.automation.db import AutomationDatabase
-from enterprise_energy_research.automation.monitor import MonitorRunner, load_watchlist
-from enterprise_energy_research.automation.service import ResearchService
+from energy_research_agent.automation.api.app import _default_executor
+from energy_research_agent.automation.db import AutomationDatabase
+from energy_research_agent.automation.monitor import MonitorRunner, load_watchlist
+from energy_research_agent.automation.service import ResearchService
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -37,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
 
     watchlist = load_watchlist(ROOT / "config" / "watchlist.yaml")
     db = AutomationDatabase("sqlite:///" + str(ROOT / "automation_monitor.db"))
-    mode = os.environ.get("EER_AUTOMATION_EXECUTOR", "synthetic")
+    mode = os.environ.get("ERA_AUTOMATION_EXECUTOR", "synthetic")
     print(f"运行模式: {mode}")
     service = ResearchService(
         db, _default_executor(), ROOT / "automation_work"

@@ -6,13 +6,13 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from enterprise_energy_research.automation.contracts import ResearchResult
-from enterprise_energy_research.automation.db import AutomationDatabase
-from enterprise_energy_research.automation.enums import TaskStatus
-from enterprise_energy_research.automation.executor import ExecutionOutcome, SyntheticKernelExecutor
-from enterprise_energy_research.automation.feishu import FeishuNotifier, MockFeishuAdapter
-from enterprise_energy_research.automation.feishu.base import FeishuMessage
-from enterprise_energy_research.automation.monitor import (
+from energy_research_agent.automation.contracts import ResearchResult
+from energy_research_agent.automation.db import AutomationDatabase
+from energy_research_agent.automation.enums import TaskStatus
+from energy_research_agent.automation.executor import ExecutionOutcome, SyntheticKernelExecutor
+from energy_research_agent.automation.feishu import FeishuNotifier, MockFeishuAdapter
+from energy_research_agent.automation.feishu.base import FeishuMessage
+from energy_research_agent.automation.monitor import (
     Change,
     ChangeDetector,
     MonitorRunner,
@@ -21,9 +21,9 @@ from enterprise_energy_research.automation.monitor import (
     load_watchlist,
     next_run_after,
 )
-from enterprise_energy_research.automation.service import ResearchService
-from enterprise_energy_research.domain.enums import ValidationStatus
-from enterprise_energy_research.domain.models import Claim
+from energy_research_agent.automation.service import ResearchService
+from energy_research_agent.domain.enums import ValidationStatus
+from energy_research_agent.domain.models import Claim
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -148,7 +148,7 @@ class MonitorWorkflowContractTests(unittest.TestCase):
 
     def test_feishu_research_workflow_is_inactive(self):
         workflow = json.loads(
-            (ROOT / "automation" / "n8n" / "enterprise-research-workflow.json").read_text(
+            (ROOT / "automation" / "n8n" / "energy-research-agent-workflow.json").read_text(
                 encoding="utf-8"
             )
         )

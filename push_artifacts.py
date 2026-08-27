@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from enterprise_energy_research.automation.feishu.lark import LarkFeishuAdapter
+from energy_research_agent.automation.feishu.lark import LarkFeishuAdapter
 
 FILES = [
     "/data/automation_work/AGENTENT-01M0W5TYTVETEYWXZXA81YGT9W/outputs/artifacts/enterprise_research.docx",

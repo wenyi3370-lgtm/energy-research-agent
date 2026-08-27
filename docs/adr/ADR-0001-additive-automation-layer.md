@@ -8,7 +8,7 @@
 自动化改造不能动摇领域边界（publisher 禁联网、Validation 先于 Freeze、Freeze 不可变）。
 
 ## 决策
-新增 `src/enterprise_energy_research/automation/` 子包承载契约/状态机/服务/API/
+新增 `src/energy_research_agent/automation/` 子包承载契约/状态机/服务/API/
 策略/集成；内核文件仅允许加法式修改（如 `Phase3Runner.process_batches_until_ingest`
 拆分），禁止改动既有行为。跨内核文件的任何必要修改必须在交付报告中说明。
 

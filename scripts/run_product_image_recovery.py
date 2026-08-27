@@ -26,23 +26,23 @@ import os
 import sqlite3
 from pathlib import Path
 
-from enterprise_energy_research.adapters.kimi_webbridge import KimiWebBridgeSearchAdapter
-from enterprise_energy_research.adapters.anysearch import AnySearchCliAdapter
-from enterprise_energy_research.adapters.base import SearchRequest
-from enterprise_energy_research.domain.enums import EnterpriseComplexity, RunStatus, VerificationStatus
-from enterprise_energy_research.domain.models import RunManifest
-from enterprise_energy_research.evidence.store import EvidenceStore
-from enterprise_energy_research.research.image_archiver import ImageAssetArchiver
-from enterprise_energy_research.research.image_discovery import (
+from energy_research_agent.adapters.kimi_webbridge import KimiWebBridgeSearchAdapter
+from energy_research_agent.adapters.anysearch import AnySearchCliAdapter
+from energy_research_agent.adapters.base import SearchRequest
+from energy_research_agent.domain.enums import EnterpriseComplexity, RunStatus, VerificationStatus
+from energy_research_agent.domain.models import RunManifest
+from energy_research_agent.evidence.store import EvidenceStore
+from energy_research_agent.research.image_archiver import ImageAssetArchiver
+from energy_research_agent.research.image_discovery import (
     ImageEvidenceBuilder,
     KimiImageDiscovery,
     KimiUsageTelemetry,
 )
-from enterprise_energy_research.research.image_validator import ImageValidator
-from enterprise_energy_research.research.ingestor import EvidenceIngestor
-from enterprise_energy_research.research.normalizer import NormalizedEvidence
-from enterprise_energy_research.research.production_runner import AdaptiveResearchRunner, MergeEvidence
-from enterprise_energy_research.research.product_detector import ProductDetector
+from energy_research_agent.research.image_validator import ImageValidator
+from energy_research_agent.research.ingestor import EvidenceIngestor
+from energy_research_agent.research.normalizer import NormalizedEvidence
+from energy_research_agent.research.production_runner import AdaptiveResearchRunner, MergeEvidence
+from energy_research_agent.research.product_detector import ProductDetector
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -212,9 +212,9 @@ def main() -> int:
         if existing is not None:
             source_id = existing
         else:
-            from enterprise_energy_research.domain.ids import new_sortable_id
-            from enterprise_energy_research.domain.models import Source
-            from enterprise_energy_research.domain.enums import SourceLevel
+            from energy_research_agent.domain.ids import new_sortable_id
+            from energy_research_agent.domain.models import Source
+            from energy_research_agent.domain.enums import SourceLevel
             source_id = new_sortable_id("source")
             evidence.sources.append(Source(
                 source_id=source_id, canonical_url=url,  # type: ignore[arg-type]
@@ -412,7 +412,7 @@ def main() -> int:
     manifest.complexity = run_manifest.complexity
     fix_store.replace_run_manifest(manifest)
 
-    from enterprise_energy_research.research.content_contract import CoreResearchReadinessGate
+    from energy_research_agent.research.content_contract import CoreResearchReadinessGate
     readiness = CoreResearchReadinessGate().assess(
         entities=runner.cumulative.entities, claims=runner.cumulative.claims,
         edges=runner.cumulative.edges, factories=runner.cumulative.factories,
@@ -420,7 +420,7 @@ def main() -> int:
         is_large_enterprise=True, minimum_substantive_claims=20,
     )
     print("[recovery] readiness:", readiness["status"])
-    from enterprise_energy_research.research.data_coverage import ResearchDataCoverageValidator
+    from energy_research_agent.research.data_coverage import ResearchDataCoverageValidator
     coverage = ResearchDataCoverageValidator().audit(
         entity_name=(canonical_entity.canonical_name if canonical_entity else "目标企业"), claims=runner.cumulative.claims,
         products=runner.cumulative.products, factories=runner.cumulative.factories,
@@ -449,7 +449,7 @@ def main() -> int:
         final_summary = {
             "run_id": run_id,
             "run_status": "COMPLETED",
-            "network_mode": "direct" if not os.getenv("EER_OUTBOUND_PROXY") else "proxy",
+            "network_mode": "direct" if not os.getenv("ERA_OUTBOUND_PROXY") else "proxy",
             "recovered_from": str(args.evidence),
             "evidence_store": str(fix_path),
             "freeze_id": freeze_id,

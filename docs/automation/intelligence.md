@@ -42,7 +42,7 @@ n8n（每天 10:00）→ POST /api/v1/intelligence/daily
 - 简报保存在 `workdir/intelligence/<日期>.json`（防重依据）
 - 全部候选审计保存在 `workdir/intelligence/freshness-audit/<日期>.json`
 - 跨日报首次发现与内容版本保存在 `workdir/intelligence/freshness-ledger.json`
-- 需要 `EER_AUTOMATION_EXECUTOR=orchestrating` + LLM 网关（DeepSeek）
+- 需要 `ERA_AUTOMATION_EXECUTOR=orchestrating` + LLM 网关（DeepSeek）
 - 采集查询集可改：`automation/intelligence/collector.py` 的 `DAILY_QUERIES`
 
 ## Freshness Gate 与筛选

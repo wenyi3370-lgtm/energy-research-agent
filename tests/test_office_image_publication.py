@@ -9,17 +9,17 @@ from pathlib import Path
 
 from PIL import Image
 
-from enterprise_energy_research.artifacts.ppt import PptMasterFrozenPublisher
-from enterprise_energy_research.artifacts.word import FrozenWordPublisher
-from enterprise_energy_research.artifacts.image_publication import prepare_publication_images
-from enterprise_energy_research.domain.enums import ArtifactType, RunStatus
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import ExtractedEvidenceBatch, RunManifest
-from enterprise_energy_research.evidence.freeze import FreezeService
-from enterprise_energy_research.evidence.store import EvidenceStore
-from enterprise_energy_research.graph.phase3_runner import Phase3Runner
-from enterprise_energy_research.graph.state import ResearchState
-from enterprise_energy_research.settings import load_yaml
+from energy_research_agent.artifacts.ppt import PptMasterFrozenPublisher
+from energy_research_agent.artifacts.word import FrozenWordPublisher
+from energy_research_agent.artifacts.image_publication import prepare_publication_images
+from energy_research_agent.domain.enums import ArtifactType, RunStatus
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import ExtractedEvidenceBatch, RunManifest
+from energy_research_agent.evidence.freeze import FreezeService
+from energy_research_agent.evidence.store import EvidenceStore
+from energy_research_agent.graph.phase3_runner import Phase3Runner
+from energy_research_agent.graph.state import ResearchState
+from energy_research_agent.settings import load_yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,8 +73,8 @@ class OfficeImagePublicationTests(unittest.TestCase):
             "image_ids": [logo.image_id, product.image_id, factory.image_id],
         })
         # PPT 已从交付流程移除（planner 不再计划），手工构造绑定以测试 ppt 模块图片契约
-        from enterprise_energy_research.domain.models import ArtifactBinding
-        from enterprise_energy_research.domain.enums import ArtifactStatus
+        from energy_research_agent.domain.models import ArtifactBinding
+        from energy_research_agent.domain.enums import ArtifactStatus
 
         ppt_binding = ArtifactBinding(
             artifact_id="ART-PPT-IMG", type=ArtifactType.PPT, status=ArtifactStatus.PLANNED,

@@ -9,10 +9,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from enterprise_energy_research.adapters.base import AdapterHealth, SearchHit, SearchResultEnvelope
-from enterprise_energy_research.domain.enums import EnterpriseComplexity
-from enterprise_energy_research.research.evidence_delta import DeltaSaturation, EvidenceDelta, EvidenceSnapshot
-from enterprise_energy_research.research.production_runner import AdaptiveResearchRunner
+from energy_research_agent.adapters.base import AdapterHealth, SearchHit, SearchResultEnvelope
+from energy_research_agent.domain.enums import EnterpriseComplexity
+from energy_research_agent.research.evidence_delta import DeltaSaturation, EvidenceDelta, EvidenceSnapshot
+from energy_research_agent.research.production_runner import AdaptiveResearchRunner
 
 
 def claim_dict(entity_key: str, field: str, value: str) -> dict:
@@ -288,7 +288,7 @@ class AdaptiveRoundTests(unittest.TestCase):
             return []
 
         with tempfile.TemporaryDirectory() as temp, patch(
-            "enterprise_energy_research.research.executor.SearchExecutor.execute",
+            "energy_research_agent.research.executor.SearchExecutor.execute",
             new=capture_execute,
         ):
             runner.run(
@@ -319,8 +319,8 @@ class AdaptiveRoundTests(unittest.TestCase):
 
 class FulltextPassTests(unittest.TestCase):
     def test_fulltext_pass_fetches_real_pages_via_anysearch_extract(self) -> None:
-        from enterprise_energy_research.adapters.base import AdapterHealth, SearchHit
-        from enterprise_energy_research.research.production_runner import AdaptiveResearchRunner
+        from energy_research_agent.adapters.base import AdapterHealth, SearchHit
+        from energy_research_agent.research.production_runner import AdaptiveResearchRunner
 
         class FakeAnySearch:
             name = "anysearch"

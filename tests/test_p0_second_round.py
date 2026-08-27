@@ -11,17 +11,17 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 
-from enterprise_energy_research.artifacts.html import FrozenHtmlPublisher
-from enterprise_energy_research.artifacts.narrative import NarrativeBuilder
-from enterprise_energy_research.artifacts.word import FrozenWordPublisher
-from enterprise_energy_research.domain.enums import ArtifactType
-from enterprise_energy_research.research.decision_synthesis import ENERGY_FIELDS
-from enterprise_energy_research.research.opportunity_assessment import OpportunityAssessmentEngine
-from enterprise_energy_research.research.product_detail_frontier import (
+from energy_research_agent.artifacts.html import FrozenHtmlPublisher
+from energy_research_agent.artifacts.narrative import NarrativeBuilder
+from energy_research_agent.artifacts.word import FrozenWordPublisher
+from energy_research_agent.domain.enums import ArtifactType
+from energy_research_agent.research.decision_synthesis import ENERGY_FIELDS
+from energy_research_agent.research.opportunity_assessment import OpportunityAssessmentEngine
+from energy_research_agent.research.product_detail_frontier import (
     BoundedBrowserWorkerPool, PersistentProductDetailQueue, ProductDetailPageResult,
     normalize_url,
 )
-from enterprise_energy_research.validation.consulting_narrative import (
+from energy_research_agent.validation.consulting_narrative import (
     BrowserExecutionValidator, ConsultingNarrativeValidator,
     PublicationVisibleTextValidator, TOCValidator, cjk_count,
 )

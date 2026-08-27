@@ -30,19 +30,19 @@ from datetime import date
 from pathlib import Path
 from xml.etree import ElementTree
 
-from enterprise_energy_research.artifacts.html import FrozenHtmlPublisher
-from enterprise_energy_research.artifacts.narrative import NarrativeBuilder, publishable_images
-from enterprise_energy_research.artifacts.visual_opportunity import VisualOpportunityPlanner
-from enterprise_energy_research.artifacts.word import FrozenWordPublisher
-from enterprise_energy_research.domain.enums import ArtifactType, VerificationStatus
-from enterprise_energy_research.research.data_coverage import ResearchDataCoverageValidator
-from enterprise_energy_research.research.product_images import ProductImageResolver
-from enterprise_energy_research.research.publication_relevance import PublicationRelevanceFilter
-from enterprise_energy_research.research.research_analysis import ResearchAnalysisEngine
-from enterprise_energy_research.validation.consulting_narrative import (
+from energy_research_agent.artifacts.html import FrozenHtmlPublisher
+from energy_research_agent.artifacts.narrative import NarrativeBuilder, publishable_images
+from energy_research_agent.artifacts.visual_opportunity import VisualOpportunityPlanner
+from energy_research_agent.artifacts.word import FrozenWordPublisher
+from energy_research_agent.domain.enums import ArtifactType, VerificationStatus
+from energy_research_agent.research.data_coverage import ResearchDataCoverageValidator
+from energy_research_agent.research.product_images import ProductImageResolver
+from energy_research_agent.research.publication_relevance import PublicationRelevanceFilter
+from energy_research_agent.research.research_analysis import ResearchAnalysisEngine
+from energy_research_agent.validation.consulting_narrative import (
     ConsultingNarrativeValidator, PublicationVisibleTextValidator, cjk_count,
 )
-from enterprise_energy_research.validation.publication_quality import (
+from energy_research_agent.validation.publication_quality import (
     BOILERPLATE_PHRASES,
     ParagraphSimilarityValidator,
     PublicationBoilerplateValidator,
@@ -130,7 +130,7 @@ def _rich_financial_claims(bundle):
             "raw_text": "2025 年经营活动现金流 250 亿元", "context_text": "2025 年度经营活动产生的现金流量净额 250 亿元",
         }),
     ])
-    from enterprise_energy_research.domain.models import Factory, Product, ProductParameter
+    from energy_research_agent.domain.models import Factory, Product, ProductParameter
     second_factory = Factory(
         factory_id="FAC-RICH-2", operator_entity_id=bundle.factories[0].operator_entity_id,
         name="惠州生产基地", address="广东省惠州市", processes=["电池制造", "检测"],
@@ -430,7 +430,7 @@ class ThirdRoundP0Tests(unittest.TestCase):
         self.assertEqual(base.status, "GAPS")
         codes = {gap.gap_code for gap in base.gaps}
         self.assertIn("coverage-product-parameters", codes, "1-parameter catalog must trigger the parameter gap")
-        # Fifth-round contract is intentionally stricter: the old rich fixture
+        # The publication contract is intentionally stricter: this fixture
         # still lacks 3-year operating cash flow, capacity and product images.
         rich = ResearchDataCoverageValidator().audit(
             entity_name="示例", claims=self.rich_bundle.claims, products=self.rich_bundle.products,
@@ -448,14 +448,14 @@ class ThirdRoundP0Tests(unittest.TestCase):
     # ── P0 third-round hardening lessons (image + financial pitfalls) ──────
     def test_lesson_phone_regex_never_matches_large_integers(self):
         """11-digit financial values (e.g. 12000000000 元) are NOT phones."""
-        from enterprise_energy_research.research.publication_relevance import PHONE_RE
+        from energy_research_agent.research.publication_relevance import PHONE_RE
         self.assertIsNone(PHONE_RE.search("12000000000"))
         self.assertIsNone(PHONE_RE.search("423701834000"))
         self.assertIsNotNone(PHONE_RE.search("400-918-0889"))
 
     def test_lesson_cross_year_claims_do_not_conflict(self):
         """2022 revenue and 2023 revenue are different facts — never one conflict group."""
-        from enterprise_energy_research.research.claim_validator import ClaimValidator
+        from energy_research_agent.research.claim_validator import ClaimValidator
         source = self.bundle.claims[0]
         rows = [
             source.model_copy(update={
@@ -507,7 +507,7 @@ class ThirdRoundP0Tests(unittest.TestCase):
 
     def test_lesson_vision_verdict_trailing_score(self):
         """'3) 1.0' without the 置信度 word still parses as score 1.0."""
-        from enterprise_energy_research.research.vision import parse_vision_text
+        from energy_research_agent.research.vision import parse_vision_text
         verdict = parse_vision_text(
             "1) 产品\n2) 图中是一辆汽车的半透明三维效果图，车身底部展示了电池包。\n3) 1.0"
         )
@@ -517,7 +517,7 @@ class ThirdRoundP0Tests(unittest.TestCase):
         self.assertFalse(blank.verified)
 
     def test_lesson_requirement_queries_route_topics(self):
-        from enterprise_energy_research.research.planner import ResearchPlanner
+        from energy_research_agent.research.planner import ResearchPlanner
         queries = ResearchPlanner().requirement_queries("宁德时代", "补充2022年营业收入和利润；增加产品图片")
         topics = {query.topic for query in queries}
         self.assertIn("revenue", topics)
@@ -531,7 +531,7 @@ class ThirdRoundP0Tests(unittest.TestCase):
         ))
 
     def test_requirement_parser_recognizes_all_intents_without_delimiters(self):
-        from enterprise_energy_research.research.planner import ResearchPlanner
+        from energy_research_agent.research.planner import ResearchPlanner
         text = "请把主营业务生产基地产品线产能财务核心客户全部补齐"
         queries = ResearchPlanner().requirement_queries("杉杉股份", text)
         topics = [query.topic for query in queries]
@@ -541,7 +541,7 @@ class ThirdRoundP0Tests(unittest.TestCase):
         self.assertTrue(all(query.adapter_preference == "anysearch" for query in queries))
 
     def test_requirement_parser_routes_competition_and_sales_channels(self):
-        from enterprise_energy_research.research.planner import ResearchPlanner
+        from energy_research_agent.research.planner import ResearchPlanner
         text = "补充星星充电产品情况加工工厂竞争情况以及销售渠道"
         queries = ResearchPlanner().requirement_queries("星星充电", text)
         topics = {query.topic for query in queries}
@@ -552,8 +552,8 @@ class ThirdRoundP0Tests(unittest.TestCase):
         self.assertTrue(all(query.adapter_preference == "anysearch" for query in queries))
 
     def test_targeted_plan_is_additive_and_does_not_change_fixed_full_plan(self):
-        from enterprise_energy_research.domain.enums import EnterpriseComplexity
-        from enterprise_energy_research.research.planner import ResearchPlanner
+        from energy_research_agent.domain.enums import EnterpriseComplexity
+        from energy_research_agent.research.planner import ResearchPlanner
         planner = ResearchPlanner()
         budget = {"max_queries": 180, "max_pages": 240}
         base = planner.build("RUN", "ENT", "宁德时代", EnterpriseComplexity.GROUP_LARGE, budget)
@@ -568,7 +568,7 @@ class ThirdRoundP0Tests(unittest.TestCase):
         self.assertTrue(all(rounds == {"R1", "R2", "R3"} for rounds in rounds_by_topic.values()))
 
     def test_lesson_deep_research_payload_contract(self):
-        from enterprise_energy_research.automation.contracts import DeepResearchPayload
+        from energy_research_agent.automation.contracts import DeepResearchPayload
         payload = DeepResearchPayload(requirements="补充 2022 年利润", run_dir="build/live_acceptance/宁德时代-20260822-r3")
         self.assertEqual(payload.requested_by, "portal-user")
         self.assertTrue(payload.include_images)
@@ -579,10 +579,10 @@ class ThirdRoundP0Tests(unittest.TestCase):
 
     def test_deep_research_store_lookup_prefers_latest_fixed_evidence(self):
         import os
-        from enterprise_energy_research.domain.enums import RunStatus
-        from enterprise_energy_research.domain.models import RunManifest
-        from enterprise_energy_research.evidence.store import EvidenceStore
-        from enterprise_energy_research.research.deep_retry import find_evidence_store
+        from energy_research_agent.domain.enums import RunStatus
+        from energy_research_agent.domain.models import RunManifest
+        from energy_research_agent.evidence.store import EvidenceStore
+        from energy_research_agent.research.deep_retry import find_evidence_store
 
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "company-run"

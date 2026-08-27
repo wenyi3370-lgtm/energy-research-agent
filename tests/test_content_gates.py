@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import unittest
 
-from enterprise_energy_research.domain.enums import VerificationStatus
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import Claim, Entity, Source
-from enterprise_energy_research.research.content_contract import (
+from energy_research_agent.domain.enums import VerificationStatus
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import Claim, Entity, Source
+from energy_research_agent.research.content_contract import (
     CHAPTER_CONTRACTS, CoreResearchReadinessGate, PlaceholderContentGate,
     chapter_substantive_facts, placeholder_ratio,
 )

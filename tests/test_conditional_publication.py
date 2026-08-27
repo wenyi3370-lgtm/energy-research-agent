@@ -11,9 +11,9 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from enterprise_energy_research.artifacts.html import FrozenHtmlPublisher
-from enterprise_energy_research.artifacts.word import FrozenWordPublisher
-from enterprise_energy_research.automation.contracts import DeepResearchPayload
+from energy_research_agent.artifacts.html import FrozenHtmlPublisher
+from energy_research_agent.artifacts.word import FrozenWordPublisher
+from energy_research_agent.automation.contracts import DeepResearchPayload
 
 from tests.test_office_image_publication import OfficeImagePublicationTests
 
@@ -32,7 +32,7 @@ class ConditionalBannerTests(unittest.TestCase):
     def _conditional_bundle(self, temp: str):
         base = OfficeImagePublicationTests()
         bundle, word_binding, html_binding = base._bundle_and_bindings(temp)
-        from enterprise_energy_research.domain.enums import ArtifactType
+        from energy_research_agent.domain.enums import ArtifactType
         html_binding = html_binding.model_copy(update={"type": ArtifactType.ENTERPRISE_HTML})
         scope = dict(bundle.run_manifest.research_scope or {})
         scope["publication_mode"] = "conditional"
@@ -77,7 +77,7 @@ class PublishConditionallyHelperTests(unittest.TestCase):
     def test_helper_marks_run_manifest_and_calls_conditional_freeze(self) -> None:
         from unittest.mock import MagicMock, patch
 
-        from enterprise_energy_research.research import deep_retry
+        from energy_research_agent.research import deep_retry
 
         store = MagicMock()
         manifest = MagicMock()
@@ -85,7 +85,7 @@ class PublishConditionallyHelperTests(unittest.TestCase):
         store.get_run.return_value = manifest
         # AdaptiveResearchRunner is imported lazily inside the helper, so the
         # patch must target the defining module.
-        with patch("enterprise_energy_research.research.production_runner.AdaptiveResearchRunner") as runner_cls:
+        with patch("energy_research_agent.research.production_runner.AdaptiveResearchRunner") as runner_cls:
             runner_cls.return_value._freeze_and_publish.return_value = ("FREEZE-1", [])
             result = deep_retry.publish_conditionally(
                 store, "RUN-1", Path("/tmp/out"),

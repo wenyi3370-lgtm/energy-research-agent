@@ -8,13 +8,13 @@ os.environ["HTTP_PROXY"] = "http://127.0.0.1:7897"
 os.environ["NO_PROXY"] = "127.0.0.1,localhost"
 os.environ["no_proxy"] = "127.0.0.1,localhost"
 
-from enterprise_energy_research.settings import Settings
-from enterprise_energy_research.gateway import LiteLLMModelGateway
-from enterprise_energy_research.agent.mission_parser import MissionParser
-from enterprise_energy_research.agent.goal_planner import GoalPlanner
-from enterprise_energy_research.agent.router import ResearchSkillRouter
-from enterprise_energy_research.agent.models import ResearchMission, ResearchMode
-from enterprise_energy_research.domain.ids import new_sortable_id
+from energy_research_agent.settings import Settings
+from energy_research_agent.gateway import LiteLLMModelGateway
+from energy_research_agent.agent.mission_parser import MissionParser
+from energy_research_agent.agent.goal_planner import GoalPlanner
+from energy_research_agent.agent.router import ResearchSkillRouter
+from energy_research_agent.agent.models import ResearchMission, ResearchMode
+from energy_research_agent.domain.ids import new_sortable_id
 
 gateway = LiteLLMModelGateway(Settings())
 parser = MissionParser(gateway)

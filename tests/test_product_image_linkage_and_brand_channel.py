@@ -57,7 +57,7 @@ class UnlinkedProductImageChapterTests(unittest.TestCase):
         }
 
     def test_products_chapter_includes_unlinked_product_images(self) -> None:
-        from enterprise_energy_research.artifacts.narrative import NarrativeBuilder
+        from energy_research_agent.artifacts.narrative import NarrativeBuilder
 
         with tempfile.TemporaryDirectory() as temp:
             bundle, extra_ids = self._bundle_with_unlinked_product_images(temp)
@@ -72,7 +72,7 @@ class UnlinkedProductImageChapterTests(unittest.TestCase):
             self.assertTrue(extra_ids <= set(ids), f"missing: {extra_ids - set(ids)}")
 
     def test_products_chapter_prefers_linked_images_first(self) -> None:
-        from enterprise_energy_research.artifacts.narrative import NarrativeBuilder
+        from energy_research_agent.artifacts.narrative import NarrativeBuilder
 
         with tempfile.TemporaryDirectory() as temp:
             bundle, extra_ids = self._bundle_with_unlinked_product_images(temp)

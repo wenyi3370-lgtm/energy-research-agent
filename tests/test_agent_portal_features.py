@@ -15,8 +15,8 @@ from typing import Any
 
 from test_agent_orchestration import FakeGateway, FakeSkill, make_orchestrator
 
-from enterprise_energy_research.agent.mission_parser import CustomGoalSpec, MissionParseResult
-from enterprise_energy_research.agent.models import (
+from energy_research_agent.agent.mission_parser import CustomGoalSpec, MissionParseResult
+from energy_research_agent.agent.models import (
     ApprovalStatus,
     GoalClass,
     GoalStatus,
@@ -25,7 +25,7 @@ from enterprise_energy_research.agent.models import (
     ResearchMode,
     SkillName,
 )
-from enterprise_energy_research.domain.ids import new_sortable_id
+from energy_research_agent.domain.ids import new_sortable_id
 
 
 def pending_approval_cb(mission, goals, routing):
@@ -370,11 +370,11 @@ class TestAgentPortalApi(unittest.TestCase):
 
         from fastapi.testclient import TestClient
 
-        from enterprise_energy_research.automation.api.app import create_app
-        from enterprise_energy_research.automation.executor import SyntheticKernelExecutor
+        from energy_research_agent.automation.api.app import create_app
+        from energy_research_agent.automation.executor import SyntheticKernelExecutor
 
         tmp = Path(tempfile.mkdtemp(prefix="agent-portal-api-"))
-        with patch.dict(os.environ, {"EER_DEEPSEEK_API_KEY": "", "EER_OPENAI_API_KEY": ""}, clear=False):
+        with patch.dict(os.environ, {"ERA_DEEPSEEK_API_KEY": "", "ERA_OPENAI_API_KEY": ""}, clear=False):
             app = create_app(executor=SyntheticKernelExecutor(), workdir=tmp)
         self.assertTrue(app.state.agent_enabled)
         return TestClient(app), app.state.agent_orchestrator

@@ -1,28 +1,28 @@
-"""Phase 2 service-layer tests: workflow rules around the state machine."""
+"""Agent service-layer tests: workflow rules around the state machine."""
 
 import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.automation.contracts import (
+from energy_research_agent.automation.contracts import (
     ArtifactRef,
     ResearchRequest,
     ReviewSubmission,
 )
-from enterprise_energy_research.automation.db import (
+from energy_research_agent.automation.db import (
     AutomationDatabase,
     DuplicateTaskError,
     RunNotFoundError,
 )
-from enterprise_energy_research.automation.enums import ReviewDecision, TaskStatus
-from enterprise_energy_research.automation.executor import ExecutionOutcome
-from enterprise_energy_research.automation.feishu import FeishuNotifier, MockFeishuAdapter
-from enterprise_energy_research.automation.service import (
+from energy_research_agent.automation.enums import ReviewDecision, TaskStatus
+from energy_research_agent.automation.executor import ExecutionOutcome
+from energy_research_agent.automation.feishu import FeishuNotifier, MockFeishuAdapter
+from energy_research_agent.automation.service import (
     ResearchService,
     RetryExhaustedError,
 )
-from enterprise_energy_research.automation.state_machine import InvalidTransitionError
-from enterprise_energy_research.domain.enums import (
+from energy_research_agent.automation.state_machine import InvalidTransitionError
+from energy_research_agent.domain.enums import (
     ArtifactStatus,
     ArtifactType,
     ValidationStatus,
@@ -111,7 +111,7 @@ class TestSubmit(ServiceTestCase):
         self.assertEqual(result.task_id, "TH_BESS_001")
         self.assertEqual(result.status, TaskStatus.QUEUED)
         with self._session() as session:
-            from enterprise_energy_research.automation.db import TaskRepository
+            from energy_research_agent.automation.db import TaskRepository
 
             repo = TaskRepository(session)
             task = repo.get_task("TH_BESS_001")
@@ -168,7 +168,7 @@ class TestExecuteRun(ServiceTestCase):
         self.assertEqual(self.executor.research_calls, 1)
         self.assertEqual(len(final.artifact_manifest), 1)
         with self._session() as session:
-            from enterprise_energy_research.automation.db import TaskRepository
+            from energy_research_agent.automation.db import TaskRepository
 
             repo = TaskRepository(session)
             chain = [
@@ -212,7 +212,7 @@ class TestExecuteRun(ServiceTestCase):
         self.assertIn("CONFLICT_01", approved.review_reasons[0])
         self.assertEqual(self.executor.freeze_calls, 1)
         with self._session() as session:
-            from enterprise_energy_research.automation.db import TaskRepository
+            from energy_research_agent.automation.db import TaskRepository
 
             reviews = TaskRepository(session).list_reviews(result.run_id)
         self.assertEqual(reviews, [])
@@ -295,7 +295,7 @@ class TestFailuresAndRetry(ServiceTestCase):
 
     def test_watchdog_failure_cannot_be_revived_by_late_executor_return(self):
         from datetime import datetime, timedelta, timezone
-        from enterprise_energy_research.automation.db import TaskRepository
+        from energy_research_agent.automation.db import TaskRepository
 
         def terminate_as_stale(run_id):
             with self._session() as session:
@@ -447,7 +447,7 @@ class TestFailuresAndRetry(ServiceTestCase):
         self.assertEqual(published.status, TaskStatus.PUBLISHED)
         self.assertIsNone(published.error)
         with self._session() as session:
-            from enterprise_energy_research.automation.db import TaskRepository
+            from energy_research_agent.automation.db import TaskRepository
 
             row = TaskRepository(session).get_run(submitted.run_id)
             self.assertIsNone(row.error_type)
@@ -494,8 +494,8 @@ class TestSyntheticKernelExecutorSmoke(unittest.TestCase):
     def test_fixture_research_and_validate_produces_outcome(self):
         import json
 
-        from enterprise_energy_research.automation.executor import SyntheticKernelExecutor
-        from enterprise_energy_research.domain.models import ExtractedEvidenceBatch
+        from energy_research_agent.automation.executor import SyntheticKernelExecutor
+        from energy_research_agent.domain.models import ExtractedEvidenceBatch
 
         payload = json.loads(
             (self.ROOT / "tests" / "fixtures" / "normal_manufacturer.json").read_text(encoding="utf-8")
@@ -508,7 +508,7 @@ class TestSyntheticKernelExecutorSmoke(unittest.TestCase):
             self.assertEqual(outcome.validation_status, ValidationStatus.PASS)
             self.assertGreater(outcome.evidence_count, 0)
             self.assertFalse(outcome.review_required)
-            from enterprise_energy_research.evidence.store import EvidenceStore
+            from energy_research_agent.evidence.store import EvidenceStore
 
             store = EvidenceStore(Path(tmp) / "RUN-SMOKE" / "evidence.sqlite3")
             self.assertGreater(len(store.list("RUN-SMOKE", "entity")), 0)
@@ -516,8 +516,8 @@ class TestSyntheticKernelExecutorSmoke(unittest.TestCase):
     def test_service_full_path_publishes_when_fixture_artifact_qa_passes(self):
         import json
 
-        from enterprise_energy_research.automation.executor import SyntheticKernelExecutor
-        from enterprise_energy_research.domain.models import ExtractedEvidenceBatch
+        from energy_research_agent.automation.executor import SyntheticKernelExecutor
+        from energy_research_agent.domain.models import ExtractedEvidenceBatch
 
         payload = json.loads(
             (self.ROOT / "tests" / "fixtures" / "small_simple.json").read_text(encoding="utf-8")

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from enterprise_energy_research.gateway.base import ModelRequest
-from enterprise_energy_research.gateway.http_json_gateway import HttpJsonModelGateway
-from enterprise_energy_research.settings import Settings
+from energy_research_agent.gateway.base import ModelRequest
+from energy_research_agent.gateway.http_json_gateway import HttpJsonModelGateway
+from energy_research_agent.settings import Settings
 
 
 def test_http_gateway_uses_bounded_network_settings_and_proxy() -> None:

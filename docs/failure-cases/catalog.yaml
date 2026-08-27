@@ -1,6 +1,5 @@
-# Failure Case Library (Phase 13) — cases are written from real incidents,
-# including the 2026-08-19 LLM quota outage that interrupted this very
-# project's Phase 2 subagent.
+# Failure Case Library — cases are written from observed Agent incidents,
+# not hypothetical failures.
 schema_version: "1.0"
 cases:
   - case_id: "FC-001"
@@ -19,7 +18,7 @@ cases:
     symptom: "SearchExecutor 返回 blocked envelope：Approved adapter is not configured"
     root_cause: "AnySearch / Kimi WebBridge 未配置或 health() 不可用"
     detection: "outcome.review_reasons 含 'adapter not available'；evidence_count == 0"
-    recovery: "检查 EER_* 凭证与 vendor skill 根目录；修复后重试 run（FAILED→RETRYING→QUEUED）"
+    recovery: "检查 ERA_* 凭证与 vendor skill 根目录；修复后重试 run（FAILED→RETRYING→QUEUED）"
     prevent: "OrchestratingExecutor.from_environment 用 UnconfiguredSearchAdapter 兜底，绝不静默降级为猜测数据"
     tags: ["adapter", "fail-closed", "search"]
 
@@ -29,7 +28,7 @@ cases:
     symptom: "artifact manifest 中 excel/word/html 状态为 failed；审计报告 ARTIFACT_NOT_PUBLISHED"
     root_cause: "publisher 依赖缺失（如 pandas/openpyxl）、磁盘问题或绑定外事实被审计拒绝"
     detection: "ArtifactConsistencyAuditor findings 非空；ArtifactResult.status == failed"
-    recovery: "安装缺失依赖（Phase 4 已把 requests/openpyxl/pandas 声明进 pyproject）；修复后对同一冻结包重跑发布"
+    recovery: "安装 pyproject 中声明的 requests/openpyxl/pandas；修复后对同一冻结包重跑发布"
     prevent: "发布前跑 publisher health()；fixture 模式必须显式标注，生产 run 禁止落入 fixture 后门"
     tags: ["publisher", "artifact", "dependencies"]
 

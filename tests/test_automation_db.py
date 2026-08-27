@@ -1,20 +1,20 @@
 import unittest
 
-from enterprise_energy_research.automation.contracts import (
+from energy_research_agent.automation.contracts import (
     CostMetrics,
     ResearchError,
     ResearchRequest,
     ResearchResult,
 )
-from enterprise_energy_research.automation.db import (
+from energy_research_agent.automation.db import (
     AutomationDatabase,
     DuplicateTaskError,
     RunNotFoundError,
     TaskRepository,
 )
-from enterprise_energy_research.automation.enums import TaskStatus
-from enterprise_energy_research.automation.state_machine import InvalidTransitionError
-from enterprise_energy_research.domain.enums import ValidationStatus
+from energy_research_agent.automation.enums import TaskStatus
+from energy_research_agent.automation.state_machine import InvalidTransitionError
+from energy_research_agent.domain.enums import ValidationStatus
 
 
 def make_request(task_id: str = "TH_BESS_001", **overrides) -> ResearchRequest:
@@ -191,7 +191,7 @@ class TestReviewsMetricsFeedback(DbTestCase):
             human_review_minutes=35.0,
             human_edit_count=2,
         )
-        from enterprise_energy_research.automation.db.models import UserFeedbackRow
+        from energy_research_agent.automation.db.models import UserFeedbackRow
 
         row = self.session.get(UserFeedbackRow, "FB-1")
         self.assertEqual(row.adoption_status, "ADOPTED")
@@ -199,7 +199,7 @@ class TestReviewsMetricsFeedback(DbTestCase):
         self.assertEqual(row.human_review_minutes, 35.0)
 
     def test_no_secret_columns_exist(self):
-        from enterprise_energy_research.automation.db import models
+        from energy_research_agent.automation.db import models
 
         forbidden = {"api_key", "password", "secret", "token", "cookie"}
         for table in models.Base.metadata.tables.values():

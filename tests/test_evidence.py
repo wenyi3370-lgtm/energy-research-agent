@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.domain.enums import RunStatus, SourceLevel, VerificationStatus
-from enterprise_energy_research.domain.models import Claim, Entity, RunManifest, Source
-from enterprise_energy_research.evidence.freeze import FreezeService
-from enterprise_energy_research.evidence.store import EvidenceStore, EvidenceStoreError
-from enterprise_energy_research.validation.core import CoreValidator
+from energy_research_agent.domain.enums import RunStatus, SourceLevel, VerificationStatus
+from energy_research_agent.domain.models import Claim, Entity, RunManifest, Source
+from energy_research_agent.evidence.freeze import FreezeService
+from energy_research_agent.evidence.store import EvidenceStore, EvidenceStoreError
+from energy_research_agent.validation.core import CoreValidator
 
 
 class EvidenceTests(unittest.TestCase):

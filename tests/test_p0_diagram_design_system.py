@@ -19,30 +19,30 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.analysis.financials import FinancialAnalyst, parse_number
-from enterprise_energy_research.artifacts.diagram_design_adapter import DiagramDesignAdapter
-from enterprise_energy_research.artifacts.html import FrozenHtmlPublisher
-from enterprise_energy_research.artifacts.image_publication import prepare_publication_images, publication_eligible
-from enterprise_energy_research.artifacts.narrative import (
+from energy_research_agent.analysis.financials import FinancialAnalyst, parse_number
+from energy_research_agent.artifacts.diagram_design_adapter import DiagramDesignAdapter
+from energy_research_agent.artifacts.html import FrozenHtmlPublisher
+from energy_research_agent.artifacts.image_publication import prepare_publication_images, publication_eligible
+from energy_research_agent.artifacts.narrative import (
     IMAGE_BUDGETS,
     NarrativeBuilder,
     publishable_images,
 )
-from enterprise_energy_research.artifacts.visual_router import RULES, VisualProposal, VisualRouter
-from enterprise_energy_research.artifacts.visuals import VisualDatum, VisualNode, VisualSpec, VisualStage
-from enterprise_energy_research.artifacts.word import FrozenWordPublisher
-from enterprise_energy_research.domain.enums import ArtifactType, RunStatus, VerificationStatus
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import (
+from energy_research_agent.artifacts.visual_router import RULES, VisualProposal, VisualRouter
+from energy_research_agent.artifacts.visuals import VisualDatum, VisualNode, VisualSpec, VisualStage
+from energy_research_agent.artifacts.word import FrozenWordPublisher
+from energy_research_agent.domain.enums import ArtifactType, RunStatus, VerificationStatus
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import (
     Claim, EnterpriseEdge, ExtractedEvidenceBatch, RunManifest,
 )
-from enterprise_energy_research.evidence.freeze import FreezeService
-from enterprise_energy_research.evidence.store import EvidenceStore
-from enterprise_energy_research.graph.phase3_runner import Phase3Runner
-from enterprise_energy_research.graph.state import ResearchState
-from enterprise_energy_research.research.canonicalizers import FactoryCanonicalizer, ProductCanonicalizer, UnitNormalizer
-from enterprise_energy_research.settings import load_yaml
-from enterprise_energy_research.vendor import EMBEDDED_SKILLS
+from energy_research_agent.evidence.freeze import FreezeService
+from energy_research_agent.evidence.store import EvidenceStore
+from energy_research_agent.graph.phase3_runner import Phase3Runner
+from energy_research_agent.graph.state import ResearchState
+from energy_research_agent.research.canonicalizers import FactoryCanonicalizer, ProductCanonicalizer, UnitNormalizer
+from energy_research_agent.settings import load_yaml
+from energy_research_agent.vendor import EMBEDDED_SKILLS
 
 
 ROOT = Path(__file__).resolve().parents[1]

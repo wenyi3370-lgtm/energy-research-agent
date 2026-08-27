@@ -100,7 +100,7 @@ Required structure:
 
 Rules:
 
-- Apply [docs/archive/office-visual-production.md](docs/archive/office-visual-production.md), [references/fifth-round-quality-contract.md](references/fifth-round-quality-contract.md), and `config/office_visual_policy.yaml`; the fifth-round contract supersedes archived length-first rules.
+- Apply [references/publication-quality-contract.md](references/publication-quality-contract.md) and `config/office_visual_policy.yaml` as the current Word/PPT publication contract.
 - Use A4 with approximately 2.54 cm margins. Body is 12 pt SimSun plus Times New Roman, exactly 22 pt line spacing, two-character first-line indent and justified alignment. Heading 1/2/3 are 22/14/12 pt with controlled spacing and keep-with-next behavior.
 - Use formal three-line tables: 1.5 pt black top/bottom rules, 1 pt navy header rule, pale-blue header fill, no vertical/internal grid. Center the table on the page; center every cell horizontally and vertically; explicitly set every cell paragraph's first-line, left and right indents to zero. `Table Grid` is prohibited in formal output.
 - Formal depth follows research density rather than a character/page quota. Target a 50% facts/data, 35% analysis/insight and 15% constraints/limitations mix.

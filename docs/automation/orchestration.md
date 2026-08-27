@@ -1,6 +1,6 @@
 # 编排接线（关键新增）
 
-审计发现（`architecture-audit.md` §2.2）：`ResearchPlanner → SearchExecutor →
+Agent 执行链将 `ResearchPlanner → SearchExecutor →
 EvidenceExtractor → DataSaturationValidator` 已实现但无生产 runner。
 `automation/orchestration.py` 的 `OrchestratingExecutor` 将其接成
 **由状态机驱动的确定性流水线**：

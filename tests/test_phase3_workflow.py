@@ -5,18 +5,18 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.domain.enums import (
+from energy_research_agent.domain.enums import (
     EnterpriseComplexity,
     ProductDashboardDecision,
     RunStatus,
     VerificationStatus,
 )
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import ExtractedEvidenceBatch, RunManifest
-from enterprise_energy_research.evidence.store import EvidenceStore
-from enterprise_energy_research.graph.phase3_runner import Phase3Runner
-from enterprise_energy_research.graph.state import ResearchState
-from enterprise_energy_research.settings import Settings, load_yaml
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import ExtractedEvidenceBatch, RunManifest
+from energy_research_agent.evidence.store import EvidenceStore
+from energy_research_agent.graph.phase3_runner import Phase3Runner
+from energy_research_agent.graph.state import ResearchState
+from energy_research_agent.settings import Settings, load_yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]

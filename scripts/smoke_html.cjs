@@ -6,7 +6,7 @@ const { writeFile } = require('node:fs/promises');
   const results = [];
   const browser = await chromium.launch({
     headless: true,
-    executablePath: process.env.EER_CHROME_PATH || 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
+    executablePath: process.env.ERA_CHROME_PATH || 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
   });
   for (const filename of ['enterprise_dashboard.html', 'product_dashboard.html']) {
     for (const width of [360, 768, 1440]) {

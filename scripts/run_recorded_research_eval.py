@@ -24,10 +24,10 @@ import argparse
 import json
 from pathlib import Path
 
-from enterprise_energy_research.domain.enums import VerificationStatus
-from enterprise_energy_research.domain.models import ExtractedEvidenceBatch
-from enterprise_energy_research.research.claim_validator import ClaimValidator
-from enterprise_energy_research.research.normalizer import EvidenceNormalizer
+from energy_research_agent.domain.enums import VerificationStatus
+from energy_research_agent.domain.models import ExtractedEvidenceBatch
+from energy_research_agent.research.claim_validator import ClaimValidator
+from energy_research_agent.research.normalizer import EvidenceNormalizer
 
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -4,7 +4,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from enterprise_energy_research.agent.market_production import MarketProductionPipeline
+from energy_research_agent.agent.market_production import MarketProductionPipeline
 
 
 def _write_csv(path: Path, header: list[str], rows: list[list[str]]) -> None:

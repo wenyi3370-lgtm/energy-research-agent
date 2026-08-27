@@ -1,6 +1,6 @@
 # Scheduled monitoring watchlist (Phase 14).
 # 已启用下面两项（第二项、第三项按需启用）。注意：
-# - 在真实研究模式（EER_AUTOMATION_EXECUTOR=orchestrating）下，把 company/
+# - 在真实研究模式（ERA_AUTOMATION_EXECUTOR=orchestrating）下，把 company/
 #   country/product 改成你真正要盯的对象，否则研究的是示例占位。
 # - 运行方式：python scripts/run_monitor.py（小白一键调度），或 cron/n8n 定时调用。
 schema_version: "1.0"

@@ -16,9 +16,9 @@ from pathlib import Path
 
 from PIL import Image
 
-from enterprise_energy_research.artifacts.html import FrozenHtmlPublisher
-from enterprise_energy_research.artifacts.word import FrozenWordPublisher
-from enterprise_energy_research.domain.enums import ArtifactType
+from energy_research_agent.artifacts.html import FrozenHtmlPublisher
+from energy_research_agent.artifacts.word import FrozenWordPublisher
+from energy_research_agent.domain.enums import ArtifactType
 
 from tests.test_office_image_publication import OfficeImagePublicationTests
 

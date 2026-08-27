@@ -9,26 +9,26 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.domain.enums import RunStatus, VerificationStatus
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import (
+from energy_research_agent.domain.enums import RunStatus, VerificationStatus
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import (
     Claim, CompanyCandidate, CompanyResolution, Entity, ExtractedEvidenceBatch,
     RunManifest, Source,
 )
-from enterprise_energy_research.evidence.store import EvidenceStore
-from enterprise_energy_research.graph.phase3_runner import Phase3Runner
-from enterprise_energy_research.graph.state import ResearchState
-from enterprise_energy_research.research.claim_validator import ClaimValidator
-from enterprise_energy_research.research.entity_mapper import EntityMapper
-from enterprise_energy_research.research.identity_evidence import (
+from energy_research_agent.evidence.store import EvidenceStore
+from energy_research_agent.graph.phase3_runner import Phase3Runner
+from energy_research_agent.graph.state import ResearchState
+from energy_research_agent.research.claim_validator import ClaimValidator
+from energy_research_agent.research.entity_mapper import EntityMapper
+from energy_research_agent.research.identity_evidence import (
     IdentityEvidenceContract, IdentityEvidenceSynthesizer,
 )
-from enterprise_energy_research.research.normalizer import EvidenceNormalizer
-from enterprise_energy_research.research.profiles import (
+from energy_research_agent.research.normalizer import EvidenceNormalizer
+from energy_research_agent.research.profiles import (
     CompanyProfile, CompanyProfileBuilder, PublishableEntityEvaluator,
 )
-from enterprise_energy_research.research.resolver import CompanyResolver
-from enterprise_energy_research.settings import load_yaml
+from energy_research_agent.research.resolver import CompanyResolver
+from energy_research_agent.settings import load_yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -307,9 +307,9 @@ class ProfileAndPublishableTests(unittest.TestCase):
         self.assertFalse(publishable)
 
     def test_word_body_contains_no_internal_metadata(self) -> None:
-        from enterprise_energy_research.artifacts.word import FrozenWordPublisher
-        from enterprise_energy_research.domain.enums import ArtifactType
-        from enterprise_energy_research.evidence.freeze import FreezeService
+        from energy_research_agent.artifacts.word import FrozenWordPublisher
+        from energy_research_agent.domain.enums import ArtifactType
+        from energy_research_agent.evidence.freeze import FreezeService
         with tempfile.TemporaryDirectory() as temp:
             store = EvidenceStore(Path(temp) / "evidence.sqlite3")
             run_id, request_id = new_sortable_id("RUN"), new_sortable_id("REQ")

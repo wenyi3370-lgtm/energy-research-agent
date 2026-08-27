@@ -89,12 +89,12 @@
 当前默认是"演示模式"（合成数据，为了让你先跑通流程）。要研究**真实企业**，
 需要两样东西：
 
-1. **一个 LLM 密钥**（任选）：DeepSeek 官网注册拿 `EER_DEEPSEEK_API_KEY`，
+1. **一个 LLM 密钥**（任选）：DeepSeek 官网注册拿 `ERA_DEEPSEEK_API_KEY`，
    或在 `docker-compose.yml` 里打开对应配置行；
 2. **浏览器调研工具**：运行 `kimi-webbridge` 程序并装上配套浏览器扩展
    （你机器上已有程序本体：`~/.kimi-webbridge/bin/`）。
 
-然后改 `docker-compose.yml` 里的 `EER_AUTOMATION_EXECUTOR=orchestrating`，
+然后改 `docker-compose.yml` 里的 `ERA_AUTOMATION_EXECUTOR=orchestrating`，
 `docker compose restart research-api`，就是真实研究了。
 
 ---

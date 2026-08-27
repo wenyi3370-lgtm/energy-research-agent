@@ -13,10 +13,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.agent.goal_planner import GoalPlanner
-from enterprise_energy_research.agent.market_evidence import MarketEvidenceImporter
-from enterprise_energy_research.agent.mission_parser import CustomGoalSpec
-from enterprise_energy_research.agent.models import (
+from energy_research_agent.agent.goal_planner import GoalPlanner
+from energy_research_agent.agent.market_evidence import MarketEvidenceImporter
+from energy_research_agent.agent.mission_parser import CustomGoalSpec
+from energy_research_agent.agent.models import (
     GoalClass,
     PriorityLevel,
     ResearchGoal,
@@ -24,10 +24,10 @@ from enterprise_energy_research.agent.models import (
     SkillName,
     SubjectType,
 )
-from enterprise_energy_research.agent.policies import AgentPolicies
-from enterprise_energy_research.agent.router import ResearchSkillRouter
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.evidence.store import EvidenceStore
+from energy_research_agent.agent.policies import AgentPolicies
+from energy_research_agent.agent.router import ResearchSkillRouter
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.evidence.store import EvidenceStore
 
 SUBJECT = "苏州昀冢电子科技股份有限公司"
 
@@ -134,7 +134,7 @@ class TestAnySearchRegistrationNotice(unittest.TestCase):
     """Anonymous-mode auto-registration notices must be infrastructure blocks, not hits."""
 
     def test_notice_is_provider_blocked(self):
-        from enterprise_energy_research.adapters.anysearch import AnySearchCliAdapter
+        from energy_research_agent.adapters.anysearch import AnySearchCliAdapter
 
         notice = (
             "Your account and API key have been automatically generated. "
@@ -144,7 +144,7 @@ class TestAnySearchRegistrationNotice(unittest.TestCase):
         self.assertTrue(AnySearchCliAdapter._provider_error_message(notice))
 
     def test_normal_content_not_flagged(self):
-        from enterprise_energy_research.adapters.anysearch import AnySearchCliAdapter
+        from energy_research_agent.adapters.anysearch import AnySearchCliAdapter
 
         self.assertIsNone(
             AnySearchCliAdapter._provider_error_message(

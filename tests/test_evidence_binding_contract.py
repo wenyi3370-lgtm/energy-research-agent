@@ -14,22 +14,22 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.agent.api import _field_to_families, _read_run_claims
-from enterprise_energy_research.agent.goal_planner import CORE_ENTERPRISE_GOALS
-from enterprise_energy_research.agent.mission_parser import MissionParseResult
-from enterprise_energy_research.agent.orchestrator import ResearchOrchestratorAgent
-from enterprise_energy_research.agent.policies import AgentPolicies
-from enterprise_energy_research.domain.enums import RunStatus, SourceLevel, VerificationStatus
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import (
+from energy_research_agent.agent.api import _field_to_families, _read_run_claims
+from energy_research_agent.agent.goal_planner import CORE_ENTERPRISE_GOALS
+from energy_research_agent.agent.mission_parser import MissionParseResult
+from energy_research_agent.agent.orchestrator import ResearchOrchestratorAgent
+from energy_research_agent.agent.policies import AgentPolicies
+from energy_research_agent.domain.enums import RunStatus, SourceLevel, VerificationStatus
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import (
     Claim,
     Entity,
     RunManifest,
     Source,
     utc_now,
 )
-from enterprise_energy_research.evidence.store import EvidenceStore
-from enterprise_energy_research.research.contracts import GOAL_CONTRACTS
+from energy_research_agent.evidence.store import EvidenceStore
+from energy_research_agent.research.contracts import GOAL_CONTRACTS
 
 
 class TestBindingContractCompleteness(unittest.TestCase):

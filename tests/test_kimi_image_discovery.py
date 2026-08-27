@@ -11,16 +11,16 @@ import io
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.adapters.base import AdapterHealth, SearchRequest, SearchResultEnvelope
-from enterprise_energy_research.domain.enums import EnterpriseComplexity
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import Entity, Source
-from enterprise_energy_research.research.image_archiver import ImageAssetArchiver
-from enterprise_energy_research.research.image_discovery import (
+from energy_research_agent.adapters.base import AdapterHealth, SearchRequest, SearchResultEnvelope
+from energy_research_agent.domain.enums import EnterpriseComplexity
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import Entity, Source
+from energy_research_agent.research.image_archiver import ImageAssetArchiver
+from energy_research_agent.research.image_discovery import (
     IMAGE_DISCOVERY_JS, ImageEvidenceBuilder, KimiImageDiscovery, KimiUsageTelemetry,
 )
-from enterprise_energy_research.research.image_validator import ImageValidator
-from enterprise_energy_research.research.planner import ResearchPlanner
+from energy_research_agent.research.image_validator import ImageValidator
+from energy_research_agent.research.planner import ResearchPlanner
 
 
 def png_bytes(width: int = 600, height: int = 400) -> bytes:
@@ -102,8 +102,8 @@ class KimiImageDiscoveryTests(unittest.TestCase):
     def test_kimi_visits_target_page_not_only_search_result(self) -> None:
         """Kimi opens the REAL target pages for product-catalog topics — never
         only a search-result page."""
-        from enterprise_energy_research.research.production_runner import AdaptiveResearchRunner
-        from enterprise_energy_research.domain.models import ResearchQuery
+        from energy_research_agent.research.production_runner import AdaptiveResearchRunner
+        from energy_research_agent.domain.models import ResearchQuery
         kimi = FakeKimiAdapter()
         kimi.evaluate_payload = IMAGE_PAYLOAD
         runner = AdaptiveResearchRunner(
@@ -384,9 +384,9 @@ class ProductDetailPassTests(unittest.TestCase):
             )
 
     def test_product_detail_links_are_followed_within_budget(self) -> None:
-        from enterprise_energy_research.research.production_runner import AdaptiveResearchRunner
-        from enterprise_energy_research.research.image_discovery import KimiUsageTelemetry
-        from enterprise_energy_research.adapters.base import SearchResultEnvelope
+        from energy_research_agent.research.production_runner import AdaptiveResearchRunner
+        from energy_research_agent.research.image_discovery import KimiUsageTelemetry
+        from energy_research_agent.adapters.base import SearchResultEnvelope
 
         kimi = self.DetailFakeKimi()
         runner = AdaptiveResearchRunner(

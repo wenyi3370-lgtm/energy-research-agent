@@ -1,10 +1,12 @@
 # Energy Research Agent v0.9.0 API image: offline build, venv-free, non-root.
 FROM python:3.11-slim
 
+ARG PIP_INDEX_URL=https://pypi.org/simple
+
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    EER_AUTOMATION_DATABASE_URL=postgresql+psycopg://research:research@postgres:5432/research \
-    EER_AUTOMATION_WORKDIR=/data/automation_work
+    ERA_AUTOMATION_DATABASE_URL=postgresql+psycopg://research:research@postgres:5432/research \
+    ERA_AUTOMATION_WORKDIR=/data/automation_work
 
 WORKDIR /app
 
@@ -37,9 +39,8 @@ COPY vendor ./vendor
 
 # api+database for the control plane; models enables the LLM gateway for
 # real extraction (litellm). Install full for convenience on small images.
-# 使用清华 PyPI 镜像加速国内构建；如需官方源删除 --index-url 参数即可。
 RUN pip install --no-cache-dir \
-    --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    --index-url "${PIP_INDEX_URL}" \
     -e ".[api,database,models]"
 
 # 内嵌海外市场研究 skill 的运行时依赖：采集/交付物子进程用镜像解释器直接
@@ -48,7 +49,7 @@ RUN pip install --no-cache-dir \
 # tomli——仅 py<3.11 需要，裸行会被 pip 当包名解析失败。
 RUN grep -vE '^(packaging|tomli)' vendor/skills/overseas-energy-market-research/requirements.txt > /tmp/vendor-reqs.txt \
     && pip install --no-cache-dir \
-        --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+        --index-url "${PIP_INDEX_URL}" \
         -r /tmp/vendor-reqs.txt \
     && rm /tmp/vendor-reqs.txt
 
@@ -64,4 +65,4 @@ USER research
 
 EXPOSE 8000
 
-CMD ["uvicorn", "enterprise_energy_research.automation.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "energy_research_agent.automation.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

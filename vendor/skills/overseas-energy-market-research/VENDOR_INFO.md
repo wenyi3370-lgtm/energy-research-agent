@@ -12,7 +12,7 @@
 Domain Capability Pack for overseas energy market research: market sizing, policy, tariffs,
 certification, channels, competition, product benchmarking, economics (NPV/IRR/Payback),
 Five Views, modeling chain, and Word/Excel/PPT deliverables. Executed by the Agent layer
-through `OverseasMarketResearchAdapter` (see `src/enterprise_energy_research/agent/tools/`),
+through `OverseasMarketResearchAdapter` (see `src/energy_research_agent/agent/tools/`),
 never mutated by the host except as documented below.
 
 ## Applied patches (do not remove without re-checking)

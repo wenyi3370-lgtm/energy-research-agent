@@ -2,9 +2,9 @@
 
 import unittest
 
-from enterprise_energy_research.adapters.base import SearchResultEnvelope
-from enterprise_energy_research.domain.models import ExtractedEvidenceBatch
-from enterprise_energy_research.research.extractor import EvidenceExtractor
+from energy_research_agent.adapters.base import SearchResultEnvelope
+from energy_research_agent.domain.models import ExtractedEvidenceBatch
+from energy_research_agent.research.extractor import EvidenceExtractor
 
 
 class SanitizeTests(unittest.TestCase):
@@ -116,7 +116,7 @@ class SanitizeTests(unittest.TestCase):
 
 
 def ExtractedClaimStub(entity_key, field_name, value):
-    from enterprise_energy_research.domain.models import ExtractedClaim
+    from energy_research_agent.domain.models import ExtractedClaim
 
     return ExtractedClaim(
         entity_key=entity_key, field_name=field_name, value=value,

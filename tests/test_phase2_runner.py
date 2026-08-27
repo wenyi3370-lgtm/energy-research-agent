@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.cli import synthetic_run
+from energy_research_agent.cli import synthetic_run
 
 
 class Phase2RunnerTests(unittest.TestCase):

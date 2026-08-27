@@ -10,7 +10,7 @@ PREFLIGHT → MISSION_PARSE → GOAL_PLAN → ROUTING → APPROVAL → EXECUTE_S
 
 One orchestrator owns the LLM steps (mission parse, goal decomposition, routing,
 evaluation, recovery, synthesis); deterministic skills own execution and gates.
-See ADR-AGENT-001..006 and `src/enterprise_energy_research/agent/`.
+See ADR-AGENT-001..006 and `src/energy_research_agent/agent/`.
 
 ## 1. State machine
 

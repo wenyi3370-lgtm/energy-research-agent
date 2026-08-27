@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from enterprise_energy_research.automation.intelligence import (
+from energy_research_agent.automation.intelligence import (
     DailyBrief,
     IntelligenceItem,
     IntelligenceService,
@@ -368,7 +368,7 @@ class FreshnessGateTests(unittest.TestCase):
         )
 
     def test_extraction_boundary_tolerates_common_model_transport_quirks(self):
-        from enterprise_energy_research.automation.intelligence import IntelligenceExtraction
+        from energy_research_agent.automation.intelligence import IntelligenceExtraction
 
         extracted = IntelligenceExtraction.model_validate({
             "title": None,
@@ -386,7 +386,7 @@ class CollectorPipelineTests(unittest.TestCase):
     def test_daily_page_budget_covers_every_planned_search_layer(self):
         from unittest.mock import patch
 
-        from enterprise_energy_research.automation.intelligence import IntelligenceCollector
+        from energy_research_agent.automation.intelligence import IntelligenceCollector
 
         captured = {"plans": []}
 
@@ -400,7 +400,7 @@ class CollectorPipelineTests(unittest.TestCase):
 
         collector = IntelligenceCollector({}, object())
         with patch(
-            "enterprise_energy_research.automation.intelligence.collector.SearchExecutor",
+            "energy_research_agent.automation.intelligence.collector.SearchExecutor",
             CapturingExecutor,
         ):
             collector.collect(
@@ -421,10 +421,10 @@ class CollectorPipelineTests(unittest.TestCase):
         self.assertIn("SOURCE_PATROL", passes)
 
     def test_root_listing_pages_are_not_sent_to_the_llm(self):
-        from enterprise_energy_research.adapters.base import (
+        from energy_research_agent.adapters.base import (
             AdapterHealth, SearchHit, SearchResultEnvelope,
         )
-        from enterprise_energy_research.automation.intelligence import IntelligenceCollector
+        from energy_research_agent.automation.intelligence import IntelligenceCollector
 
         class FakeAnySearch:
             name = "anysearch"
@@ -455,10 +455,10 @@ class CollectorPipelineTests(unittest.TestCase):
         self.assertEqual(collector.extraction_attempt_count, 0)
 
     def test_anysearch_snippet_is_hydrated_before_llm_extraction(self):
-        from enterprise_energy_research.adapters.base import (
+        from energy_research_agent.adapters.base import (
             AdapterHealth, SearchHit, SearchResultEnvelope,
         )
-        from enterprise_energy_research.automation.intelligence import (
+        from energy_research_agent.automation.intelligence import (
             IntelligenceCollector, IntelligenceExtraction,
         )
 
@@ -636,7 +636,7 @@ class CatchUpProbeTests(unittest.TestCase):
         import os
         import time as _time
 
-        from enterprise_energy_research.automation.intelligence.service import (
+        from energy_research_agent.automation.intelligence.service import (
             DAILY_RUN_LOCK_STALE_SECONDS,
         )
 
@@ -659,7 +659,7 @@ class CatchUpProbeTests(unittest.TestCase):
 
 class ServiceTests(unittest.TestCase):
     def test_daily_claim_is_atomic_across_concurrent_services(self):
-        from enterprise_energy_research.automation.intelligence.service import (
+        from energy_research_agent.automation.intelligence.service import (
             DAILY_CLAIM_RUNNING,
             DAILY_CLAIM_STARTED,
         )
@@ -698,7 +698,7 @@ class ServiceTests(unittest.TestCase):
 
     def test_publish_sends_brief_docx_file_to_feishu(self):
         """发布时除了正文消息，还必须把 Word 成品作为文件消息送达飞书。"""
-        from enterprise_energy_research.automation.feishu.mock import MockFeishuAdapter
+        from energy_research_agent.automation.feishu.mock import MockFeishuAdapter
 
         now = datetime(2026, 8, 24, 10, 0, tzinfo=TZ)
         brief = DailyBrief(
@@ -733,7 +733,7 @@ class ServiceTests(unittest.TestCase):
     def test_run_daily_idempotent(self):
         class FakeGateway:
             def structured(self, request):
-                from enterprise_energy_research.automation.intelligence import IntelligenceExtraction
+                from energy_research_agent.automation.intelligence import IntelligenceExtraction
 
                 if request.response_model is str:
                     return "V2G政策持续向规模化推进。"
@@ -756,7 +756,7 @@ class ServiceTests(unittest.TestCase):
                 return type("H", (), {"available": True})()
 
             def search(self, request):
-                from enterprise_energy_research.adapters.base import SearchHit, SearchResultEnvelope
+                from energy_research_agent.adapters.base import SearchHit, SearchResultEnvelope
 
                 self.sent.append(request)
                 return SearchResultEnvelope(
@@ -766,7 +766,7 @@ class ServiceTests(unittest.TestCase):
                 )
 
         with tempfile.TemporaryDirectory() as tmp:
-            from enterprise_energy_research.automation.db import AutomationDatabase
+            from energy_research_agent.automation.db import AutomationDatabase
 
             db = AutomationDatabase(f"sqlite:///{Path(tmp)}/i.db")
             try:

@@ -11,7 +11,7 @@ dev/测试需要零依赖起步；生产（docker-compose）用 PostgreSQL。审
 自动化表（research_tasks/runs/workflow_events/human_reviews/run_metrics/
 user_feedback）用 SQLAlchemy 可移植类型（String/Integer/Float/Boolean/
 DateTime/JSON），同一套模型跑 `sqlite://` 与
-`postgresql+psycopg://`（`EER_AUTOMATION_DATABASE_URL` 切换）。时区差异
+`postgresql+psycopg://`（`ERA_AUTOMATION_DATABASE_URL` 切换）。时区差异
 （SQLite naive vs PG aware）在 repository 层 `_as_utc` 归一化。evidence 仍为
 workdir 内 append-only SQLite，两者互不触碰。
 

@@ -6,14 +6,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.automation.contracts import ResearchRequest
-from enterprise_energy_research.automation.executor import ExecutionOutcome
-from enterprise_energy_research.automation.failure_library import FailureCase, FailureLibrary
-from enterprise_energy_research.automation.observability import CountingGateway, GatewayUsage
-from enterprise_energy_research.automation.retry import RetryPolicy, is_transient
-from enterprise_energy_research.automation.review import ReviewGateResult, ReviewPolicy
-from enterprise_energy_research.automation.roi import RoiCalculator, RoiRunRow
-from enterprise_energy_research.domain.enums import ValidationStatus
+from energy_research_agent.automation.contracts import ResearchRequest
+from energy_research_agent.automation.executor import ExecutionOutcome
+from energy_research_agent.automation.failure_library import FailureCase, FailureLibrary
+from energy_research_agent.automation.observability import CountingGateway, GatewayUsage
+from energy_research_agent.automation.retry import RetryPolicy, is_transient
+from energy_research_agent.automation.review import ReviewGateResult, ReviewPolicy
+from energy_research_agent.automation.roi import RoiCalculator, RoiRunRow
+from energy_research_agent.domain.enums import ValidationStatus
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -124,7 +124,7 @@ class RetryPolicyTests(unittest.TestCase):
 
 class CountingGatewayTests(unittest.TestCase):
     def test_counts_and_estimates_cost(self):
-        from enterprise_energy_research.gateway.base import ModelRequest, ModelResponse
+        from energy_research_agent.gateway.base import ModelRequest, ModelResponse
 
         class FakeGateway:
             def complete(self, request):

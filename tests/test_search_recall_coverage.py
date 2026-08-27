@@ -7,12 +7,12 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from enterprise_energy_research.adapters.base import SearchHit, SearchResultEnvelope
-from enterprise_energy_research.automation.intelligence.freshness import apply_freshness_gate
-from enterprise_energy_research.automation.intelligence.models import DailyBrief, IntelligenceItem, RawIntelligenceItem
-from enterprise_energy_research.automation.intelligence.scorer import deduplicate, score_item, select_top
-from enterprise_energy_research.domain.models import Claim, FrozenResearchBundle
-from enterprise_energy_research.research.recall import (
+from energy_research_agent.adapters.base import SearchHit, SearchResultEnvelope
+from energy_research_agent.automation.intelligence.freshness import apply_freshness_gate
+from energy_research_agent.automation.intelligence.models import DailyBrief, IntelligenceItem, RawIntelligenceItem
+from energy_research_agent.automation.intelligence.scorer import deduplicate, score_item, select_top
+from energy_research_agent.domain.models import Claim, FrozenResearchBundle
+from energy_research_agent.research.recall import (
     AnomalyHunter, CoverageTracker, DailyRecallBudgetPlanner, EntityEventMiner, FrontierEntry,
     FrontierPriority, QueryExpander, QueryPriority, RecallAudit,
     RecallBudgetPolicy, RecallConvergenceTracker, RecallEngine, RecallProfile,
@@ -256,7 +256,7 @@ class TestAuditAndEvidenceBoundary:
         matrix = tracker.matrix().model_dump()
         topic_fields = set(type(tracker.matrix()).model_fields)
         assert {"topics", "chinese_query_count", "english_query_count", "coverage_complete", "status"} <= topic_fields
-        from enterprise_energy_research.research.recall.models import TopicCoverage
+        from energy_research_agent.research.recall.models import TopicCoverage
         assert {lane.value for lane in SourceLane} <= set(TopicCoverage.model_fields)
 
     def test_29_recall_metrics_count_unique_domains(self):
@@ -290,7 +290,7 @@ class TestAuditAndEvidenceBoundary:
         assert len(queries) == 1 and "文件编号" in queries[0].query and "PDF" in queries[0].query
 
     def test_32_source_roster_traversal_limits_are_bounded(self):
-        from enterprise_energy_research.research.recall.source_lanes import SourceRoster
+        from energy_research_agent.research.recall.source_lanes import SourceRoster
         roster = SourceRoster()
         assert 1 <= roster.max_listing_pages_per_source <= 3
         assert roster.max_articles_per_source >= 1

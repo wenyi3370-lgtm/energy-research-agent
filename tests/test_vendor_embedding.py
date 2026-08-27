@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import unittest
 
-from enterprise_energy_research.artifacts.excel import ExcelMasterFrozenPublisher
-from enterprise_energy_research.artifacts.html import FrozenHtmlPublisher
-from enterprise_energy_research.artifacts.ppt import PptMasterFrozenPublisher
-from enterprise_energy_research.domain.enums import ArtifactType
-from enterprise_energy_research.vendor import EMBEDDED_SKILLS, embedded_skill_available, embedded_skill_root
+from energy_research_agent.artifacts.excel import ExcelMasterFrozenPublisher
+from energy_research_agent.artifacts.html import FrozenHtmlPublisher
+from energy_research_agent.artifacts.ppt import PptMasterFrozenPublisher
+from energy_research_agent.domain.enums import ArtifactType
+from energy_research_agent.vendor import EMBEDDED_SKILLS, embedded_skill_available, embedded_skill_root
 
 
 class VendorEmbeddingTests(unittest.TestCase):

@@ -6,13 +6,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.adapters.base import AdapterHealth, SearchHit, SearchRequest, SearchResultEnvelope
-from enterprise_energy_research.automation.contracts import ResearchRequest
-from enterprise_energy_research.automation.db import AutomationDatabase
-from enterprise_energy_research.automation.enums import TaskStatus
-from enterprise_energy_research.automation.orchestration import OrchestratingExecutor
-from enterprise_energy_research.automation.service import ResearchService
-from enterprise_energy_research.domain.enums import ValidationStatus
+from energy_research_agent.adapters.base import AdapterHealth, SearchHit, SearchRequest, SearchResultEnvelope
+from energy_research_agent.automation.contracts import ResearchRequest
+from energy_research_agent.automation.db import AutomationDatabase
+from energy_research_agent.automation.enums import TaskStatus
+from energy_research_agent.automation.orchestration import OrchestratingExecutor
+from energy_research_agent.automation.service import ResearchService
+from energy_research_agent.domain.enums import ValidationStatus
 
 ROOT = Path(__file__).resolve().parents[1]
 

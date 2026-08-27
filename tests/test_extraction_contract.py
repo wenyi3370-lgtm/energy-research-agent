@@ -8,14 +8,14 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.adapters.base import SearchRequest, SearchResultEnvelope
-from enterprise_energy_research.domain.enums import EnterpriseComplexity
-from enterprise_energy_research.domain.models import ResearchPlan, ResearchQuery
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.research.contracts import GOAL_CONTRACTS, contract_for
-from enterprise_energy_research.research.executor import SearchExecutor
-from enterprise_energy_research.research.extractor import EvidenceExtractor, extract_goal_context
-from enterprise_energy_research.research.planner import GOAL_FAMILIES, ResearchPlanner
+from energy_research_agent.adapters.base import SearchRequest, SearchResultEnvelope
+from energy_research_agent.domain.enums import EnterpriseComplexity
+from energy_research_agent.domain.models import ResearchPlan, ResearchQuery
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.research.contracts import GOAL_CONTRACTS, contract_for
+from energy_research_agent.research.executor import SearchExecutor
+from energy_research_agent.research.extractor import EvidenceExtractor, extract_goal_context
+from energy_research_agent.research.planner import GOAL_FAMILIES, ResearchPlanner
 
 
 class _CapturingAdapter:
@@ -25,7 +25,7 @@ class _CapturingAdapter:
         self.requests: list[SearchRequest] = []
 
     def health(self):
-        from enterprise_energy_research.adapters.base import AdapterHealth
+        from energy_research_agent.adapters.base import AdapterHealth
         return AdapterHealth(name=self.name, available=True)
 
     def search(self, request: SearchRequest) -> SearchResultEnvelope:

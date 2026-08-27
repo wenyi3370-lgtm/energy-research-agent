@@ -3,12 +3,12 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.research.planner import ResearchPlanner
-from enterprise_energy_research.research.saturation import CollectionAttemptSummary, DataSaturationValidator
-from enterprise_energy_research.settings import load_yaml
-from enterprise_energy_research.validation.delivery_quality import PptVisualDeliveryRecord, inspect_ppt_visual_delivery
-from enterprise_energy_research.domain.enums import EnterpriseComplexity
-from enterprise_energy_research.domain.models import ConflictGroup, DataGap
+from energy_research_agent.research.planner import ResearchPlanner
+from energy_research_agent.research.saturation import CollectionAttemptSummary, DataSaturationValidator
+from energy_research_agent.settings import load_yaml
+from energy_research_agent.validation.delivery_quality import PptVisualDeliveryRecord, inspect_ppt_visual_delivery
+from energy_research_agent.domain.enums import EnterpriseComplexity
+from energy_research_agent.domain.models import ConflictGroup, DataGap
 
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -1,20 +1,20 @@
-"""Focused fifth-round fail-closed publication regressions."""
+"""Focused fail-closed publication regressions."""
 
 from __future__ import annotations
 
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.artifacts.publication_boilerplate import (
+from energy_research_agent.artifacts.publication_boilerplate import (
     HTML_ZERO_PHRASES,
     PublicationBoilerplateFilter,
 )
-from enterprise_energy_research.artifacts.qa_report import QAFinding, new_qa_report
-from enterprise_energy_research.artifacts.visual_router import VisualDatum, VisualProposal, VisualRouter
-from enterprise_energy_research.artifacts.word import FrozenWordPublisher
-from enterprise_energy_research.domain.models import Entity
-from enterprise_energy_research.research.deep_retry import exact_product_key
-from enterprise_energy_research.research.production_runner import AdaptiveResearchRunner
+from energy_research_agent.artifacts.qa_report import QAFinding, new_qa_report
+from energy_research_agent.artifacts.visual_router import VisualDatum, VisualProposal, VisualRouter
+from energy_research_agent.artifacts.word import FrozenWordPublisher
+from energy_research_agent.domain.models import Entity
+from energy_research_agent.research.deep_retry import exact_product_key
+from energy_research_agent.research.production_runner import AdaptiveResearchRunner
 
 
 class FifthRoundP0Tests(unittest.TestCase):

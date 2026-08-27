@@ -2,31 +2,31 @@ from __future__ import annotations
 
 from datetime import date
 
-from enterprise_energy_research.artifacts.html import FrozenHtmlPublisher
-from enterprise_energy_research.artifacts.narrative import NarrativeBuilder
-from enterprise_energy_research.artifacts.publication_terminology import source_type_label
-from enterprise_energy_research.domain.enums import (
+from energy_research_agent.artifacts.html import FrozenHtmlPublisher
+from energy_research_agent.artifacts.narrative import NarrativeBuilder
+from energy_research_agent.artifacts.publication_terminology import source_type_label
+from energy_research_agent.domain.enums import (
     EnterpriseComplexity, RunStatus, SourceLevel, StatementType,
     ValidationStatus, VerificationStatus,
 )
-from enterprise_energy_research.domain.models import (
+from energy_research_agent.domain.models import (
     Claim, DataFreeze, DataGap, Entity, FrozenResearchBundle, RunManifest,
     Solution, Source,
 )
-from enterprise_energy_research.research.client_profile import (
+from energy_research_agent.research.client_profile import (
     ClientCapability, ClientCapabilityStatus, ClientProfile, load_client_profile,
 )
-from enterprise_energy_research.research.cooperation_hypothesis import (
+from energy_research_agent.research.cooperation_hypothesis import (
     CooperationHypothesisEngine, CooperationHypothesisStatus,
 )
-from enterprise_energy_research.research.decision_synthesis import DecisionSynthesisEngine
-from enterprise_energy_research.research.research_analysis import ResearchAnalysisEngine
-from enterprise_energy_research.research.publication_relevance import PublicationRelevanceFilter
-from enterprise_energy_research.research.entity_scope import publication_identity_errors
-from enterprise_energy_research.research.strategic_interpretation import StrategicInterpretationEngine
-from enterprise_energy_research.validation.publication_quality import AI_TONE_PHRASES, DecisionIntelligenceValidator
-from enterprise_energy_research.validation.consulting_narrative import narrative_body_text
-from enterprise_energy_research.research.vision import parse_vision_text
+from energy_research_agent.research.decision_synthesis import DecisionSynthesisEngine
+from energy_research_agent.research.research_analysis import ResearchAnalysisEngine
+from energy_research_agent.research.publication_relevance import PublicationRelevanceFilter
+from energy_research_agent.research.entity_scope import publication_identity_errors
+from energy_research_agent.research.strategic_interpretation import StrategicInterpretationEngine
+from energy_research_agent.validation.publication_quality import AI_TONE_PHRASES, DecisionIntelligenceValidator
+from energy_research_agent.validation.consulting_narrative import narrative_body_text
+from energy_research_agent.research.vision import parse_vision_text
 
 
 def claim(claim_id: str, field: str, value, year: int, source_id: str = "SRC-A", confidence: float = 0.9) -> Claim:

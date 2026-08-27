@@ -8,7 +8,7 @@ Accepted (2026-08-25)
 
 The repository grew two production loops (`OrchestratingExecutor.research_and_validate`,
 `AdaptiveResearchRunner.run`) and a keyword/if-chain patch debt (see
-`docs/agent/PATCH_DEBT_AUDIT.md`). Every new user requirement (competition, policy,
+Legacy keyword branches could not safely absorb new user requirements (competition, policy,
 channel, continuation, custom goals) had to be anticipated as a code branch. User
 requests that did not match a branch degraded silently. Two separate capability
 repositories (enterprise research, overseas market research) could not be combined
@@ -16,7 +16,7 @@ without a new mega-workflow.
 
 ## Decision
 
-Add a single **Research Orchestrator Agent** control layer (`src/enterprise_energy_research/agent/`)
+Add a single **Research Orchestrator Agent** control layer (`src/energy_research_agent/agent/`)
 that owns understanding, goal decomposition, skill routing, gap reasoning, recovery
 planning and cross-domain synthesis, while deterministic skills own execution, gates,
 budgets, IDs and audits.

@@ -11,7 +11,7 @@
 1. 搜索：`OrchestratingExecutor` 只使用 `health()==available` 的适配器；
    缺失偏好 → blocked envelope → 零证据 → BLOCKED；`from_environment()` 构造失败用
    `UnconfiguredSearchAdapter` 兜底。
-2. 通知：`LarkFeishuAdapter` 无 `EER_FEISHU_*` 凭证 → `available()==False` →
+2. 通知：`LarkFeishuAdapter` 无 `ERA_FEISHU_*` 凭证 → `available()==False` →
    notifier no-op 但写 warning 日志 + 事件（`notify.error`），绝不静默。
 3. LLM：无 gateway → 抽取只透传 recorded fixture 批次（显式标注），不假装抽取。
 

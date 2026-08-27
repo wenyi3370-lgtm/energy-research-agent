@@ -108,10 +108,10 @@ Immediate blockers include:
 - product dashboard generated without qualifying products;
 - verified product facts or A/B-backed product records exist but the frozen publication bundle contains zero `VERIFIED` products; every retry path must recompute product status after referential-integrity cleanup, regardless of product-image recovery outcome;
 - PPT outside 15-20 slides;
-- unresolved high-severity fifth-round coverage gap, including missing 3-year financial series or required five-product image coverage;
+- unresolved high-severity coverage gap, including missing 3-year financial series or required five-product image coverage;
 - Dashboard chapter outside the 1 judgement / 3–6 KPI / 1–3 visual / 3 insight contract;
 - large-enterprise Dashboard with fewer than eight meaningful visuals, or a multi-base enterprise without a map;
-- any fifth-round zero-tolerance phrase in the complete offline HTML payload;
+- any publication-contract zero-tolerance phrase in the complete offline HTML payload;
 - any formal publisher QA report with `status: fail`;
 - Word with a missing visual manifest, missing HTML/SVG/PNG siblings, missing figure source notes, grid tables, or a figure whose frozen data fails the Visual Router's data-sufficiency checks for the routed diagram-design type;
 - Word/PPT with a selected verified image missing from the package, a binary/hash/MIME/dimension mismatch, a remote-only image, a missing image caption/source, or an image used to replace a required chart;

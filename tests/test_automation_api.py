@@ -1,4 +1,4 @@
-"""Phase 2 API-layer tests: REST surface, structured errors, request IDs."""
+"""Agent API-layer tests: REST surface, structured errors, request IDs."""
 
 import tempfile
 import unittest
@@ -6,10 +6,10 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from enterprise_energy_research.automation.api import create_app
-from enterprise_energy_research.automation.executor import ExecutionOutcome
-from enterprise_energy_research.automation.enums import ReviewDecision
-from enterprise_energy_research.domain.enums import ArtifactStatus, ArtifactType, ValidationStatus
+from energy_research_agent.automation.api import create_app
+from energy_research_agent.automation.executor import ExecutionOutcome
+from energy_research_agent.automation.enums import ReviewDecision
+from energy_research_agent.domain.enums import ArtifactStatus, ArtifactType, ValidationStatus
 from test_automation_service import StubExecutor, make_request
 
 
@@ -41,7 +41,7 @@ class ApiTestCase(unittest.TestCase):
 
 class TestSubmitAndStatus(ApiTestCase):
     def test_keyword_fallback_preserves_company_and_full_requirement(self):
-        from enterprise_energy_research.automation.api.app import _keyword_parse
+        from energy_research_agent.automation.api.app import _keyword_parse
 
         parsed = _keyword_parse("调研宁德时代的主营业务生产基地和产品线")
         self.assertEqual(parsed.company, "宁德时代")
@@ -98,22 +98,15 @@ class TestSubmitAndStatus(ApiTestCase):
         source_file = resp.json()["source_file"].replace("\\", "/")
         portal_file = resp.json()["portal_file"].replace("\\", "/")
         self.assertTrue(source_file.endswith("automation/api/app.py"))
-        self.assertTrue(portal_file.endswith("portal/portal.html"))
+        self.assertTrue(portal_file.endswith("portal/agent.html"))
 
-    def test_every_portal_button_is_wired_to_a_registered_api(self):
+    def test_root_serves_the_agent_portal(self):
         html = self.client.get("/").text
-        button_ids = (
-            "parseBtn", "prepareBtn", "startBtn", "deepBtn",
-            "stopAllBtn", "intelBtn", "pauseBtn", "resumeBtn",
-        )
-        for button_id in button_ids:
-            self.assertIn(f'id="{button_id}"', html)
-            self.assertIn(f"getElementById('{button_id}')", html)
+        self.assertIn("新能源产业研究 Agent", html)
         for endpoint in (
-            "/api/v1/research/natural", "/api/v1/research/prepare",
-            "/api/v1/research/stop-all", "/deep-research",
-            "/api/v1/intelligence/daily", "/api/v1/intelligence/pause",
-            "/api/v1/intelligence/resume", "/api/v1/intelligence/status",
+            "/api/agent/parse",
+            "/api/agent/mission/",
+            "/api/agent/missions",
         ):
             self.assertIn(endpoint, html)
 
@@ -147,26 +140,20 @@ class TestSubmitAndStatus(ApiTestCase):
             },
         )
 
-    def test_portal_exposes_manual_research_and_daily_push_controls(self):
+    def test_portal_exposes_agent_approval_and_research_controls(self):
         html = self.client.get("/").text
-        self.assertIn("企业研究仅由本页按钮启动，不会定时自动运行", html)
-        self.assertIn("/api/v1/research/prepare", html)
-        self.assertIn("/api/v1/research/' + currentRun + '/start", html)
-        self.assertIn("renderParsed({company: body.company", html)
-        self.assertIn("/api/v1/intelligence/pause", html)
-        self.assertIn("/api/v1/intelligence/resume", html)
-        self.assertIn("每日仅生成并推送一次", html)
-        self.assertIn("重复点击已被拦截", html)
+        self.assertIn("确认框架并开始研究", html)
+        self.assertIn("/api/agent/parse", html)
+        self.assertIn("/approve", html)
+        self.assertIn("/stop", html)
+        self.assertIn("深度研究", html)
 
     def test_portal_exposes_continue_deep_research(self):
         """门户提供「继续深度研究」入口（自然语言定位 + 需求 + 保存桌面/推送飞书）。"""
         html = self.client.get("/").text
-        self.assertIn("继续深度研究", html)
+        self.assertIn("深度研究", html)
         self.assertIn("/deep-research", html)
-        self.assertIn("deepRequirements", html)
-        self.assertIn("deepQuery", html)
-        self.assertIn("deepDesktop", html)
-        self.assertIn("deepFeishu", html)
+        self.assertIn("deepRequest", html)
 
     def test_deep_research_lookup_by_natural_language(self):
         """任务定位：用公司名/产品关键词即可找到 run。"""
@@ -230,7 +217,7 @@ class TestSubmitAndStatus(ApiTestCase):
         self.assertEqual(self.client.get("/api/v1/intelligence/status").json()["paused"], False)
 
     def test_daily_endpoint_rejects_duplicate_while_run_is_in_flight(self):
-        from enterprise_energy_research.automation.intelligence import (
+        from energy_research_agent.automation.intelligence import (
             IntelligenceService,
             current_intelligence_time,
         )

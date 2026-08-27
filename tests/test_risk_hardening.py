@@ -1,7 +1,7 @@
 """风险加固测试：视觉核验网关复用 / 浏览器发现链 / 无浏览器 Word 降级。
 
 对应剩余风险修正：
-- 风险1:视觉核验复用既有研究网关凭据（EER_OPENAI_API_KEY），无需新增外部配置
+- 风险1:视觉核验复用既有研究网关凭据（ERA_OPENAI_API_KEY），无需新增外部配置
 - 风险3:浏览器发现链含 Playwright 托管 Chromium 缓存；无浏览器时 Word 确定性降级
 """
 
@@ -15,17 +15,17 @@ import zipfile
 from pathlib import Path
 from unittest import mock
 
-from enterprise_energy_research.artifacts.diagram_design_adapter import DiagramDesignAdapter
-from enterprise_energy_research.artifacts.word import FrozenWordPublisher
-from enterprise_energy_research.domain.enums import ArtifactType, RunStatus, VerificationStatus
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import ExtractedEvidenceBatch, RunManifest
-from enterprise_energy_research.evidence.freeze import FreezeService
-from enterprise_energy_research.evidence.store import EvidenceStore
-from enterprise_energy_research.graph.phase3_runner import Phase3Runner
-from enterprise_energy_research.graph.state import ResearchState
-from enterprise_energy_research.research.vision import GatewayVisionVerifier, default_vision_verifier
-from enterprise_energy_research.settings import Settings, load_yaml
+from energy_research_agent.artifacts.diagram_design_adapter import DiagramDesignAdapter
+from energy_research_agent.artifacts.word import FrozenWordPublisher
+from energy_research_agent.domain.enums import ArtifactType, RunStatus, VerificationStatus
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import ExtractedEvidenceBatch, RunManifest
+from energy_research_agent.evidence.freeze import FreezeService
+from energy_research_agent.evidence.store import EvidenceStore
+from energy_research_agent.graph.phase3_runner import Phase3Runner
+from energy_research_agent.graph.state import ResearchState
+from energy_research_agent.research.vision import GatewayVisionVerifier, default_vision_verifier
+from energy_research_agent.settings import Settings, load_yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,7 +62,7 @@ class RiskHardeningTests(unittest.TestCase):
         )
 
     def test_vision_verifier_prefers_deepseek_v4_flash_vision_exp(self) -> None:
-        with mock.patch("enterprise_energy_research.settings.Settings",
+        with mock.patch("energy_research_agent.settings.Settings",
                         return_value=self._fake_settings(deepseek_key="sk-deepseek-test")):
             verifier = default_vision_verifier()
             self.assertIsNotNone(verifier, "已配置 DeepSeek 网关凭据时视觉核验应自动可用")
@@ -71,7 +71,7 @@ class RiskHardeningTests(unittest.TestCase):
             self.assertEqual(verifier.model, "deepseek-v4-flash-vision-exp")
 
     def test_vision_verifier_falls_back_to_openai_when_no_deepseek_key(self) -> None:
-        with mock.patch("enterprise_energy_research.settings.Settings",
+        with mock.patch("energy_research_agent.settings.Settings",
                         return_value=self._fake_settings(openai_key="sk-openai-test",
                                                          openai_base="https://gateway.example.com/v1")):
             verifier = default_vision_verifier()
@@ -82,7 +82,7 @@ class RiskHardeningTests(unittest.TestCase):
     def test_vision_verifier_prefers_dedicated_vision_credentials(self) -> None:
         # 研究网关指向第三方（如 SiliconFlow）时，视觉链仍走原生 DeepSeek
         # 视觉模型专用凭据，不受研究网关改道影响。
-        with mock.patch("enterprise_energy_research.settings.Settings",
+        with mock.patch("energy_research_agent.settings.Settings",
                         return_value=self._fake_settings(
                             deepseek_key="sk-siliconflow",
                             deepseek_base="https://api.siliconflow.cn/v1",
@@ -94,7 +94,7 @@ class RiskHardeningTests(unittest.TestCase):
             self.assertEqual(verifier.model, "deepseek-v4-flash-vision-exp")
 
     def test_vision_verifier_absent_when_nothing_configured(self) -> None:
-        with mock.patch("enterprise_energy_research.settings.Settings",
+        with mock.patch("energy_research_agent.settings.Settings",
                         return_value=self._fake_settings()):
             verifier = default_vision_verifier()
         self.assertIsNone(verifier, "无任何视觉能力配置时必须诚实返回 None")
@@ -103,7 +103,7 @@ class RiskHardeningTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             env_path = Path(temp) / ".env"
             env_path.write_text(
-                "EER_DEEPSEEK_API_KEY=sk-from-dotenv\nEER_OPENAI_API_KEY=sk-openai-dotenv\n",
+                "ERA_DEEPSEEK_API_KEY=sk-from-dotenv\nERA_OPENAI_API_KEY=sk-openai-dotenv\n",
                 encoding="utf-8",
             )
             settings = Settings(_env_file=env_path)
@@ -111,9 +111,9 @@ class RiskHardeningTests(unittest.TestCase):
             self.assertEqual(settings.openai_api_key, "sk-openai-dotenv")
 
     def test_visual_verify_runs_on_archived_bytes(self) -> None:
-        from enterprise_energy_research.domain.models import ImageEvidence
-        from enterprise_energy_research.research.image_validator import ImageValidator
-        from enterprise_energy_research.research.vision import VisionVerdict
+        from energy_research_agent.domain.models import ImageEvidence
+        from energy_research_agent.research.image_validator import ImageValidator
+        from energy_research_agent.research.vision import VisionVerdict
 
         with tempfile.TemporaryDirectory() as temp:
             asset = Path(temp) / "photo.png"

@@ -4,13 +4,13 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from enterprise_energy_research.agent.market_production import (
+from energy_research_agent.agent.market_production import (
     MarketProductionPipeline,
     MarketTables,
     AnalysisBundle,
     InsightBody,
 )
-from enterprise_energy_research.gateway.base import StructuredRequest
+from energy_research_agent.gateway.base import StructuredRequest
 
 
 class _FakeGateway:

@@ -8,7 +8,7 @@ from pathlib import Path
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root / "src"))
-    from enterprise_energy_research.domain.models import (
+    from energy_research_agent.domain.models import (
         ArtifactManifest,
         Claim,
         ConflictGroup,
@@ -21,7 +21,7 @@ def main() -> None:
         ResearchRequest,
         ValidationReport,
     )
-    from enterprise_energy_research.agent.models import (
+    from energy_research_agent.agent.models import (
         GoalEvaluation,
         RecoveryPlan,
         ResearchGoal,

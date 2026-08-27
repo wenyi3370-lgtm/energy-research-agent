@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import hashlib
 
-from enterprise_energy_research.domain.enums import (
+from energy_research_agent.domain.enums import (
     RunStatus,
     SourceLevel,
     VerificationStatus,
 )
-from enterprise_energy_research.domain.models import (
+from energy_research_agent.domain.models import (
     Claim,
     DataFreeze,
     Entity,
@@ -18,13 +18,13 @@ from enterprise_energy_research.domain.models import (
     RunManifest,
     Source,
 )
-from enterprise_energy_research.research.claim_validator import ClaimValidator
-from enterprise_energy_research.research.entity_scope import rebind_target_alias_entities
-from enterprise_energy_research.research.normalizer import EvidenceNormalizer, NormalizedEvidence
-from enterprise_energy_research.research.planner import ResearchPlanner
-from enterprise_energy_research.research.publication_relevance import PublicationRelevanceFilter
-from enterprise_energy_research.artifacts.narrative import NarrativeBuilder, ResearchNarrative
-from enterprise_energy_research.validation.publication_quality import ResearchValueValidator
+from energy_research_agent.research.claim_validator import ClaimValidator
+from energy_research_agent.research.entity_scope import rebind_target_alias_entities
+from energy_research_agent.research.normalizer import EvidenceNormalizer, NormalizedEvidence
+from energy_research_agent.research.planner import ResearchPlanner
+from energy_research_agent.research.publication_relevance import PublicationRelevanceFilter
+from energy_research_agent.artifacts.narrative import NarrativeBuilder, ResearchNarrative
+from energy_research_agent.validation.publication_quality import ResearchValueValidator
 
 
 def _claim(claim_id: str, entity_id: str, field: str, value: object, source_id: str) -> Claim:

@@ -24,7 +24,7 @@ def main() -> int:
 
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root / "src"))
-    from enterprise_energy_research.agent.mission_store import MissionStore
+    from energy_research_agent.agent.mission_store import MissionStore
 
     store = MissionStore(Path(args.store) if args.store else None)
     missions = store.list_missions(limit=500)

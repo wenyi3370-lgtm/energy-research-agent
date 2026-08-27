@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from enterprise_energy_research.validation.delivery_quality import inspect_word_depth  # noqa: E402
+from energy_research_agent.validation.delivery_quality import inspect_word_depth  # noqa: E402
 
 
 def main() -> int:

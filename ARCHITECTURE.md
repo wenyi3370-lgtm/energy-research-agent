@@ -7,7 +7,7 @@
 
 Concretely:
 
-- **LLM 负责不确定性**：理解、规划、判断、补救、综合（`src/enterprise_energy_research/agent/`）。
+- **LLM 负责不确定性**：理解、规划、判断、补救、综合（`src/energy_research_agent/agent/`）。
 - **代码负责确定性**：搜索执行、证据、预算、ID、审计、Schema、冻结、发布（既有
   research/evidence/validation/artifacts/automation 平面）。
 - 推理可以动态；执行必须受控。所有 Agent 决策走 `ModelGateway.structured`
@@ -44,7 +44,7 @@ The system has four planes:
 ## 1.1 Agent control layer (Energy Research Agent)
 
 Above the deterministic planes sits one **Research Orchestrator Agent**
-(`src/enterprise_energy_research/agent/`, see ADR-AGENT-001..006):
+(`src/energy_research_agent/agent/`, see ADR-AGENT-001..006):
 
 ```text
 PREFLIGHT → MISSION_PARSE → GOAL_PLAN → ROUTING → APPROVAL → EXECUTE_SKILLS
@@ -68,7 +68,7 @@ PREFLIGHT → MISSION_PARSE → GOAL_PLAN → ROUTING → APPROVAL → EXECUTE_S
 - One human approval (`Unified Research Mission Approval`) gates execution;
   the agent can never self-approve.
 
-### Fifth-round publication control plane
+### Publication control plane
 
 `ResearchDataCoverageValidator` runs before freezing and may trigger bounded,
 targeted retry. Remaining high-severity gaps set `RESEARCH_DATA_BLOCKED`.
@@ -231,14 +231,13 @@ energy-research-agent/
 ├─ SKILL.md
 ├─ agents/openai.yaml
 ├─ ARCHITECTURE.md
-├─ IMPLEMENTATION_PLAN.md
 ├─ WORKFLOW.md
 ├─ DATA_SCHEMA.md
 ├─ SOURCE_POLICY.md
 ├─ ARTIFACT_SPEC.md
 ├─ VALIDATION_SPEC.md
 ├─ references/reference-findings.md
-├─ pyproject.toml                         # Phase 2
+├─ pyproject.toml                         # package and dependencies
 ├─ .env.example                          # names only; no secrets
 ├─ config/
 │  ├─ default.yaml
@@ -246,7 +245,7 @@ energy-research-agent/
 │  ├─ source_policy.yaml
 │  ├─ research_budgets.yaml
 │  └─ artifact_profiles.yaml
-├─ src/enterprise_energy_research/
+├─ src/energy_research_agent/
 │  ├─ cli.py
 │  ├─ settings.py
 │  ├─ domain/{enums.py,ids.py,models.py}

@@ -10,11 +10,11 @@ unified t1 publication by ``_materialize_source_assets``).
 
 from pathlib import Path
 
-from enterprise_energy_research.domain.models import ImageEvidence
-from enterprise_energy_research.research.deep_retry import (
+from energy_research_agent.domain.models import ImageEvidence
+from energy_research_agent.research.deep_retry import (
     _materialize_source_image_assets,
 )
-from enterprise_energy_research.research.normalizer import NormalizedEvidence
+from energy_research_agent.research.normalizer import NormalizedEvidence
 
 
 def _image(image_id: str, reference: str | None) -> ImageEvidence:

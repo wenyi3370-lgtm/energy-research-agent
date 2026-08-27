@@ -15,12 +15,12 @@ from typing import TypeVar
 
 from pydantic import BaseModel
 
-from enterprise_energy_research.artifacts.excel import ExcelMasterFrozenPublisher
-from enterprise_energy_research.artifacts.html import FrozenHtmlPublisher
-from enterprise_energy_research.artifacts.publisher import ArtifactPublicationService
-from enterprise_energy_research.artifacts.word import FrozenWordPublisher
-from enterprise_energy_research.domain.enums import ArtifactType
-from enterprise_energy_research.domain.models import (
+from energy_research_agent.artifacts.excel import ExcelMasterFrozenPublisher
+from energy_research_agent.artifacts.html import FrozenHtmlPublisher
+from energy_research_agent.artifacts.publisher import ArtifactPublicationService
+from energy_research_agent.artifacts.word import FrozenWordPublisher
+from energy_research_agent.domain.enums import ArtifactType
+from energy_research_agent.domain.models import (
     ArtifactManifest, Claim, ConflictGroup, DataFreeze, DataGap, EnergyProfile,
     EnterpriseEdge, Entity, Factory, FrozenResearchBundle, ImageEvidence,
     Product, Retrieval, RunManifest, Solution, Source,

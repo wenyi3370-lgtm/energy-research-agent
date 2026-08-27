@@ -9,13 +9,13 @@ from pathlib import Path
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
-from enterprise_energy_research.adapters.anysearch import AnySearchCliAdapter
-from enterprise_energy_research.adapters.base import SearchRequest
-from enterprise_energy_research.automation.intelligence.collector import DAILY_QUERIES, IntelligenceCollector
-from enterprise_energy_research.automation.intelligence.freshness import apply_freshness_gate
-from enterprise_energy_research.automation.intelligence.scorer import deduplicate, score_item, select_top
-from enterprise_energy_research.research.recall import RecallBudgetPolicy, SearchPass
-from enterprise_energy_research.settings import Settings
+from energy_research_agent.adapters.anysearch import AnySearchCliAdapter
+from energy_research_agent.adapters.base import SearchRequest
+from energy_research_agent.automation.intelligence.collector import DAILY_QUERIES, IntelligenceCollector
+from energy_research_agent.automation.intelligence.freshness import apply_freshness_gate
+from energy_research_agent.automation.intelligence.scorer import deduplicate, score_item, select_top
+from energy_research_agent.research.recall import RecallBudgetPolicy, SearchPass
+from energy_research_agent.settings import Settings
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,7 +25,7 @@ def build_gateway():
     settings = Settings()
     if not (settings.deepseek_api_key or settings.openai_api_key):
         return None
-    from enterprise_energy_research.gateway.http_json_gateway import HttpJsonModelGateway
+    from energy_research_agent.gateway.http_json_gateway import HttpJsonModelGateway
     gateway = HttpJsonModelGateway(settings)
     return gateway if gateway.health()["available"] else None
 

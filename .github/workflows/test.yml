@@ -43,7 +43,7 @@ jobs:
       - name: JSON and schema syntax
         run: python -c "import json,pathlib; [json.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('schemas').glob('*.json')]"
       - name: Docker build
-        run: docker build -t enterprise-energy-research:${{ github.sha }} .
+        run: docker build -t energy-research-agent:${{ github.sha }} .
 
   # Live browser / API acceptance is high-cost external-call work: manual only.
   live-acceptance:
@@ -58,6 +58,6 @@ jobs:
       - run: python -m pip install -e ".[full,test]"
       - name: Live acceptance (default company)
         env:
-          EER_DEEPSEEK_API_KEY: ${{ secrets.EER_DEEPSEEK_API_KEY }}
-          EER_OPENAI_API_KEY: ${{ secrets.EER_OPENAI_API_KEY }}
+          ERA_DEEPSEEK_API_KEY: ${{ secrets.ERA_DEEPSEEK_API_KEY }}
+          ERA_OPENAI_API_KEY: ${{ secrets.ERA_OPENAI_API_KEY }}
         run: python scripts/run_live_acceptance.py --company 宁德时代

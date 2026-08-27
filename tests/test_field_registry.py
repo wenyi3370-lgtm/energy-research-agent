@@ -6,11 +6,11 @@ from __future__ import annotations
 
 import unittest
 
-from enterprise_energy_research.domain.models import ExtractedClaim, ExtractedEvidenceBatch
-from enterprise_energy_research.research.field_registry import CanonicalFieldRegistry
-from enterprise_energy_research.research.normalizer import EvidenceNormalizer
-from enterprise_energy_research.research.claim_validator import ClaimValidator
-from enterprise_energy_research.research.profiles import CompanyProfileBuilder
+from energy_research_agent.domain.models import ExtractedClaim, ExtractedEvidenceBatch
+from energy_research_agent.research.field_registry import CanonicalFieldRegistry
+from energy_research_agent.research.normalizer import EvidenceNormalizer
+from energy_research_agent.research.claim_validator import ClaimValidator
+from energy_research_agent.research.profiles import CompanyProfileBuilder
 
 
 def _batch(field_name: str, value) -> ExtractedEvidenceBatch:
@@ -57,7 +57,7 @@ class FieldRegistryTests(unittest.TestCase):
         batch = _batch("营业收入", "80亿元")
         evidence = EvidenceNormalizer().normalize([batch])
         evidence.claims, _ = ClaimValidator().validate(evidence.claims, evidence.sources)
-        from enterprise_energy_research.research.entity_mapper import EntityMapper
+        from energy_research_agent.research.entity_mapper import EntityMapper
         evidence.entities, _ = EntityMapper().apply_evidence(
             evidence.entities, evidence.edges, evidence.claims,
         )

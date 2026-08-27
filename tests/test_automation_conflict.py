@@ -4,20 +4,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from enterprise_energy_research.automation.contracts import ResearchRequest
-from enterprise_energy_research.automation.db import AutomationDatabase
-from enterprise_energy_research.automation.enums import TaskStatus
-from enterprise_energy_research.automation.executor import ExecutionOutcome
-from enterprise_energy_research.automation.feishu import FeishuNotifier, MockFeishuAdapter
-from enterprise_energy_research.automation.service import (
+from energy_research_agent.automation.contracts import ResearchRequest
+from energy_research_agent.automation.db import AutomationDatabase
+from energy_research_agent.automation.enums import TaskStatus
+from energy_research_agent.automation.executor import ExecutionOutcome
+from energy_research_agent.automation.feishu import FeishuNotifier, MockFeishuAdapter
+from energy_research_agent.automation.service import (
     ConflictNotFoundError,
     ConflictResolutionError,
     ResearchService,
 )
-from enterprise_energy_research.automation.state_machine import InvalidTransitionError
-from enterprise_energy_research.domain.enums import ConflictStatus, RunStatus, ValidationStatus
-from enterprise_energy_research.domain.models import ConflictGroup, RunManifest
-from enterprise_energy_research.evidence.store import EvidenceStore
+from energy_research_agent.automation.state_machine import InvalidTransitionError
+from energy_research_agent.domain.enums import ConflictStatus, RunStatus, ValidationStatus
+from energy_research_agent.domain.models import ConflictGroup, RunManifest
+from energy_research_agent.evidence.store import EvidenceStore
 
 
 def make_request(task_id: str = "TH_BESS_001") -> ResearchRequest:
@@ -100,7 +100,7 @@ class ConflictAdjudicationTests(unittest.TestCase):
         )
         self.assertEqual(queued.status, TaskStatus.QUEUED)
         # 未裁决的冲突仍在快照之外
-        from enterprise_energy_research.automation.db import TaskRepository
+        from energy_research_agent.automation.db import TaskRepository
 
         session = self.db.session()
         try:
@@ -161,7 +161,7 @@ class StaleRunRecoveryTests(unittest.TestCase):
         run_id = submitted.run_id
         session = self.db.session()
         try:
-            from enterprise_energy_research.automation.db import TaskRepository
+            from energy_research_agent.automation.db import TaskRepository
 
             repo = TaskRepository(session)
             repo.update_run_status(run_id, TaskStatus.RESEARCHING, started=True)
@@ -214,7 +214,7 @@ class StaleRunRecoveryTests(unittest.TestCase):
         self.service.execute_run(run_id)
         session = self.db.session()
         try:
-            from enterprise_energy_research.automation.db import TaskRepository
+            from energy_research_agent.automation.db import TaskRepository
             from datetime import datetime, timezone
 
             row = TaskRepository(session).get_run(run_id)

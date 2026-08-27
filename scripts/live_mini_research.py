@@ -11,18 +11,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 ROOT = Path(__file__).resolve().parents[1]
 
-from enterprise_energy_research.adapters.anysearch import AnySearchCliAdapter
-from enterprise_energy_research.adapters.base import SearchRequest
-from enterprise_energy_research.domain.enums import RunStatus
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import (
+from energy_research_agent.adapters.anysearch import AnySearchCliAdapter
+from energy_research_agent.adapters.base import SearchRequest
+from energy_research_agent.domain.enums import RunStatus
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import (
     ExtractedClaim, ExtractedEntity, ExtractedEvidenceBatch, RunManifest,
 )
-from enterprise_energy_research.evidence.freeze import FreezeService
-from enterprise_energy_research.evidence.store import EvidenceStore
-from enterprise_energy_research.graph.phase3_runner import Phase3Runner
-from enterprise_energy_research.graph.state import ResearchState
-from enterprise_energy_research.settings import Settings, load_yaml
+from energy_research_agent.evidence.freeze import FreezeService
+from energy_research_agent.evidence.store import EvidenceStore
+from energy_research_agent.graph.phase3_runner import Phase3Runner
+from energy_research_agent.graph.state import ResearchState
+from energy_research_agent.settings import Settings, load_yaml
 
 
 def main() -> int:
@@ -60,8 +60,8 @@ def main() -> int:
     text_sample = full_text[:6000]
 
     print("== 3) DeepSeek 真实结构化抽取 ==")
-    from enterprise_energy_research.gateway.base import ModelRequest
-    from enterprise_energy_research.gateway.http_json_gateway import HttpJsonModelGateway
+    from energy_research_agent.gateway.base import ModelRequest
+    from energy_research_agent.gateway.http_json_gateway import HttpJsonModelGateway
     settings = Settings()
     gateway = HttpJsonModelGateway(settings)
     prompt = (
@@ -86,7 +86,7 @@ def main() -> int:
         revenue_value = match.group(1)
 
     print("== 4) 组装证据批 → Phase3 → Freeze ==")
-    from enterprise_energy_research.domain.models import ExtractedProduct
+    from energy_research_agent.domain.models import ExtractedProduct
     batches = [ExtractedEvidenceBatch(
         source_url=official.final_url if official else "https://www.catl.com/",
         source_title=official.title if official else "CATL 官网",
@@ -125,8 +125,8 @@ def main() -> int:
               "| 产品:", len(bundle.products), "| 来源:", len(bundle.sources))
 
         print("== 5) diagram-design 发布（HTML + Word）==")
-        from enterprise_energy_research.artifacts.html import FrozenHtmlPublisher
-        from enterprise_energy_research.artifacts.word import FrozenWordPublisher
+        from energy_research_agent.artifacts.html import FrozenHtmlPublisher
+        from energy_research_agent.artifacts.word import FrozenWordPublisher
         html_binding = next(item for item in manifest.artifacts if item.type.value == "enterprise_html")
         word_binding = next(item for item in manifest.artifacts if item.type.value == "word")
         html_target = work / "enterprise_research_dashboard.html"

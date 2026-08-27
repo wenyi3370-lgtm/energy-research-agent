@@ -16,7 +16,7 @@ three repairs:
 
 import unittest
 
-from enterprise_energy_research.agent.models import (
+from energy_research_agent.agent.models import (
     GoalClass,
     GoalEvaluation,
     GoalStatus,
@@ -24,10 +24,10 @@ from enterprise_energy_research.agent.models import (
     SkillName,
     SubjectType,
 )
-from enterprise_energy_research.agent.recovery import RecoveryPlanner, _LLMRecovery
-from enterprise_energy_research.automation.orchestration import split_recovery_notes
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.research.planner import ResearchPlanner
+from energy_research_agent.agent.recovery import RecoveryPlanner, _LLMRecovery
+from energy_research_agent.automation.orchestration import split_recovery_notes
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.research.planner import ResearchPlanner
 
 
 def _goal(

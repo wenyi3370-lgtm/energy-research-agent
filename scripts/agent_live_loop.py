@@ -1,6 +1,6 @@
 # Live agent loop integration (local-only): real DeepSeek decisions + deterministic skills.
-# Requires: EER_DEEPSEEK_API_KEY in .env; run with the local proxy env if the
-# Windows registry proxy is unusable (see docs/agent/REPOSITORY_INTEGRATION_BASELINE.md).
+# Requires: ERA_DEEPSEEK_API_KEY in .env; run with the local proxy env if the
+# Network routing is configured only through ERA_OUTBOUND_PROXY when required.
 import os
 
 for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
@@ -12,18 +12,18 @@ if os.environ.get("AGENT_LIVE_PROXY"):
 import tempfile
 from pathlib import Path
 
-from enterprise_energy_research.agent.mission_store import MissionStore
-from enterprise_energy_research.agent.models import (
+from energy_research_agent.agent.mission_store import MissionStore
+from energy_research_agent.agent.models import (
     ApprovalStatus, MissionApproval, SkillName,
 )
-from enterprise_energy_research.agent.orchestrator import ResearchOrchestratorAgent
-from enterprise_energy_research.agent.policies import AgentPolicies
-from enterprise_energy_research.agent.tools.enterprise_research import EnterpriseResearchSkill
-from enterprise_energy_research.automation.executor import SyntheticKernelExecutor
-from enterprise_energy_research.evidence.store import EvidenceStore
-from enterprise_energy_research.gateway import LiteLLMModelGateway
-from enterprise_energy_research.settings import Settings
-from enterprise_energy_research.domain.ids import new_sortable_id
+from energy_research_agent.agent.orchestrator import ResearchOrchestratorAgent
+from energy_research_agent.agent.policies import AgentPolicies
+from energy_research_agent.agent.tools.enterprise_research import EnterpriseResearchSkill
+from energy_research_agent.automation.executor import SyntheticKernelExecutor
+from energy_research_agent.evidence.store import EvidenceStore
+from energy_research_agent.gateway import LiteLLMModelGateway
+from energy_research_agent.settings import Settings
+from energy_research_agent.domain.ids import new_sortable_id
 
 tmp = Path(tempfile.mkdtemp(prefix="agent-live-"))
 gateway = LiteLLMModelGateway(Settings())

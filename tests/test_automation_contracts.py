@@ -2,7 +2,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from enterprise_energy_research.automation import (
+from energy_research_agent.automation import (
     ArtifactRef,
     CostMetrics,
     Priority,
@@ -13,7 +13,7 @@ from enterprise_energy_research.automation import (
     RiskLevel,
     TaskStatus,
 )
-from enterprise_energy_research.domain.enums import ArtifactStatus, ArtifactType, ValidationStatus
+from energy_research_agent.domain.enums import ArtifactStatus, ArtifactType, ValidationStatus
 
 
 SPEC_EXAMPLE = {

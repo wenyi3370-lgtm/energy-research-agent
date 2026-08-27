@@ -16,9 +16,9 @@ class SkillPortabilityTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         relatives = {path.relative_to(root).as_posix() for path in project_files()}
         self.assertIn("SKILL.md", relatives)
-        self.assertIn("src/enterprise_energy_research/artifacts/word.py", relatives)
-        self.assertIn("src/enterprise_energy_research/research/production_runner.py", relatives)
-        self.assertIn("src/enterprise_energy_research/research/deep_retry.py", relatives)
+        self.assertIn("src/energy_research_agent/artifacts/word.py", relatives)
+        self.assertIn("src/energy_research_agent/research/production_runner.py", relatives)
+        self.assertIn("src/energy_research_agent/research/deep_retry.py", relatives)
         self.assertIn("scripts/run_product_image_recovery.py", relatives)
         self.assertNotIn(".env", relatives)
         self.assertFalse(any(path.startswith(("build/", "outputs/", ".venv/")) for path in relatives))
@@ -40,6 +40,39 @@ class SkillPortabilityTests(unittest.TestCase):
             self.assertIn(prefix + "uv.lock", names)
             self.assertNotIn(prefix + ".env", names)
             self.assertFalse(any("/build/" in name or "/.venv/" in name for name in names))
+
+    def test_new_agent_identity_has_no_previous_project_residue(self):
+        root = Path(__file__).resolve().parents[1]
+        previous_tokens = (
+            "enterprise" + "-energy-research",
+            "enterprise" + "_energy_research",
+            "E" + "ER_",
+        )
+        text_suffixes = {
+            ".bat", ".cjs", ".css", ".html", ".ini", ".js", ".json",
+            ".md", ".py", ".sh", ".toml", ".txt", ".yaml", ".yml",
+        }
+        violations: list[str] = []
+        for path in project_files():
+            relative = path.relative_to(root).as_posix()
+            if any(token in relative for token in previous_tokens):
+                violations.append(relative)
+                continue
+            if path.suffix.lower() not in text_suffixes:
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            if any(token in text for token in previous_tokens):
+                violations.append(relative)
+        self.assertEqual(violations, [])
+
+    def test_readme_documents_portable_agent_installation(self):
+        root = Path(__file__).resolve().parents[1]
+        readme = (root / "README.md").read_text(encoding="utf-8")
+        self.assertIn("# Energy Research Agent", readme)
+        self.assertIn("energy_research_agent", readme)
+        self.assertIn("ERA_", readme)
+        self.assertIn("docker compose up -d --build", readme)
+        self.assertIn("~/.agents/skills/energy-research-agent", readme)
 
 
 if __name__ == "__main__":

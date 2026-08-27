@@ -6,16 +6,16 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from enterprise_energy_research.artifacts.excel import ExcelMasterFrozenPublisher
-from enterprise_energy_research.artifacts.word import FrozenWordPublisher
-from enterprise_energy_research.domain.enums import ArtifactType, RunStatus
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import ExtractedEvidenceBatch, RunManifest
-from enterprise_energy_research.evidence.freeze import FreezeService
-from enterprise_energy_research.evidence.store import EvidenceStore
-from enterprise_energy_research.graph.phase3_runner import Phase3Runner
-from enterprise_energy_research.graph.state import ResearchState
-from enterprise_energy_research.settings import load_yaml
+from energy_research_agent.artifacts.excel import ExcelMasterFrozenPublisher
+from energy_research_agent.artifacts.word import FrozenWordPublisher
+from energy_research_agent.domain.enums import ArtifactType, RunStatus
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import ExtractedEvidenceBatch, RunManifest
+from energy_research_agent.evidence.freeze import FreezeService
+from energy_research_agent.evidence.store import EvidenceStore
+from energy_research_agent.graph.phase3_runner import Phase3Runner
+from energy_research_agent.graph.state import ResearchState
+from energy_research_agent.settings import load_yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]

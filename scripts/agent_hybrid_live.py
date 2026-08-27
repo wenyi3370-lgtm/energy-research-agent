@@ -1,7 +1,7 @@
 # HYBRID live end-to-end probe: real DeepSeek decisions + real AnySearch
 # searches (market side via the vendored CLI adapter) + real enterprise
 # pipeline + cross-domain synthesis + unified publication (§37/§38/§59).
-# Local-only diagnostic; requires EER_DEEPSEEK_API_KEY + network.
+# Local-only diagnostic; requires ERA_DEEPSEEK_API_KEY + network.
 import csv
 import os
 import sys
@@ -17,22 +17,22 @@ if os.environ.get("AGENT_LIVE_PROXY"):
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from enterprise_energy_research.agent.mission_store import MissionStore  # noqa: E402
-from enterprise_energy_research.agent.models import (  # noqa: E402
+from energy_research_agent.agent.mission_store import MissionStore  # noqa: E402
+from energy_research_agent.agent.models import (  # noqa: E402
     ApprovalStatus, MissionApproval, SkillName,
 )
-from enterprise_energy_research.agent.orchestrator import ResearchOrchestratorAgent  # noqa: E402
-from enterprise_energy_research.agent.policies import AgentPolicies  # noqa: E402
-from enterprise_energy_research.agent.publication import publish_unified  # noqa: E402
-from enterprise_energy_research.agent.tools.enterprise_research import EnterpriseResearchSkill  # noqa: E402
-from enterprise_energy_research.agent.tools.overseas_market_research import OverseasMarketResearchAdapter  # noqa: E402
-from enterprise_energy_research.adapters.anysearch import AnySearchCliAdapter  # noqa: E402
-from enterprise_energy_research.adapters.base import SearchRequest  # noqa: E402
-from enterprise_energy_research.automation.orchestration import OrchestratingExecutor  # noqa: E402
-from enterprise_energy_research.domain.ids import new_sortable_id  # noqa: E402
-from enterprise_energy_research.evidence.store import EvidenceStore  # noqa: E402
-from enterprise_energy_research.gateway import LiteLLMModelGateway  # noqa: E402
-from enterprise_energy_research.settings import Settings  # noqa: E402
+from energy_research_agent.agent.orchestrator import ResearchOrchestratorAgent  # noqa: E402
+from energy_research_agent.agent.policies import AgentPolicies  # noqa: E402
+from energy_research_agent.agent.publication import publish_unified  # noqa: E402
+from energy_research_agent.agent.tools.enterprise_research import EnterpriseResearchSkill  # noqa: E402
+from energy_research_agent.agent.tools.overseas_market_research import OverseasMarketResearchAdapter  # noqa: E402
+from energy_research_agent.adapters.anysearch import AnySearchCliAdapter  # noqa: E402
+from energy_research_agent.adapters.base import SearchRequest  # noqa: E402
+from energy_research_agent.automation.orchestration import OrchestratingExecutor  # noqa: E402
+from energy_research_agent.domain.ids import new_sortable_id  # noqa: E402
+from energy_research_agent.evidence.store import EvidenceStore  # noqa: E402
+from energy_research_agent.gateway import LiteLLMModelGateway  # noqa: E402
+from energy_research_agent.settings import Settings  # noqa: E402
 
 
 def make_market_runner(adapter: AnySearchCliAdapter, project_dir: Path):
@@ -132,7 +132,7 @@ def main() -> int:
         )
 
     def ent_run(spec: dict) -> dict:
-        from enterprise_energy_research.agent.api import build_enterprise_executor
+        from energy_research_agent.agent.api import build_enterprise_executor
         fn = build_enterprise_executor(executor, tmp)
         return fn(spec)
 

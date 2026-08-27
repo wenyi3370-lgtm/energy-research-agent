@@ -22,10 +22,10 @@ import re
 from datetime import date
 from pathlib import Path
 
-from enterprise_energy_research.adapters.anysearch import AnySearchCliAdapter
-from enterprise_energy_research.adapters.kimi_webbridge import KimiWebBridgeSearchAdapter
-from enterprise_energy_research.domain.enums import EnterpriseComplexity, VerificationStatus
-from enterprise_energy_research.research.production_runner import AdaptiveResearchRunner
+from energy_research_agent.adapters.anysearch import AnySearchCliAdapter
+from energy_research_agent.adapters.kimi_webbridge import KimiWebBridgeSearchAdapter
+from energy_research_agent.domain.enums import EnterpriseComplexity, VerificationStatus
+from energy_research_agent.research.production_runner import AdaptiveResearchRunner
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -55,14 +55,14 @@ def load_env_file() -> None:
 def build_gateway():
     """Provider-neutral gateway when credentials exist; None degrades visibly."""
     load_env_file()
-    from enterprise_energy_research.settings import Settings
+    from energy_research_agent.settings import Settings
     settings = Settings()
     if not (settings.deepseek_api_key or settings.openai_api_key):
         return None
     try:
         import importlib.util
         if importlib.util.find_spec("litellm"):
-            from enterprise_energy_research.gateway.litellm_gateway import LiteLLMModelGateway
+            from energy_research_agent.gateway.litellm_gateway import LiteLLMModelGateway
             gateway = LiteLLMModelGateway(settings)
             if gateway.health()["available"]:
                 return gateway
@@ -70,7 +70,7 @@ def build_gateway():
         pass
     # LiteLLM unavailable (blocked index): use the dependency-free HTTP JSON
     # gateway over the same provider-neutral contract.
-    from enterprise_energy_research.gateway.http_json_gateway import HttpJsonModelGateway
+    from energy_research_agent.gateway.http_json_gateway import HttpJsonModelGateway
     gateway = HttpJsonModelGateway(settings)
     return gateway if gateway.health()["available"] else None
 
@@ -78,8 +78,8 @@ def build_gateway():
 def visual_regression_verdicts() -> dict:
     import hashlib
 
-    from enterprise_energy_research.artifacts import html as html_module
-    from enterprise_energy_research.artifacts.visual_policy import colors, word_policy
+    from energy_research_agent.artifacts import html as html_module
+    from energy_research_agent.artifacts.visual_policy import colors, word_policy
     # P0 third-round baseline: ENTERPRISE RESEARCH DASHBOARD hero (real KPI
     # grid, judgement demoted to one module) instead of the decision hero.
     frozen_css = "f4bc660a21f34da93907d287cc238345316ad18360ed0d180ea32110bbd9d908"
@@ -120,7 +120,7 @@ def main() -> int:
     }
     # Real byte fetcher for image discovery + archiving (proxy-bypassed exact
     # asset retrieval; never a search fallback).
-    from enterprise_energy_research.research.image_archiver import ImageAssetArchiver
+    from energy_research_agent.research.image_archiver import ImageAssetArchiver
     archiver = ImageAssetArchiver()
     fetcher = lambda url, referer: archiver._fetch_direct(url, referer)[0]
 

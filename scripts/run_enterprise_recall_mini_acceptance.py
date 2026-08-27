@@ -7,12 +7,12 @@ import json
 from pathlib import Path
 from urllib.parse import urlparse
 
-from enterprise_energy_research.adapters.anysearch import AnySearchCliAdapter
-from enterprise_energy_research.adapters.base import SearchRequest
-from enterprise_energy_research.research.recall import (
+from energy_research_agent.adapters.anysearch import AnySearchCliAdapter
+from energy_research_agent.adapters.base import SearchRequest
+from energy_research_agent.research.recall import (
     EntityEventMiner, RecallProfile, RecallStatus, SearchFrontier,
 )
-from enterprise_energy_research.research.recall.recall_engine import RecallEngine
+from energy_research_agent.research.recall.recall_engine import RecallEngine
 
 
 TOPICS = [

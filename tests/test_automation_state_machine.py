@@ -1,6 +1,6 @@
 import unittest
 
-from enterprise_energy_research.automation.state_machine import (
+from energy_research_agent.automation.state_machine import (
     LEGAL_TRANSITIONS,
     TERMINAL_STATES,
     InvalidTransitionError,
@@ -8,7 +8,7 @@ from enterprise_energy_research.automation.state_machine import (
     assert_transition,
     is_terminal,
 )
-from enterprise_energy_research.automation.enums import TaskStatus
+from energy_research_agent.automation.enums import TaskStatus
 
 
 class TestTaskStateMachine(unittest.TestCase):

@@ -6,10 +6,10 @@ from __future__ import annotations
 
 import unittest
 
-from enterprise_energy_research.domain.enums import VerificationStatus
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.domain.models import Claim, EnergyProfile, Entity
-from enterprise_energy_research.research.opportunity_registry import (
+from energy_research_agent.domain.enums import VerificationStatus
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.domain.models import Claim, EnergyProfile, Entity
+from energy_research_agent.research.opportunity_registry import (
     EvidenceOpportunityEngine, OpportunityRegistry,
 )
 

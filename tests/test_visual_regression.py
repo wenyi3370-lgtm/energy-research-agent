@@ -9,9 +9,9 @@ import hashlib
 import re
 import unittest
 
-from enterprise_energy_research.artifacts import html as html_module
-from enterprise_energy_research.artifacts.diagram_design_adapter import ENTERPRISE_PROFILE
-from enterprise_energy_research.artifacts.visual_policy import colors, word_policy
+from energy_research_agent.artifacts import html as html_module
+from energy_research_agent.artifacts.diagram_design_adapter import ENTERPRISE_PROFILE
+from energy_research_agent.artifacts.visual_policy import colors, word_policy
 
 # P0 third-round baseline: ENTERPRISE RESEARCH DASHBOARD hero (real KPI grid,
 # judgement demoted to one module) instead of the decision-first hero.

@@ -7,9 +7,9 @@ returned texts VERBATIM via ``ResearchPlanner.direct_recovery_queries`` (R4).
 The LLM is an enrichment: any failure degrades to the template floor.
 """
 
-from enterprise_energy_research.gateway.base import GatewayError
-from enterprise_energy_research.research.data_coverage import CoverageGap
-from enterprise_energy_research.research.deep_retry import (
+from energy_research_agent.gateway.base import GatewayError
+from energy_research_agent.research.data_coverage import CoverageGap
+from energy_research_agent.research.deep_retry import (
     _DeepRecoveryQueries,
     _llm_recovery_queries,
 )

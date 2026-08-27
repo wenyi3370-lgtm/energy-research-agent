@@ -2,8 +2,8 @@
 
 import unittest
 
-from enterprise_energy_research.research.normalizer import EvidenceNormalizer
-from enterprise_energy_research.domain.models import ExtractedEvidenceBatch
+from energy_research_agent.research.normalizer import EvidenceNormalizer
+from energy_research_agent.domain.models import ExtractedEvidenceBatch
 
 
 class QuoteFallbackTests(unittest.TestCase):

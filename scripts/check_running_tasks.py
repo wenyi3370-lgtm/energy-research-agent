@@ -8,9 +8,9 @@ import urllib.request
 
 try:
     import psycopg  # noqa
-    from enterprise_energy_research.automation.db import AutomationDatabase
+    from energy_research_agent.automation.db import AutomationDatabase
     from sqlalchemy import select
-    from enterprise_energy_research.automation.db.models import ResearchRunRow
+    from energy_research_agent.automation.db.models import ResearchRunRow
 
     db = AutomationDatabase("postgresql+psycopg://research:research@localhost:5432/research")
     session = db.session()

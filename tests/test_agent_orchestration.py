@@ -13,9 +13,9 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-from enterprise_energy_research.agent.evaluator import _LLMEvaluation
-from enterprise_energy_research.agent.mission_parser import CustomGoalSpec, MarketGoalSpec, MissionParseResult
-from enterprise_energy_research.agent.models import (
+from energy_research_agent.agent.evaluator import _LLMEvaluation
+from energy_research_agent.agent.mission_parser import CustomGoalSpec, MarketGoalSpec, MissionParseResult
+from energy_research_agent.agent.models import (
     ApprovalStatus,
     CrossDomainFinding,
     FailureClass,
@@ -35,13 +35,13 @@ from enterprise_energy_research.agent.models import (
     SkillRunStatus,
     SubjectType,
 )
-from enterprise_energy_research.agent.policies import AgentPolicies
-from enterprise_energy_research.agent.recovery import RecoveryLedger
-from enterprise_energy_research.agent.router import RoutingBatch
-from enterprise_energy_research.agent.synthesis import _LLMSynthesis
-from enterprise_energy_research.domain.ids import new_sortable_id
-from enterprise_energy_research.evidence.store import EvidenceStore
-from enterprise_energy_research.gateway.base import GatewayError
+from energy_research_agent.agent.policies import AgentPolicies
+from energy_research_agent.agent.recovery import RecoveryLedger
+from energy_research_agent.agent.router import RoutingBatch
+from energy_research_agent.agent.synthesis import _LLMSynthesis
+from energy_research_agent.domain.ids import new_sortable_id
+from energy_research_agent.evidence.store import EvidenceStore
+from energy_research_agent.gateway.base import GatewayError
 
 _SENTINEL = object()
 
@@ -195,8 +195,8 @@ def make_orchestrator(
     approval_cb=None,
     evidence_store: EvidenceStore | None = None,
 ):
-    from enterprise_energy_research.agent.mission_store import MissionStore
-    from enterprise_energy_research.agent.orchestrator import ResearchOrchestratorAgent
+    from energy_research_agent.agent.mission_store import MissionStore
+    from energy_research_agent.agent.orchestrator import ResearchOrchestratorAgent
 
     tmp = Path(tempfile.mkdtemp(prefix="agent-test-"))
     ent = enterprise if enterprise is not None else FakeSkill(SkillName.ENTERPRISE_RESEARCH)
@@ -339,8 +339,8 @@ class TestRecoveryUsesRepoStrategies(unittest.TestCase):
     Search Recall contract), not a hand-rolled lane list."""
 
     def test_deterministic_recovery_rotates_repo_strategies(self):
-        from enterprise_energy_research.agent.recovery import RecoveryPlanner
-        from enterprise_energy_research.research.planner import RECOVERY_STRATEGIES
+        from energy_research_agent.agent.recovery import RecoveryPlanner
+        from energy_research_agent.research.planner import RECOVERY_STRATEGIES
 
         goal = ResearchGoal(
             goal_id=new_sortable_id("GOAL"), goal_name="产能与产线", goal_description="d",
@@ -370,7 +370,7 @@ class TestAgentEvidenceBoundaries(unittest.TestCase):
     """TEST-AGENT-04/13: subject isolation and conflict preservation."""
 
     def test_agent04_competitor_evidence_never_pollutes_target(self):
-        from enterprise_energy_research.agent.market_evidence import MarketEvidenceImporter
+        from energy_research_agent.agent.market_evidence import MarketEvidenceImporter
 
         tmp = Path(tempfile.mkdtemp(prefix="agent-ev-"))
         store = EvidenceStore(tmp / "ev.sqlite3")
@@ -408,9 +408,9 @@ class TestAgentEvidenceBoundaries(unittest.TestCase):
         self.assertEqual(target[0].entity_id, target_goal.subject_id)
 
     def test_agent13_conflicts_preserved_no_auto_overwrite(self):
-        from enterprise_energy_research.agent.market_evidence import MarketEvidenceImporter
-        from enterprise_energy_research.domain.enums import VerificationStatus
-        from enterprise_energy_research.domain.models import Claim, utc_now
+        from energy_research_agent.agent.market_evidence import MarketEvidenceImporter
+        from energy_research_agent.domain.enums import VerificationStatus
+        from energy_research_agent.domain.models import Claim, utc_now
 
         tmp = Path(tempfile.mkdtemp(prefix="agent-conflict-"))
         store = EvidenceStore(tmp / "ev.sqlite3")
@@ -496,7 +496,7 @@ class TestEnterpriseToolEvidenceRows(unittest.TestCase):
     payload) as evidence_exports, or goal binding sees nothing."""
 
     def test_execute_exposes_claim_rows(self):
-        from enterprise_energy_research.agent.tools.enterprise_research import EnterpriseResearchSkill
+        from energy_research_agent.agent.tools.enterprise_research import EnterpriseResearchSkill
 
         def fake_executor(spec):
             return {
@@ -523,7 +523,7 @@ class TestAgentApproval(unittest.TestCase):
     """TEST-AGENT-08: the agent cannot self-approve market research."""
 
     def test_agent08_unapproved_overseas_blocks(self):
-        from enterprise_energy_research.agent.tools.overseas_market_research import OverseasMarketResearchAdapter
+        from energy_research_agent.agent.tools.overseas_market_research import OverseasMarketResearchAdapter
 
         tmp = Path(tempfile.mkdtemp(prefix="agent-approval-"))
         calls: dict[str, Any] = {"runner": 0}
@@ -550,7 +550,7 @@ class TestAgentApproval(unittest.TestCase):
     def test_agent08b_unified_approval_opens_both_gates(self):
         """§27: one human mission approval materializes the skill's own
         Stage-0 record, so no second approval step is needed."""
-        from enterprise_energy_research.agent.tools.overseas_market_research import OverseasMarketResearchAdapter
+        from energy_research_agent.agent.tools.overseas_market_research import OverseasMarketResearchAdapter
 
         tmp = Path(tempfile.mkdtemp(prefix="agent-approval-"))
         calls: dict[str, Any] = {"runner": 0}
@@ -575,7 +575,7 @@ class TestAgentApproval(unittest.TestCase):
         self.assertEqual(calls["runner"], 1)
 
     def test_agent08_approved_overseas_runs(self):
-        from enterprise_energy_research.agent.tools.overseas_market_research import OverseasMarketResearchAdapter
+        from energy_research_agent.agent.tools.overseas_market_research import OverseasMarketResearchAdapter
 
         tmp = Path(tempfile.mkdtemp(prefix="agent-approval-"))
         project_dir = tmp / "market"
@@ -611,7 +611,7 @@ class TestMarketTaskFloors(unittest.TestCase):
     policy floors, not hardcoded 2/3."""
 
     def test_task_rows_use_policy_floors(self):
-        from enterprise_energy_research.agent.tools.overseas_market_research import OverseasMarketResearchAdapter
+        from energy_research_agent.agent.tools.overseas_market_research import OverseasMarketResearchAdapter
 
         tmp = Path(tempfile.mkdtemp(prefix="agent-floors-"))
         adapter = OverseasMarketResearchAdapter(skill_root=Path("unused"), runner=lambda spec: {"status": "OK"})
@@ -644,7 +644,7 @@ class TestMarketRunnerCommand(unittest.TestCase):
     def test_json_log_flag_carries_path_value(self):
         from unittest import mock
 
-        from enterprise_energy_research.agent.tools.overseas_market_research import OverseasMarketResearchAdapter
+        from energy_research_agent.agent.tools.overseas_market_research import OverseasMarketResearchAdapter
 
         tmp = Path(tempfile.mkdtemp(prefix="agent-runner-"))
         project = tmp / "market"
@@ -696,7 +696,7 @@ class TestMarketRunnerCommand(unittest.TestCase):
         导致项目模板永远未初始化 → ledger 0 行 → 目标全部 EXHAUSTED 零交付）。"""
         from unittest import mock
 
-        from enterprise_energy_research.agent.tools.overseas_market_research import OverseasMarketResearchAdapter
+        from energy_research_agent.agent.tools.overseas_market_research import OverseasMarketResearchAdapter
 
         tmp = Path(tempfile.mkdtemp(prefix="agent-runner-init-"))
         project = tmp / "market"
@@ -743,7 +743,7 @@ class TestMarketRunnerCommand(unittest.TestCase):
         否则编排层判零证据、证据进不了 unified store、整任务零交付物。"""
         import csv as _csv
 
-        from enterprise_energy_research.agent.tools.overseas_market_research import register_sources_from_captures
+        from energy_research_agent.agent.tools.overseas_market_research import register_sources_from_captures
 
         tmp = Path(tempfile.mkdtemp(prefix="agent-ledger-"))
         project = tmp / "market"
@@ -798,7 +798,7 @@ class TestMarketGoalDedup(unittest.TestCase):
     规划器不得按条数 × 目标族展开，否则单市场出现重复目标组（18 而非 6）。"""
 
     def test_same_geography_specs_are_merged(self):
-        from enterprise_energy_research.agent.goal_planner import MARKET_GOAL_FAMILIES, GoalPlanner
+        from energy_research_agent.agent.goal_planner import MARKET_GOAL_FAMILIES, GoalPlanner
 
         planner = GoalPlanner()
         mission = ResearchMission(
@@ -830,7 +830,7 @@ class TestCustomGoalCoreDedup(unittest.TestCase):
     同时保留真正新增范围的目标（新主题、带地理限定、竞对深挖）。"""
 
     def _planned(self, custom_goals):
-        from enterprise_energy_research.agent.goal_planner import GoalPlanner
+        from energy_research_agent.agent.goal_planner import GoalPlanner
 
         planner = GoalPlanner()
         mission = ResearchMission(
@@ -912,7 +912,7 @@ class TestAgentRecovery(unittest.TestCase):
                 evals[goal_name] = count + 1
                 return _LLMEvaluation(satisfied=count >= 1, reason="scripted")
             if request.purpose == "agent.recovery_plan":
-                from enterprise_energy_research.agent.recovery import _LLMRecovery
+                from energy_research_agent.agent.recovery import _LLMRecovery
                 return _LLMRecovery(
                     failure_reason="上一轮产能证据缺失",
                     new_strategy="环评与投产公告",
@@ -972,7 +972,7 @@ class TestAgentRecovery(unittest.TestCase):
             if request.purpose == "agent.goal_evaluation":
                 return _LLMEvaluation(satisfied=False, reason="scripted failure")
             if request.purpose == "agent.recovery_plan":
-                from enterprise_energy_research.agent.recovery import _LLMRecovery
+                from energy_research_agent.agent.recovery import _LLMRecovery
                 return _LLMRecovery(failure_reason="x", new_strategy="y", new_queries=["new-query"])
             if request.purpose == "agent.cross_domain_synthesis":
                 return _LLMSynthesis(findings=[])
@@ -998,7 +998,7 @@ class TestAgentRecovery(unittest.TestCase):
             if request.purpose == "agent.goal_evaluation":
                 return _LLMEvaluation(satisfied=False, reason="scripted insufficiency")
             if request.purpose == "agent.recovery_plan":
-                from enterprise_energy_research.agent.recovery import _LLMRecovery
+                from energy_research_agent.agent.recovery import _LLMRecovery
                 return _LLMRecovery(failure_reason="x", new_strategy="y", new_queries=[new_sortable_id("Q")])
             if request.purpose == "agent.cross_domain_synthesis":
                 return _LLMSynthesis(findings=[])
@@ -1026,7 +1026,7 @@ class TestAgentSynthesisAndPublisher(unittest.TestCase):
     """TEST-AGENT-14: final publication never fetches; synthesis is traceable."""
 
     def test_agent14_synthesis_requires_traceable_refs(self):
-        from enterprise_energy_research.agent.synthesis import CrossDomainSynthesisEngine
+        from energy_research_agent.agent.synthesis import CrossDomainSynthesisEngine
 
         evidence = [{"claim_id": "CLAIM-1", "verification_status": "VERIFIED", "raw_value": "x"}]
         engine = CrossDomainSynthesisEngine(FakeGateway(lambda request: _LLMSynthesis(findings=[
@@ -1050,7 +1050,7 @@ class TestAgentSynthesisAndPublisher(unittest.TestCase):
 
     def test_agent14b_engine_has_no_network_surface(self):
         import inspect
-        from enterprise_energy_research.agent.synthesis import CrossDomainSynthesisEngine
+        from energy_research_agent.agent.synthesis import CrossDomainSynthesisEngine
 
         source = inspect.getsource(CrossDomainSynthesisEngine)
         for banned in ("requests.get", "urlopen", "httpx", "urllib.request", "socket"):
@@ -1060,9 +1060,9 @@ class TestAgentSynthesisAndPublisher(unittest.TestCase):
         # The agent layer must not import the intelligence workflow (§47), and
         # its public entry point stays intact.
         import inspect
-        from enterprise_energy_research.automation.intelligence.service import IntelligenceService
-        from enterprise_energy_research.agent.orchestrator import ResearchOrchestratorAgent
-        from enterprise_energy_research.agent.api import build_agent_orchestrator
+        from energy_research_agent.automation.intelligence.service import IntelligenceService
+        from energy_research_agent.agent.orchestrator import ResearchOrchestratorAgent
+        from energy_research_agent.agent.api import build_agent_orchestrator
 
         self.assertTrue(hasattr(IntelligenceService, "run_daily"), "run_daily must remain intact")
         for module in (ResearchOrchestratorAgent, build_agent_orchestrator):
@@ -1138,11 +1138,11 @@ class TestAgentApiSurface(unittest.TestCase):
 
         from fastapi.testclient import TestClient
 
-        from enterprise_energy_research.automation.api.app import create_app
-        from enterprise_energy_research.automation.executor import SyntheticKernelExecutor
+        from energy_research_agent.automation.api.app import create_app
+        from energy_research_agent.automation.executor import SyntheticKernelExecutor
 
         tmp = Path(tempfile.mkdtemp(prefix="agent-api-"))
-        with patch.dict(os.environ, {"EER_DEEPSEEK_API_KEY": "", "EER_OPENAI_API_KEY": ""}, clear=False):
+        with patch.dict(os.environ, {"ERA_DEEPSEEK_API_KEY": "", "ERA_OPENAI_API_KEY": ""}, clear=False):
             app = create_app(executor=SyntheticKernelExecutor(), workdir=tmp)
         self.assertTrue(app.state.agent_enabled)
         client = TestClient(app)
@@ -1160,7 +1160,7 @@ class TestMarketHarvestAndProduction(unittest.TestCase):
     """回归：模板骨架绝不进交付清单（曾被推送到飞书）；生产管线幂等可跳过。"""
 
     def _adapter(self):
-        from enterprise_energy_research.agent.tools.overseas_market_research import OverseasMarketResearchAdapter
+        from energy_research_agent.agent.tools.overseas_market_research import OverseasMarketResearchAdapter
 
         return OverseasMarketResearchAdapter(skill_root=Path("unused"), runner=lambda spec: {"status": "OK"})
 

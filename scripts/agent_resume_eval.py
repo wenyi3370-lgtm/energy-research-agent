@@ -12,25 +12,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from enterprise_energy_research.agent.api import _read_run_claims  # noqa: E402
-from enterprise_energy_research.agent.evals import compute_agent_metrics  # noqa: E402
-from enterprise_energy_research.agent.mission_store import MissionStore  # noqa: E402
-from enterprise_energy_research.agent.models import (  # noqa: E402
+from energy_research_agent.agent.api import _read_run_claims  # noqa: E402
+from energy_research_agent.agent.evals import compute_agent_metrics  # noqa: E402
+from energy_research_agent.agent.mission_store import MissionStore  # noqa: E402
+from energy_research_agent.agent.models import (  # noqa: E402
     ApprovalStatus, GoalStatus, MissionApproval, ResearchMode, SkillName,
 )
-from enterprise_energy_research.agent.orchestrator import ResearchOrchestratorAgent  # noqa: E402
-from enterprise_energy_research.agent.policies import AgentPolicies  # noqa: E402
-from enterprise_energy_research.agent.publication import publish_unified  # noqa: E402
-from enterprise_energy_research.agent.synthesis import CrossDomainSynthesisEngine  # noqa: E402
-from enterprise_energy_research.evidence.store import EvidenceStore  # noqa: E402
-from enterprise_energy_research.gateway import LiteLLMModelGateway  # noqa: E402
-from enterprise_energy_research.settings import Settings  # noqa: E402
+from energy_research_agent.agent.orchestrator import ResearchOrchestratorAgent  # noqa: E402
+from energy_research_agent.agent.policies import AgentPolicies  # noqa: E402
+from energy_research_agent.agent.publication import publish_unified  # noqa: E402
+from energy_research_agent.agent.synthesis import CrossDomainSynthesisEngine  # noqa: E402
+from energy_research_agent.evidence.store import EvidenceStore  # noqa: E402
+from energy_research_agent.gateway import LiteLLMModelGateway  # noqa: E402
+from energy_research_agent.settings import Settings  # noqa: E402
 
 
 def _merge_run_claims(probe: Path, src_run_id: str, dst_run_id: str) -> int:
     """Copy records from a recovery run into the accumulating enterprise run,
     deduplicated by record id (append-only store semantics)."""
-    from enterprise_energy_research.evidence.store import EvidenceStore
+    from energy_research_agent.evidence.store import EvidenceStore
 
     src = EvidenceStore(probe / src_run_id / "evidence.sqlite3")
     dst = EvidenceStore(probe / dst_run_id / "evidence.sqlite3")
@@ -108,10 +108,10 @@ def main() -> int:
     print("claims loaded:", len(rows))
 
     # 2) bind + evaluate (reuse the orchestrator's deterministic machinery)
-    from enterprise_energy_research.agent.tools.enterprise_research import EnterpriseResearchSkill
-    from enterprise_energy_research.agent.evaluator import GoalEvaluator
-    from enterprise_energy_research.agent.recovery import RecoveryLedger, RecoveryPlanner
-    from enterprise_energy_research.automation.orchestration import OrchestratingExecutor
+    from energy_research_agent.agent.tools.enterprise_research import EnterpriseResearchSkill
+    from energy_research_agent.agent.evaluator import GoalEvaluator
+    from energy_research_agent.agent.recovery import RecoveryLedger, RecoveryPlanner
+    from energy_research_agent.automation.orchestration import OrchestratingExecutor
 
     evaluator = GoalEvaluator(gateway)
     recovery_planner = RecoveryPlanner(gateway, max_rounds_per_goal=3)
@@ -130,7 +130,7 @@ def main() -> int:
 
     evaluations = []
     executor = OrchestratingExecutor.from_environment(gateway=gateway)
-    from enterprise_energy_research.agent.api import build_enterprise_executor
+    from energy_research_agent.agent.api import build_enterprise_executor
 
     ent_executor = build_enterprise_executor(executor, probe)
     for goal in mission.goals:
@@ -149,7 +149,7 @@ def main() -> int:
                 goal, evaluation, failed_round=rounds,
                 previous_attempts=[], evidence_sample=evidence_by_goal.get(goal.goal_id, []),
             )
-            if recovery.failure_class == __import__("enterprise_energy_research.agent.models", fromlist=["FailureClass"]).FailureClass.RECOVERY_EXHAUSTED or not recovery.new_queries:
+            if recovery.failure_class == __import__("energy_research_agent.agent.models", fromlist=["FailureClass"]).FailureClass.RECOVERY_EXHAUSTED or not recovery.new_queries:
                 break
             print(f"  recovery {goal.goal_name} round {rounds + 1}: {recovery.new_queries[:2]}")
             payload = ent_executor({
