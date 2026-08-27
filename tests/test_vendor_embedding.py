@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from energy_research_agent.artifacts.excel import ExcelMasterFrozenPublisher
 from energy_research_agent.artifacts.html import FrozenHtmlPublisher
 from energy_research_agent.artifacts.ppt import PptMasterFrozenPublisher
 from energy_research_agent.domain.enums import ArtifactType
 from energy_research_agent.vendor import EMBEDDED_SKILLS, embedded_skill_available, embedded_skill_root
+from scripts.vendor_skills import digest
 
 
 class VendorEmbeddingTests(unittest.TestCase):
@@ -79,10 +82,30 @@ class VendorEmbeddingTests(unittest.TestCase):
                 self.assertTrue((root / relative).is_file())
 
     def test_diagram_design_third_party_notices_are_present(self) -> None:
-        from pathlib import Path
         root = Path(__file__).resolve().parents[1]
         self.assertTrue((root / "third_party" / "diagram-design" / "LICENSE").is_file())
         self.assertTrue((root / "third_party" / "diagram-design" / "NOTICE.md").is_file())
+
+    def test_manifest_digest_normalizes_cross_platform_text_line_endings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for name in ("table.csv", "suffixes.dat", ".gitignore"):
+                windows = root / f"windows-{name}" if name != ".gitignore" else root / "windows" / name
+                linux = root / f"linux-{name}" if name != ".gitignore" else root / "linux" / name
+                windows.parent.mkdir(parents=True, exist_ok=True)
+                linux.parent.mkdir(parents=True, exist_ok=True)
+                windows.write_bytes(b"alpha\r\nbeta\r\n")
+                linux.write_bytes(b"alpha\nbeta\n")
+                self.assertEqual(digest(windows), digest(linux), name)
+
+    def test_manifest_digest_keeps_binary_bytes_exact(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            windows = root / "asset.bin"
+            linux = root / "asset-copy.bin"
+            windows.write_bytes(b"\x00alpha\r\nbeta")
+            linux.write_bytes(b"\x00alpha\nbeta")
+            self.assertNotEqual(digest(windows), digest(linux))
 
 
 if __name__ == "__main__":

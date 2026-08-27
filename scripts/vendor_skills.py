@@ -80,6 +80,7 @@ SECRET_PATTERN = re.compile(
 TEXT_SUFFIXES = {
     ".md", ".py", ".yaml", ".yml", ".json", ".txt", ".toml", ".sh", ".ps1",
     ".js", ".html", ".css", ".xml", ".svg", ".example", ".cjs", ".mjs",
+    ".csv", ".dat",
 }
 
 
@@ -92,7 +93,7 @@ def digest(path: Path) -> tuple[str, int]:
     Text files are normalized CRLF -> LF; binaries are used verbatim.
     """
     raw = path.read_bytes()
-    if path.suffix.lower() in TEXT_SUFFIXES or path.name in {"LICENSE", "NOTICE"}:
+    if path.suffix.lower() in TEXT_SUFFIXES or path.name in {"LICENSE", "NOTICE", ".gitignore"}:
         raw = raw.replace(b"\r\n", b"\n")
     return hashlib.sha256(raw).hexdigest(), len(raw)
 

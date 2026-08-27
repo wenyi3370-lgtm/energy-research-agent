@@ -1,7 +1,7 @@
 {
   "components": {
     "anysearch": {
-      "byte_count": 146875,
+      "byte_count": 146872,
       "file_count": 19,
       "required": [
         "SKILL.md",
@@ -59,7 +59,7 @@
       "source": "local Codex Skill snapshot"
     },
     "overseas-energy-market-research": {
-      "byte_count": 27411034,
+      "byte_count": 27394616,
       "file_count": 12266,
       "required": [
         "SKILL.md",
@@ -103,8 +103,8 @@
       "sha256": "1f9cf7d8d8018dfe456d61d435557a6de268997e8174d0abe107c24bc4dfdf8e"
     },
     "anysearch/.gitignore": {
-      "bytes": 38,
-      "sha256": "4275a959e6e1be989763585117410c36fd577399e69a6db0b77c1a9d6fd4643f"
+      "bytes": 35,
+      "sha256": "c46c6f288d3ec1733bd66ec8f2649cde63acef481c92c5f7e6926b4f0186a462"
     },
     "anysearch/LICENSE": {
       "bytes": 11215,
@@ -1047,8 +1047,8 @@
       "sha256": "e5c1a35fc53600b8ff2c5a384f1c0f1964d0c4b57f59be623e49a3ef4e8c02cd"
     },
     "overseas-energy-market-research/.gitignore": {
-      "bytes": 30,
-      "sha256": "f8c5a8b7d9d15c5ad3752442145fb8f8918bc871de8bfc7d6a4c91375965466c"
+      "bytes": 27,
+      "sha256": "c93364c490e584d3b30d7f3b06e506661750448113fac875818b366e3299724d"
     },
     "overseas-energy-market-research/CHANGELOG.md": {
       "bytes": 54461,
@@ -1111,76 +1111,76 @@
       "sha256": "6632994fca90cd3a30617187adb7f6251d2d7896598b17592efc82ae00f0066a"
     },
     "overseas-energy-market-research/assets/templates/csv/channel_service_template.csv": {
-      "bytes": 151,
-      "sha256": "e4be2942122a46a4b4b15dfe66dac482f28c17bef1ee34a0599a365b5ea45eef"
+      "bytes": 150,
+      "sha256": "e1f623dd4ecbd87531c8864fe18fabec9b375f027c15dffe20d99956adcf8ae9"
     },
     "overseas-energy-market-research/assets/templates/csv/collection_record_registry_template.csv": {
-      "bytes": 269,
-      "sha256": "9e0df9a427cc908d6ae24925697a19c639da90f54b5e74cb80e53fa1ee5e7e39"
+      "bytes": 268,
+      "sha256": "4b9e5dc956fc147f84c23a6534cc74aca36dc0574fced5c91df7478f916ae872"
     },
     "overseas-energy-market-research/assets/templates/csv/competitor_list_template.csv": {
-      "bytes": 108,
-      "sha256": "5e5819a57525201afe55db324722791b049d29ea3ac5442479e046fc1805e46f"
+      "bytes": 107,
+      "sha256": "f2a9e47032b8b49ef0f896afa7c7d4e536f2eaa71d08636259e84850ff8f447f"
     },
     "overseas-energy-market-research/assets/templates/csv/data_gaps_template.csv": {
-      "bytes": 376,
-      "sha256": "3c96217289e553511d1ed577730ac5d4ffb40bab91dffc7f44946c3708875f3f"
+      "bytes": 375,
+      "sha256": "67335909d762a7f8351e10c1c3055725d2c8bff2f27cca589f874aa8a8f4c73c"
     },
     "overseas-energy-market-research/assets/templates/csv/integrated_matrix_template.csv": {
-      "bytes": 212,
-      "sha256": "972c55db0a01127f4eb61756c334332ddd06df5dbf4879fd29891015a6cb6043"
+      "bytes": 211,
+      "sha256": "fc061b59f95e5027159c3734713f135001df19d328c0c3fda27befc44680e687"
     },
     "overseas-energy-market-research/assets/templates/csv/market_scan_template.csv": {
-      "bytes": 233,
-      "sha256": "8c71111cc19b242236e75e2ae9d8c8b7e2e37949a1a0a29f4f2b9256682f2cb2"
+      "bytes": 232,
+      "sha256": "67c775b64896cef7e36ac35784f697475c98b3e89bffd7df04215b5879b8aca5"
     },
     "overseas-energy-market-research/assets/templates/csv/model_assumptions_template.csv": {
-      "bytes": 213,
-      "sha256": "a95af057987eac5c9e19dd62e9853151ebc11cd24864d86816aef1813872f61d"
+      "bytes": 212,
+      "sha256": "138b579d8819d05aa54579842a548c9f29dbd6734bd45c9c87644432ea2520df"
     },
     "overseas-energy-market-research/assets/templates/csv/model_identifier_template.csv": {
-      "bytes": 163,
-      "sha256": "f1617a3ea41cf1a773a49896a64724ed2fe3661c71d5a48706c70d933b2c4ffc"
+      "bytes": 162,
+      "sha256": "0cebea8700a4925c9a2a7bf7b3474e66d6e21224eb11f971e50d7d6b2dd674ab"
     },
     "overseas-energy-market-research/assets/templates/csv/model_results_template.csv": {
-      "bytes": 246,
-      "sha256": "aca01c1ac2ffbfd9efe1df412b640f75550c6dcdc96fdaf40bab720f41ef72e9"
+      "bytes": 245,
+      "sha256": "581c2cc6e559d72e6ecc90f6de4644d76a302a1433953ebe9e80245f0d937b36"
     },
     "overseas-energy-market-research/assets/templates/csv/pricing_channel_template.csv": {
-      "bytes": 295,
-      "sha256": "120906f8c1e6b9f248fe72f1b586ae8fb88dc52fd2a9498dddd93fd03e1d0194"
+      "bytes": 294,
+      "sha256": "5aff598d8aa8436ea4664341bbbe89c5b5e42dd193f76dca7f852c7525425bc6"
     },
     "overseas-energy-market-research/assets/templates/csv/product_parameters_template.csv": {
-      "bytes": 222,
-      "sha256": "a3b6cb1d1b5b93316b59e412cb60f14ddbce99b7bc8d9ed7b14daa38bcf501d0"
+      "bytes": 221,
+      "sha256": "b2da0098ce953dc0178bd43b52d6b42efcb79a5021eef65c0f6475b51914dbae"
     },
     "overseas-energy-market-research/assets/templates/csv/raw_reviews_template.csv": {
-      "bytes": 230,
-      "sha256": "86800f4ab6fcc7bdfc858c182cb0374e2f3518ac456e74f2a172ec831fd53066"
+      "bytes": 229,
+      "sha256": "9e93cb8cb29c8f729ad8636bd9d95492f22dd98645c35cf8debddf452cc0daf2"
     },
     "overseas-energy-market-research/assets/templates/csv/research_approval_template.csv": {
-      "bytes": 151,
-      "sha256": "37e0f893279642fc62b20e830bea442186f03ff0bcf17c99dcdcc305056da5b0"
+      "bytes": 150,
+      "sha256": "d3a4845b09a614dc2b0661e1b0d7bc0139e921a5c4cec7550e37d75f623bc2df"
     },
     "overseas-energy-market-research/assets/templates/csv/review_coding_template.csv": {
-      "bytes": 141,
-      "sha256": "9bf4e9975f50c3bd6aed6b570e85c7700575722eb1432675d0988690279ec10e"
+      "bytes": 140,
+      "sha256": "5b51db1c36e49ca556400ec6204c404397fade9c9e264fb19596127a9aaaa5fd"
     },
     "overseas-energy-market-research/assets/templates/csv/simulated_modeling_data_template.csv": {
-      "bytes": 418,
-      "sha256": "f2095c188e3f0b8be6931384a917441c65b22dd83a92abfd351ed83c0dd8465e"
+      "bytes": 417,
+      "sha256": "4f006e0a331b7a5b03bfc05e675d237e7b695a1fc2b823046842715ce3537eff"
     },
     "overseas-energy-market-research/assets/templates/csv/source_ledger_template.csv": {
-      "bytes": 438,
-      "sha256": "ab562011bf427c34dfba880db1c6fe8b86e4e0caafa0a624c0fcdc457618f44a"
+      "bytes": 437,
+      "sha256": "f20b14e72e751c83a5e0ca88fc64922f528997cfc57b1296d4edae06d2c5d519"
     },
     "overseas-energy-market-research/assets/templates/csv/swot_opportunity_template.csv": {
-      "bytes": 131,
-      "sha256": "5e66b4169ff1264b50fe8125161e1afc538b3485ea3fe54cb32ae84866713221"
+      "bytes": 130,
+      "sha256": "8612a48e220b75346c8d520b26ec500be7b5183db44ba6c9b02501fe088e2c1e"
     },
     "overseas-energy-market-research/assets/templates/csv/web_collection_tasks_template.csv": {
-      "bytes": 651,
-      "sha256": "6364421960ac18703db0fd659669ac57f81049f98bb114e29e1cc66a9d46adb0"
+      "bytes": 650,
+      "sha256": "02207505f2ba831afcd99b6c51a5779e1f6fd036c745dfb0e151fb04f009176b"
     },
     "overseas-energy-market-research/assets/templates/excel/energy_market_research_workbook_template.xlsx": {
       "bytes": 92941,
@@ -1707,8 +1707,8 @@
       "sha256": "2ebe6ed097d2fc88438d01958f4b4c6b50f8223976a6d862ada712ea1dff78f8"
     },
     "overseas-energy-market-research/references/public_suffix_list.dat": {
-      "bytes": 348665,
-      "sha256": "1b8ce21390c6b781d6da7faa18d41619afc64091c657855190b42e2747fdad67"
+      "bytes": 332268,
+      "sha256": "9ba63f0c1fed38f8160f5f706af81ff99089d01254d6eed89a89e7d99b20cb9d"
     },
     "overseas-energy-market-research/references/shared-standards.md": {
       "bytes": 38065,
