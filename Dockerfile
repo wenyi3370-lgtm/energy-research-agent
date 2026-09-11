@@ -38,6 +38,7 @@ RUN apt-get update \
 COPY src ./src
 COPY config ./config
 COPY vendor ./vendor
+COPY deploy/entrypoint.sh /usr/local/bin/energy-research-entrypoint
 
 # api+database for the control plane; models enables the LLM gateway for
 # real extraction (litellm). Install full for convenience on small images.
@@ -62,9 +63,11 @@ RUN apt-mark manual libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /data/automation_work && useradd -m -u 10001 research \
-    && chown -R research:research /data/automation_work
-USER research
+    && chown -R research:research /data/automation_work \
+    && sed -i 's/\r$//' /usr/local/bin/energy-research-entrypoint \
+    && chmod 0755 /usr/local/bin/energy-research-entrypoint
 
 EXPOSE 8000
 
+ENTRYPOINT ["/usr/local/bin/energy-research-entrypoint"]
 CMD ["sh", "-c", "exec uvicorn energy_research_agent.automation.api.app:create_app --factory --host 0.0.0.0 --port \"${PORT:-8000}\""]
