@@ -21,6 +21,8 @@ per request (no secrets are ever logged).
 
 from __future__ import annotations
 
+import base64
+import hmac
 import json
 import logging
 import os
@@ -355,7 +357,28 @@ def create_app(
     async def request_id_middleware(request: Request, call_next):
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         started = time.perf_counter()
-        response = await call_next(request)
+        access_password = os.environ.get("ERA_ACCESS_PASSWORD", "").strip()
+        authorized = not access_password or request.url.path == "/health"
+        if not authorized:
+            scheme, _, encoded = request.headers.get("Authorization", "").partition(" ")
+            if scheme.lower() == "basic" and encoded:
+                try:
+                    decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+                    username, separator, password = decoded.partition(":")
+                    expected_username = os.environ.get("ERA_ACCESS_USERNAME", "energy-admin")
+                    authorized = bool(separator) and hmac.compare_digest(
+                        username, expected_username
+                    ) and hmac.compare_digest(password, access_password)
+                except (ValueError, UnicodeDecodeError):
+                    authorized = False
+        if authorized:
+            response = await call_next(request)
+        else:
+            response = JSONResponse(
+                status_code=401,
+                content={"error": {"type": "AUTH_REQUIRED", "message": "Authentication required"}},
+                headers={"WWW-Authenticate": 'Basic realm="Energy Research Agent"'},
+            )
         response.headers["X-Request-ID"] = request_id
         logger.info(
             "request request_id=%s run_id=%s path=%s status=%d latency_ms=%.1f",

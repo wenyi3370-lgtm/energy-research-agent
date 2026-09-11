@@ -128,6 +128,11 @@ docker compose up -d --build
 
 - Agent：<http://localhost:8000/>
 - Agent 调试页：<http://localhost:8000/agent/debug>
+
+公网或云端部署必须设置 `ERA_ACCESS_PASSWORD`；用户名可通过
+`ERA_ACCESS_USERNAME` 配置（默认 `energy-admin`）。健康检查 `/health`
+保持匿名可访问，其余页面和 API 均要求浏览器 HTTP Basic 登录。密钥只能
+写入部署平台的 Secret Variables，不得提交到仓库。
 - API 文档：<http://localhost:8000/docs>
 - n8n（仅启用 `automation` profile 后）：<http://localhost:5678>
 

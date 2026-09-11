@@ -5,8 +5,10 @@ ARG PIP_INDEX_URL=https://pypi.org/simple
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    ERA_AUTOMATION_DATABASE_URL=postgresql+psycopg://research:research@postgres:5432/research \
-    ERA_AUTOMATION_WORKDIR=/data/automation_work
+    ERA_AUTOMATION_DATABASE_URL=sqlite:////data/automation_work/automation.db \
+    ERA_AUTOMATION_WORKDIR=/data/automation_work \
+    ERA_SKILL_ROOT=/app \
+    ERA_DESKTOP_PATH=/data/automation_work/exports
 
 WORKDIR /app
 
@@ -65,4 +67,4 @@ USER research
 
 EXPOSE 8000
 
-CMD ["uvicorn", "energy_research_agent.automation.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "exec uvicorn energy_research_agent.automation.api.app:create_app --factory --host 0.0.0.0 --port \"${PORT:-8000}\""]
