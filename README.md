@@ -116,7 +116,7 @@ ERA_DEEPSEEK_API_KEY=your-key
 ERA_ANYSEARCH_API_KEY=your-key
 ```
 
-默认 `ERA_PRIMARY_MODEL=deepseek-chat`，因此上例配置 DeepSeek。若只使用 OpenAI，应同时设置 `ERA_OPENAI_API_KEY`，并把 `ERA_PRIMARY_MODEL` 改为当前 OpenAI 账户可用的模型名称。不要保留没有对应密钥的主模型配置。
+默认使用 DeepSeek 官方 API（`ERA_DEEPSEEK_API_BASE=https://api.deepseek.com`）和 `ERA_PRIMARY_MODEL=deepseek-v4-flash`。若只使用 OpenAI，应同时设置 `ERA_OPENAI_API_KEY`，并把 `ERA_PRIMARY_MODEL` 改为当前 OpenAI 账户可用的模型名称。不要保留没有对应密钥的主模型配置。
 
 启动：
 

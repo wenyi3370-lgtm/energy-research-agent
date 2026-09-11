@@ -28,7 +28,7 @@
 
 | 配置项 | 说明 | 缺失后果 |
 |---|---|---|
-| `ERA_DEEPSEEK_API_KEY` | 主 provider（deepseek-chat） | 全部不可用 → run FAILED（GatewayError） |
+| `ERA_DEEPSEEK_API_KEY` | 主 provider（DeepSeek 官方 `deepseek-v4-flash`） | 全部不可用 → run FAILED（GatewayError） |
 | `ERA_OPENAI_API_KEY` | 兜底 provider | 仅影响 fallback |
 | `ERA_DEEPSEEK_API_BASE` / `ERA_OPENAI_API_BASE` | 自定义端点 | 有默认值 |
 | `litellm` 依赖 | `pip install -e ".[models]"` | GatewayError "LiteLLM is not installed" |

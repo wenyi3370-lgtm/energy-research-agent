@@ -13,7 +13,7 @@ from .base import GatewayError, ModelRequest, ModelResponse, StructuredRequest
 
 T = TypeVar("T", bound=BaseModel)
 
-# Reasoning providers (SiliconFlow DeepSeek-V4 family) sometimes leak the
+# Reasoning providers (including the DeepSeek-V4 family) sometimes leak the
 # thinking chain into ``content`` as a literal ``...`` wrapper even
 # though ``reasoning_content`` carries it separately.
 _THINK_WRAPPER = re.compile(r"<think>[\s\S]*?</think>\n?", re.IGNORECASE)
@@ -68,11 +68,14 @@ class LiteLLMModelGateway:
         if isinstance(request, StructuredRequest):
             kwargs["response_format"] = {"type": "json_object"}
         # Reasoning models burn quota on chain-of-thought tokens the pipeline
-        # never reads and may leak the thinking wrapper into content; default
-        # to non-thinking mode (quality-neutral for extraction/distillation,
-        # ~60% cheaper on SiliconFlow V4-Flash). Opt back in via env.
+        # never reads and may leak the thinking wrapper into content. DeepSeek's
+        # official API uses ``thinking.type``; compatible third-party endpoints
+        # commonly use ``enable_thinking``. Opt back in via env.
         if not self.settings.enable_thinking:
-            kwargs["enable_thinking"] = False
+            if provider == "deepseek" and (api_base or "").rstrip("/") == "https://api.deepseek.com":
+                kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
+            else:
+                kwargs["enable_thinking"] = False
         # A provider can accept a request and never answer (observed on
         # SiliconFlow: one hung call stalled the whole mission for 20+ min).
         # Enforce the configured per-call timeout and retry in-place before

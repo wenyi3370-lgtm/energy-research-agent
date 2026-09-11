@@ -25,13 +25,13 @@ class Settings(BaseSettings):
 
     primary_provider: str = "deepseek"
     fallback_provider: str = "openai"
-    primary_model: str = "deepseek-chat"
+    primary_model: str = "deepseek-v4-flash"
     fallback_model: str = "gpt-5"
     deepseek_api_base: str = "https://api.deepseek.com"
     deepseek_api_key: str | None = None
     openai_api_base: str | None = None
     openai_api_key: str | None = None
-    # Reasoning models (DeepSeek-V4 family on SiliconFlow) spend quota on
+    # Reasoning models (including DeepSeek-V4 family) spend quota on
     # chain-of-thought tokens the pipeline never reads; default off keeps
     # extraction/distillation quality-neutral at ~60% lower cost.
     enable_thinking: bool = False
